@@ -1,0 +1,56 @@
+#include "pch.h"
+#include "RigidBodyComponent.h"
+#include "Entities/Actor.h"
+#include <Components/TransformComponent.h>
+
+HEIN::RigidBodyComponent::RigidBodyComponent(Actor* owner)
+	: IComponent(owner)
+	, m_transform(nullptr)
+	, m_velocity(DirectX::SimpleMath::Vector3::Zero)
+	, m_acceleration(DirectX::SimpleMath::Vector3::Zero)
+	, m_mass(1.0f)
+	, m_useGravity(true)
+	, m_isKinematic(false)
+{
+}
+
+void HEIN::RigidBodyComponent::Initialize(float mass, bool useGravity, bool isKinematic)
+{
+	m_mass = mass;
+	m_useGravity = useGravity;
+	m_isKinematic = isKinematic;
+}
+
+void HEIN::RigidBodyComponent::Start()
+{
+	m_transform = GetOwner()->GetComponent<HEIN::TransformComponent>();
+}
+
+void HEIN::RigidBodyComponent::Update(float deltaTime)
+{
+	
+}
+
+void HEIN::RigidBodyComponent::AddForce(const DirectX::SimpleMath::Vector3& force)
+{
+	if (m_mass > 0.0f)
+	{
+		m_acceleration += (force / m_mass);
+	}
+}
+
+void HEIN::RigidBodyComponent::SetVelocity(const DirectX::SimpleMath::Vector3& velocity)
+{
+	m_velocity = velocity;
+}
+
+void HEIN::RigidBodyComponent::SetHorizontalVelocity(const DirectX::SimpleMath::Vector3& velocity)
+{
+	m_velocity.x = velocity.x;
+	m_velocity.z = velocity.z;
+}
+
+DirectX::SimpleMath::Vector3 HEIN::RigidBodyComponent::GetVelocity() const
+{
+	return m_velocity;
+}

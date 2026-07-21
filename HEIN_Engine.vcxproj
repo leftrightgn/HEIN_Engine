@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build" ToolsVersion="14.0">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <RootNamespace>HEIN_Engine</RootNamespace>
+    <ProjectGuid>{7B25AEB1-3C1E-45A1-910F-7E1184E03743}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\HEIN_Engine;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalOptions>/Zc:__cplusplus /ZH:SHA_256 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;uuid.lib;kernel32.lib;user32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Manifest>
+      <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\HEIN_Engine;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalOptions>/Zc:__cplusplus /ZH:SHA_256 %(AdditionalOptions)</AdditionalOptions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;uuid.lib;kernel32.lib;user32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Manifest>
+      <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\HEIN_Engine;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalOptions>/Zc:__cplusplus /ZH:SHA_256 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;uuid.lib;kernel32.lib;user32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Manifest>
+      <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\HEIN_Engine;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalOptions>/Zc:__cplusplus /ZH:SHA_256 %(AdditionalOptions)</AdditionalOptions>
+      <GuardEHContMetadata>true</GuardEHContMetadata>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;uuid.lib;kernel32.lib;user32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Manifest>
+      <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>このプロジェクトは、このコンピューター上にない NuGet パッケージを参照しています。それらのパッケージをダウンロードするには、[NuGet パッケージの復元] を使用します。詳細については、http://go.microsoft.com/fwlink/?LinkID=322105 を参照してください。見つからないファイルは {0} です。</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\directxtk_desktop_win10.2026.4.1.1\build\native\directxtk_desktop_win10.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\directxtk_desktop_win10.2026.4.1.1\build\native\directxtk_desktop_win10.targets'))" />
+    <Error Condition="!Exists('packages\directxtk_desktop_win10.2026.5.8.1\build\native\directxtk_desktop_win10.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\directxtk_desktop_win10.2026.5.8.1\build\native\directxtk_desktop_win10.targets'))" />
+  </Target>
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup>
+    <ClInclude Include="BehaviourTree\BTNode.h" />
+    <ClInclude Include="BehaviourTree\BTSelector.h" />
+    <ClInclude Include="BehaviourTree\BTSequence.h" />
+    <ClInclude Include="Camera\CameraController.h" />
+    <ClInclude Include="Camera\CinematicMode.h" />
+    <ClInclude Include="Camera\DebugCameraMode.h" />
+    <ClInclude Include="Camera\FirstPersonMode.h" />
+    <ClInclude Include="Camera\ICameraMode.h" />
+    <ClInclude Include="Camera\SpringCameraMode.h" />
+    <ClInclude Include="Camera\ThirdPersonMode.h" />
+    <ClInclude Include="Common\CollisionDispatcher.h" />
+    <ClInclude Include="Common\CollisionMath.h" />
+    <ClInclude Include="Common\DeviceResources.h" />
+    <ClInclude Include="Common\Event.h" />
+    <ClInclude Include="Common\EventManager.h" />
+    <ClInclude Include="Common\InputManager.h" />
+    <ClInclude Include="Common\PhysicsSystem.h" />
+    <ClInclude Include="Common\StepTimer.h" />
+    <ClInclude Include="Components\BoneLinkComponent.h" />
+    <ClInclude Include="Components\IComponent.h" />
+    <ClInclude Include="Components\RigidBodyComponent.h" />
+    <ClInclude Include="Components\SkinnedModelComponent.h" />
+    <ClInclude Include="Components\SocketAttachmentComponent.h" />
+    <ClInclude Include="Components\SocketComponent.h" />
+    <ClInclude Include="Components\StaticModelComponent.h" />
+    <ClInclude Include="Components\TransformComponent.h" />
+    <ClInclude Include="Components\TwoBoneLinkComponent.h" />
+    <ClInclude Include="Components\ColliderComponent\AABBColliderComponent.h" />
+    <ClInclude Include="Components\ColliderComponent\CapsuleColliderComponent.h" />
+    <ClInclude Include="Components\ColliderComponent\ColliderComponent.h" />
+    <ClInclude Include="Components\ColliderComponent\MeshColliderComponent.h" />
+    <ClInclude Include="Components\ColliderComponent\OBBColliderComponent.h" />
+    <ClInclude Include="Components\ColliderComponent\SphereColliderComponent.h" />
+    <ClInclude Include="DebugingTools\DebugCollisionRenderer.h" />
+    <ClInclude Include="DebugingTools\DebugDisplayController.h" />
+    <ClInclude Include="DebugingTools\DebugRenderer.h" />
+    <ClInclude Include="DebugingTools\DebugUIManager.h" />
+    <ClInclude Include="DebugingTools\IGizmoEditable.h" />
+    <ClInclude Include="DirectXTK_Utilities\Animation.h" />
+    <ClInclude Include="DirectXTK_Utilities\DebugDraw.h" />
+    <ClInclude Include="Effect\ReadData.h" />
+    <ClInclude Include="Effect\Skybox.h" />
+    <ClInclude Include="Effect\SkyboxEffect.h" />
+    <ClInclude Include="Effect\Water.h" />
+    <ClInclude Include="Entities\Actor.h" />
+    <ClInclude Include="Entities\ActorManager.h" />
+    <ClInclude Include="Framework\Game.h" />
+    <ClInclude Include="Framework\GameContext.h" />
+    <ClInclude Include="ImaseLib\GridFloor.h" />
+    <ClInclude Include="ImGui\GraphEditor.h" />
+    <ClInclude Include="ImGui\imconfig.h" />
+    <ClInclude Include="ImGui\ImCurveEdit.h" />
+    <ClInclude Include="ImGui\ImGradient.h" />
+    <ClInclude Include="ImGui\imgui.h" />
+    <ClInclude Include="ImGui\ImGuizmo.h" />
+    <ClInclude Include="ImGui\imgui_impl_dx11.h" />
+    <ClInclude Include="ImGui\imgui_impl_win32.h" />
+    <ClInclude Include="ImGui\imgui_internal.h" />
+    <ClInclude Include="ImGui\ImLightRig.h" />
+    <ClInclude Include="ImGui\ImSequencer.h" />
+    <ClInclude Include="ImGui\imstb_rectpack.h" />
+    <ClInclude Include="ImGui\imstb_textedit.h" />
+    <ClInclude Include="ImGui\imstb_truetype.h" />
+    <ClInclude Include="ImGui\ImVectorEditor.h" />
+    <ClInclude Include="ImGui\ImZoomSlider.h" />
+    <ClInclude Include="Message\IObserver.h" />
+    <ClInclude Include="Message\Message.h" />
+    <ClInclude Include="Message\Messenger.h" />
+    <ClInclude Include="Scene\IScene.h" />
+    <ClInclude Include="Scene\SceneManager.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="BehaviourTree\BTSelector.cpp" />
+    <ClCompile Include="BehaviourTree\BTSequence.cpp" />
+    <ClCompile Include="Camera\CameraController.cpp" />
+    <ClCompile Include="Camera\CinematicMode.cpp" />
+    <ClCompile Include="Camera\DebugCameraMode.cpp" />
+    <ClCompile Include="Camera\FirstPersonMode.cpp" />
+    <ClCompile Include="Camera\SpringCameraMode.cpp" />
+    <ClCompile Include="Camera\ThirdPersonMode.cpp" />
+    <ClCompile Include="Common\CollisionDispatcher.cpp" />
+    <ClCompile Include="Common\CollisionMath.cpp" />
+    <ClCompile Include="Common\DeviceResources.cpp" />
+    <ClCompile Include="Common\EventManager.cpp" />
+    <ClCompile Include="Common\InputManager.cpp" />
+    <ClCompile Include="Common\PhysicsSystem.cpp" />
+    <ClCompile Include="Components\BoneLinkComponent.cpp" />
+    <ClCompile Include="Components\RigidBodyComponent.cpp" />
+    <ClCompile Include="Components\SkinnedModelComponent.cpp" />
+    <ClCompile Include="Components\SocketAttachmentComponent.cpp" />
+    <ClCompile Include="Components\SocketComponent.cpp" />
+    <ClCompile Include="Components\StaticModelComponent.cpp" />
+    <ClCompile Include="Components\TransformComponent.cpp" />
+    <ClCompile Include="Components\TwoBoneLinkComponent.cpp" />
+    <ClCompile Include="Components\ColliderComponent\AABBColliderComponent.cpp" />
+    <ClCompile Include="Components\ColliderComponent\CapsuleColliderComponent.cpp" />
+    <ClCompile Include="Components\ColliderComponent\ColliderComponent.cpp" />
+    <ClCompile Include="Components\ColliderComponent\MeshColliderComponent.cpp" />
+    <ClCompile Include="Components\ColliderComponent\OBBColliderComponent.cpp" />
+    <ClCompile Include="Components\ColliderComponent\SphereColliderComponent.cpp" />
+    <ClCompile Include="DebugingTools\DebugCollisionRenderer.cpp" />
+    <ClCompile Include="DebugingTools\DebugDisplayController.cpp" />
+    <ClCompile Include="DebugingTools\DebugRenderer.cpp" />
+    <ClCompile Include="DebugingTools\DebugUIManager.cpp" />
+    <ClCompile Include="DirectXTK_Utilities\Animation.cpp" />
+    <ClCompile Include="DirectXTK_Utilities\DebugDraw.cpp" />
+    <ClCompile Include="Effect\Skybox.cpp" />
+    <ClCompile Include="Effect\SkyboxEffect.cpp" />
+    <ClCompile Include="Effect\Water.cpp" />
+    <ClCompile Include="Entities\Actor.cpp" />
+    <ClCompile Include="Entities\ActorManager.cpp" />
+    <ClCompile Include="Framework\Game.cpp" />
+    <ClCompile Include="ImaseLib\GridFloor.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\GraphEditor.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImCurveEdit.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImGradient.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImGuizmo.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_demo.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_draw.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_impl_dx11.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_impl_win32.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_tables.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_widgets.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImSequencer.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImVectorEditor.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Message\Messenger.cpp" />
+    <ClCompile Include="Scene\SceneManager.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="Shaders\SkyboxEffect_Common.hlsli" />
+    <None Include="Shaders\SkyboxEffect_PS.hlsl" />
+    <None Include="Shaders\SkyboxEffect_VS.hlsl" />
+    <None Include="Shaders\WaterPs.hlsl" />
+    <None Include="Shaders\WaterVs.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Common\DamageSystem.h" />
+    <ClInclude Include="Components\HealthComponent.h" />
+    <ClInclude Include="Components\DamageDealerComponent.h" />
+    <ClInclude Include="Components\TargetTrackingComponent.h" />
+    <ClInclude Include="Camera\LockOnCameraMode.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Common\DamageSystem.cpp" />
+    <ClCompile Include="Components\HealthComponent.cpp" />
+    <ClCompile Include="Components\DamageDealerComponent.cpp" />
+    <ClCompile Include="Components\TargetTrackingComponent.cpp" />
+    <ClCompile Include="Camera\LockOnCameraMode.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\directxtk_desktop_win10.2026.4.1.1\build\native\directxtk_desktop_win10.targets" Condition="Exists('..\packages\directxtk_desktop_win10.2026.4.1.1\build\native\directxtk_desktop_win10.targets')" />
+    <Import Project="packages\directxtk_desktop_win10.2026.5.8.1\build\native\directxtk_desktop_win10.targets" Condition="Exists('packages\directxtk_desktop_win10.2026.5.8.1\build\native\directxtk_desktop_win10.targets')" />
+  </ImportGroup>
+</Project>

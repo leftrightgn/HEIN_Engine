@@ -1,0 +1,525 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <ItemGroup>
+    <ClCompile Include="Components\DamageDealerComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\HealthComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\DamageSystem.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\LockOnCameraMode.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\TargetTrackingComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="Components\DamageDealerComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\HealthComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\DamageSystem.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\LockOnCameraMode.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\TargetTrackingComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Common">
+      <UniqueIdentifier>{a355142e-3d25-4fca-922d-aeadbfedb2ae}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DirectXTK_Utilities">
+      <UniqueIdentifier>{c86a2feb-a710-4e0f-8e6f-fabd949787bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ImaseLib">
+      <UniqueIdentifier>{373fa7de-bb0c-473d-acc2-b72816c8a5ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Scene">
+      <UniqueIdentifier>{6ee32f6a-f298-4e46-bb2f-07cf73db150a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Scene\BaseScene">
+      <UniqueIdentifier>{fad1c948-86ef-4cb2-acb4-185a59b4a139}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Scene\GameScene">
+      <UniqueIdentifier>{0d9d6f68-4a02-4f44-994a-620e016fcc76}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Effect">
+      <UniqueIdentifier>{5915fa9b-369f-46a7-b832-10067f3f5875}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Entities">
+      <UniqueIdentifier>{a2f0aa4b-4b55-4981-806f-addef4a328fb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Camera">
+      <UniqueIdentifier>{4780256a-30e1-4ac8-a139-628d7794971c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Components">
+      <UniqueIdentifier>{9a06591c-ad84-479e-9d8c-ea99a26b1195}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{d39c8c10-12c7-4c95-b4dd-ed97dd5cbbb5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="BlackBoard">
+      <UniqueIdentifier>{323a272c-8af8-44fd-a7ab-d2215a1c0777}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Framework">
+      <UniqueIdentifier>{ff47a537-cbd8-4b0c-b57b-e1562a993356}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Components\ColliderComponent">
+      <UniqueIdentifier>{97b6bd58-ac24-430f-8eee-8d43fa6bdb6f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ImGui">
+      <UniqueIdentifier>{645f9198-81cc-4177-9663-39b3d0ec71ab}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Factory">
+      <UniqueIdentifier>{0b41e055-baed-449d-8b94-87d6031a8b88}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="BehaviourTree">
+      <UniqueIdentifier>{f9777594-de78-4196-9ffd-6d28381a3228}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Message">
+      <UniqueIdentifier>{f9235b91-6e95-4153-a32e-1c6878d4dd28}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DebugingTools">
+      <UniqueIdentifier>{15e6802d-4ad2-49b9-88b5-97ebd7096072}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup />
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="BehaviourTree\BTNode.h">
+      <Filter>BehaviourTree</Filter>
+    </ClInclude>
+    <ClInclude Include="BehaviourTree\BTSelector.h">
+      <Filter>BehaviourTree</Filter>
+    </ClInclude>
+    <ClInclude Include="BehaviourTree\BTSequence.h">
+      <Filter>BehaviourTree</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\CameraController.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\CinematicMode.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\DebugCameraMode.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\FirstPersonMode.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\ICameraMode.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\SpringCameraMode.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\ThirdPersonMode.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\CollisionDispatcher.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\CollisionMath.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\DeviceResources.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Event.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\EventManager.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\InputManager.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\PhysicsSystem.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\StepTimer.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\BoneLinkComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\IComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\RigidBodyComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\SkinnedModelComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\SocketAttachmentComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\SocketComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\StaticModelComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\TransformComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\TwoBoneLinkComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\ColliderComponent\AABBColliderComponent.h">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\ColliderComponent\CapsuleColliderComponent.h">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\ColliderComponent\ColliderComponent.h">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\ColliderComponent\MeshColliderComponent.h">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\ColliderComponent\OBBColliderComponent.h">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\ColliderComponent\SphereColliderComponent.h">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugingTools\DebugCollisionRenderer.h">
+      <Filter>DebugingTools</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugingTools\DebugDisplayController.h">
+      <Filter>DebugingTools</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugingTools\DebugRenderer.h">
+      <Filter>DebugingTools</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugingTools\DebugUIManager.h">
+      <Filter>DebugingTools</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugingTools\IGizmoEditable.h">
+      <Filter>DebugingTools</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectXTK_Utilities\Animation.h">
+      <Filter>DirectXTK_Utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectXTK_Utilities\DebugDraw.h">
+      <Filter>DirectXTK_Utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="Effect\ReadData.h">
+      <Filter>Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Effect\Skybox.h">
+      <Filter>Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Effect\SkyboxEffect.h">
+      <Filter>Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Effect\Water.h">
+      <Filter>Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Entities\Actor.h">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Entities\ActorManager.h">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Framework\Game.h">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="Framework\GameContext.h">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="ImaseLib\GridFloor.h">
+      <Filter>ImaseLib</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\GraphEditor.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imconfig.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\ImCurveEdit.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\ImGradient.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\ImGuizmo.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_impl_dx11.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_impl_win32.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_internal.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\ImLightRig.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\ImSequencer.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_rectpack.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_textedit.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_truetype.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\ImVectorEditor.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\ImZoomSlider.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Message\IObserver.h">
+      <Filter>Message</Filter>
+    </ClInclude>
+    <ClInclude Include="Message\Message.h">
+      <Filter>Message</Filter>
+    </ClInclude>
+    <ClInclude Include="Message\Messenger.h">
+      <Filter>Message</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene\IScene.h">
+      <Filter>Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene\SceneManager.h">
+      <Filter>Scene</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="BehaviourTree\BTSelector.cpp">
+      <Filter>BehaviourTree</Filter>
+    </ClCompile>
+    <ClCompile Include="BehaviourTree\BTSequence.cpp">
+      <Filter>BehaviourTree</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\CameraController.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\CinematicMode.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\DebugCameraMode.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\FirstPersonMode.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\SpringCameraMode.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\ThirdPersonMode.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\CollisionDispatcher.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\CollisionMath.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\DeviceResources.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\EventManager.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\InputManager.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\PhysicsSystem.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\BoneLinkComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\RigidBodyComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\SkinnedModelComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\SocketAttachmentComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\SocketComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\StaticModelComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\TransformComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\TwoBoneLinkComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\ColliderComponent\AABBColliderComponent.cpp">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\ColliderComponent\CapsuleColliderComponent.cpp">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\ColliderComponent\ColliderComponent.cpp">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\ColliderComponent\MeshColliderComponent.cpp">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\ColliderComponent\OBBColliderComponent.cpp">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\ColliderComponent\SphereColliderComponent.cpp">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClCompile>
+    <ClCompile Include="DebugingTools\DebugCollisionRenderer.cpp">
+      <Filter>DebugingTools</Filter>
+    </ClCompile>
+    <ClCompile Include="DebugingTools\DebugDisplayController.cpp">
+      <Filter>DebugingTools</Filter>
+    </ClCompile>
+    <ClCompile Include="DebugingTools\DebugRenderer.cpp">
+      <Filter>DebugingTools</Filter>
+    </ClCompile>
+    <ClCompile Include="DebugingTools\DebugUIManager.cpp">
+      <Filter>DebugingTools</Filter>
+    </ClCompile>
+    <ClCompile Include="DirectXTK_Utilities\Animation.cpp">
+      <Filter>DirectXTK_Utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="DirectXTK_Utilities\DebugDraw.cpp">
+      <Filter>DirectXTK_Utilities</Filter>
+    </ClCompile>
+    <ClCompile Include="Effect\Skybox.cpp">
+      <Filter>Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Effect\SkyboxEffect.cpp">
+      <Filter>Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Effect\Water.cpp">
+      <Filter>Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Entities\Actor.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Entities\ActorManager.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Framework\Game.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="ImaseLib\GridFloor.cpp">
+      <Filter>ImaseLib</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\GraphEditor.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImCurveEdit.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImGradient.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImGuizmo.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_demo.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_draw.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_impl_dx11.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_impl_win32.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_tables.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_widgets.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImSequencer.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\ImVectorEditor.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Message\Messenger.cpp">
+      <Filter>Message</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene\SceneManager.cpp">
+      <Filter>Scene</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="Shaders\SkyboxEffect_Common.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\SkyboxEffect_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\SkyboxEffect_VS.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\WaterPs.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\WaterVs.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>

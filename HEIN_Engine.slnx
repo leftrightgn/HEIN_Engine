@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="HEIN_Engine.vcxproj" Id="7b25aeb1-3c1e-45a1-910f-7e1184e03743" />
+</Solution>

@@ -1,0 +1,46 @@
+#pragma once
+#include "IComponent.h"
+#include <string>
+
+namespace HEIN
+{
+	class TransformComponent;
+	class SkinnedModelComponent;
+	class ColliderComponent;
+
+	class BoneLinkComponent : public IComponent
+	{
+		SkinnedModelComponent* m_targetModel;
+		std::wstring m_targetBoneName;
+		int m_targetBoneIndex;
+
+		// Target
+		TransformComponent* m_linkedTransform;
+		ColliderComponent* m_linkedCollider;
+		DirectX::SimpleMath::Vector3* m_linkedPosition;
+
+	public:
+
+		BoneLinkComponent(Actor* owner);
+	
+		void Initialize(SkinnedModelComponent* targetModel, const std::wstring& targetBoneName);
+		void Initialize(SkinnedModelComponent* targetModel, int targetBoneIndex);
+
+		void LinkTo(TransformComponent* transfrom);
+		void LinkTo(ColliderComponent* collider);
+		void LinkTo(DirectX::SimpleMath::Vector3* position);
+
+		void Start() override;
+		void Update(float /*deltaTime*/) override {}
+		void LateUpdate(float deltaTime) override;
+
+		void Draw(
+			GameContext& /*gameContext*/,
+			const DirectX::SimpleMath::Matrix& /*world*/,
+			const DirectX::SimpleMath::Matrix& /*view*/,
+			const DirectX::SimpleMath::Matrix& /*proj*/
+		) override { }
+	};
+}
+
+
