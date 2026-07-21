@@ -30,6 +30,12 @@ namespace HEIN
             const DirectX::SimpleMath::Matrix& proj
         );
 
+        void ExtractMeshData(
+            GameContext& gameContext,
+            std::vector<DirectX::SimpleMath::Vector3>& outVertices,
+            std::vector<uint32_t>& outIndices
+        );
+
         DirectX::BoundingBox GetBoundingBox() const;
         DirectX::BoundingSphere GetBoundingSphere() const;
 

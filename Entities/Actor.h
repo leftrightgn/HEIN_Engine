@@ -5,6 +5,7 @@
 #include <utility>
 #include <algorithm>
 #include <cstdint>
+#include "../Components/IComponent.h"
 
 struct GameContext;
 
