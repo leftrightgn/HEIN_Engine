@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "CameraController.h"
 
+
 HEIN::CameraController::CameraController(Actor* owner)
 	: IComponent(owner)
 {
