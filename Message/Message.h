@@ -1,0 +1,28 @@
+#pragma once
+
+namespace HEIN
+{
+	class Message
+	{
+	public:
+
+		enum MessageID : int
+		{
+			PLAYER_MOVE_FORWARD = 0,
+			PLAYER_MOVE_BACKWARD,
+			PLAYER_MOVE_RIGHT,
+			PLAYER_MOVE_LEFT,
+			PLAYER_STOP_MOVEMENT,
+
+			PLAYER_ACTION_ATTACK,
+			PLAYER_ACTION_DODGE,
+			PLAYER_ACTION_BLOCK,
+
+			PLAYER_STOP_BLOCK,
+
+			PLAYER_ENTER_STRAFE,
+			PLAYER_EXIT_STRAFE
+		};
+	};
+
+}
