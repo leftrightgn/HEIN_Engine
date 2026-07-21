@@ -50,7 +50,7 @@ void HEIN::StaticModelComponent::ExtractMeshData(
     ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
     ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
 
-    uint32_t vertexOffset;
+    uint32_t vertexOffset = 0;
 
     for (const auto& mesh : m_model->meshes)
     {
