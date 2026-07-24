@@ -20,6 +20,10 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3* m_linkedPosition;
 
 	public:
+		std::string GetComponentName() const override { return "BoneLinkComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		BoneLinkComponent(Actor* owner);
 	

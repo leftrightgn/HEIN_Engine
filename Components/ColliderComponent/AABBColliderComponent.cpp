@@ -53,3 +53,14 @@ void HEIN::AABBColliderComponent::Draw(
 
     gameContext.debugCollisionRenderer->QueueAABB(m_worldAABB, debugColor);
 }
+
+nlohmann::json HEIN::AABBColliderComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::AABBColliderComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

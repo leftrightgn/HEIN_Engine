@@ -46,3 +46,14 @@ void HEIN::SphereColliderComponent::Draw(GameContext& gameContext, const DirectX
 
     gameContext.debugCollisionRenderer->QueueSphere(m_worldSphere, debugColor);
 }
+
+nlohmann::json HEIN::SphereColliderComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::SphereColliderComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

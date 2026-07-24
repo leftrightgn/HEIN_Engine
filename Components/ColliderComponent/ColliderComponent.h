@@ -54,6 +54,10 @@ namespace HEIN
 		uint32_t m_mask = CollisionLayer::Layer_All;
 
 	public:
+		std::string GetComponentName() const override { return "ColliderComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		ColliderComponent(Actor* owner, ColliderShape shape);
 		virtual ~ColliderComponent() = default;

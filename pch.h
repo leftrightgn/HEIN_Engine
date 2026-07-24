@@ -102,4 +102,7 @@ namespace DX
 // DirectXTK_Utilities
 #include "DirectXTK_Utilities/DebugDraw.h"
 
+// Json
+#include "Common/json.hpp"
+
 #pragma comment(lib, "d3dcompiler.lib")

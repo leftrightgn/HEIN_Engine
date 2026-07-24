@@ -20,6 +20,10 @@ namespace HEIN
 		CapsuleColliderComponent* m_linkedCapsule;
 
 	public:
+		std::string GetComponentName() const override { return "TwoBoneLinkComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		TwoBoneLinkComponent(Actor* owner);
 	

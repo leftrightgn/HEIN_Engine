@@ -14,6 +14,10 @@ namespace HEIN
 		DirectX::BoundingSphere m_worldSphere;
 
 	public:
+		std::string GetComponentName() const override { return "SphereColliderComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		SphereColliderComponent(Actor* owner);
 	

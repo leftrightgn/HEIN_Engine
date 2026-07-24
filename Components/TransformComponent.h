@@ -47,6 +47,10 @@ namespace HEIN
 
         void SetParentMatrix(const DirectX::SimpleMath::Matrix& parent) { m_parentMatrix = parent; }
 
+        std::string GetComponentName() const override { return "TransformComponent"; }
+        nlohmann::json Serialize() override;
+        void Deserialize(const nlohmann::json& data) override;
+
         // --- Core 3D Math ---
 
         // Generates the World Matrix for DirectX 11 rendering

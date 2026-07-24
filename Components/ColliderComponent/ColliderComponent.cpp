@@ -171,3 +171,14 @@ void HEIN::ColliderComponent::DrawGizmo(
         }
     }
 }
+
+nlohmann::json HEIN::ColliderComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::ColliderComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

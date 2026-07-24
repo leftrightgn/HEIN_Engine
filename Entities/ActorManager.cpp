@@ -110,6 +110,66 @@ void HEIN::ActorManager::CleanUpDestroyedActors()
     m_pendingDestorys.clear();
 }
 
+nlohmann::json HEIN::ActorManager::Serialize()
+{
+    nlohmann::json sceneData;
+    nlohmann::json actorsArray = nlohmann::json::array();
+
+    for (auto& pair : m_actors)
+    {
+        HEIN::Actor* actor = pair.second.get();
+
+        if (actor != nullptr)
+        {
+            actorsArray.push_back(actor->Serialize());
+        }
+
+    }
+    sceneData["Actors"] = actorsArray;
+
+    return sceneData;
+}
+
+void HEIN::ActorManager::Deserialize(const nlohmann::json& sceneData)
+{
+    if (sceneData.contains("Actors"))
+    {
+        for (const auto& actorData : sceneData["Actors"])
+        {
+            std::wstring actorTag = L"Unknown";
+
+            if (actorData.contains("Name"))
+            {
+                std::string narrowTag = actorData["Name"];
+
+                actorTag = std::wstring(narrowTag.begin(), narrowTag.end());
+            }
+
+            HEIN::Actor* newActor = CreateActor(actorTag);
+
+            if (newActor != nullptr)
+            {
+                newActor->Deserialize(actorData);
+            }
+        }
+        
+    }
+}
+
+void HEIN::ActorManager::InitializeAfterDeserialize(GameContext& gameContext)
+{
+    for (auto& pair : m_actors)
+    {
+        pair.second->InitializeAfterDeserialize(gameContext);
+    }
+}
+
+void HEIN::ActorManager::ClearAllActors()
+{
+    m_actors.clear();
+    m_pendingDestorys.clear(); 
+}
+
 void HEIN::ActorManager::CascadeTransforms(ActorID parentID)
 {
     Actor* parent = GetActor(parentID);

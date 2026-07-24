@@ -13,6 +13,14 @@ namespace HEIN
 		std::unique_ptr<DirectX::EffectFactory> m_fxFactory;
 		bool m_isVisible = true;
     public:
+		std::wstring m_modelPath;
+		std::wstring m_textureDir;
+
+		std::string GetComponentName() const override { return "StaticModelComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+		void InitializeAfterDeserialize(GameContext& gameContext) override;
+
         StaticModelComponent(Actor* owner);
 
         void Initialize(

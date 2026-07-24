@@ -54,3 +54,14 @@ DirectX::SimpleMath::Vector3 HEIN::RigidBodyComponent::GetVelocity() const
 {
 	return m_velocity;
 }
+
+nlohmann::json HEIN::RigidBodyComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::RigidBodyComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

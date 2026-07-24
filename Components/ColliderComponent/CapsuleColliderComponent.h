@@ -19,6 +19,10 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 m_worldforwardDir;
 
 	public:
+		std::string GetComponentName() const override { return "CapsuleColliderComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		CapsuleColliderComponent(Actor* owner);
 	

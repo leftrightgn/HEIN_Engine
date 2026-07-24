@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/json.hpp>
 
 struct GameContext;
 
@@ -35,6 +36,11 @@ namespace HEIN
 		) {}
 
 		virtual void OnInspectorGUI() {}
+
+		virtual std::string GetComponentName() const { return "Unknown"; }
+		virtual nlohmann::json Serialize() { return nlohmann::json(); }
+		virtual void Deserialize(const nlohmann::json& data) {}
+		virtual void InitializeAfterDeserialize(GameContext& gameContext) {}
 
 		Actor* GetOwner() const { return m_owner; }
 	};

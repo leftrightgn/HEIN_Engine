@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include "../Components/IComponent.h"
+#include <Common/json.hpp>
 
 struct GameContext;
 
@@ -59,8 +60,13 @@ namespace HEIN
 
 		void DrawInspector();
 
+		nlohmann::json Serialize();
+		void Deserialize(const nlohmann::json& actorData);
+		void InitializeAfterDeserialize(GameContext& gameContext);
+
 		ActorID GetID() const { return m_id; }
 		std::wstring GetTag() const { return m_tag; }
+		void SetTag(const std::wstring& tag) { m_tag = tag; }
 
 		void SetParent(ActorID id) { m_parentID = id; }
 		ActorID GetParentID() const { return m_parentID; }

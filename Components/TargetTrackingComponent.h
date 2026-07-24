@@ -23,8 +23,12 @@ namespace HEIN
 		HEIN::ActorID FindBestTarget() const;
 
 	public:
+		std::string GetComponentName() const override { return "TargetTrackingComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
 
-		TargetTrackingComponent(Actor* owner, ActorManager* manager, HEIN::ActorType targetType);
+
+		TargetTrackingComponent(Actor* owner, ActorManager* manager, HEIN::ActorType targetType = HEIN::ActorType::Default);
 
 		void Start() override;
 

@@ -42,3 +42,14 @@ void HEIN::SocketAttachmentComponent::LateUpdate(float deltaTime)
 	}
 
 }
+
+nlohmann::json HEIN::SocketAttachmentComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::SocketAttachmentComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

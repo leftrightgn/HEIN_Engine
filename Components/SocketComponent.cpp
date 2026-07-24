@@ -219,3 +219,13 @@ DirectX::SimpleMath::Matrix HEIN::SocketComponent::GetSocketWorldMatrix(const st
 
     return ownerWorld;
 }
+nlohmann::json HEIN::SocketComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::SocketComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

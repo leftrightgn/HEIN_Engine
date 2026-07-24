@@ -112,3 +112,13 @@ void HEIN::TargetTrackingComponent::Update(float deltaTime)
 		}
 	}
 }
+nlohmann::json HEIN::TargetTrackingComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::TargetTrackingComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

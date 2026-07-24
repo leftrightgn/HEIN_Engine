@@ -19,6 +19,9 @@ namespace HEIN
 		const wchar_t* textureDir
 	)
 	{
+		m_modelPath = modelPath;
+		m_textureDir = textureDir;
+		
 		ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
 
 		if (s_fxFactory == nullptr)
@@ -301,4 +304,37 @@ namespace HEIN
 		}
 	}
 
+}
+
+nlohmann::json HEIN::SkinnedModelComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    std::string narrowModelPath(m_modelPath.begin(), m_modelPath.end());
+    std::string narrowTextureDir(m_textureDir.begin(), m_textureDir.end());
+    data["ModelPath"] = narrowModelPath;
+    data["TextureDir"] = narrowTextureDir;
+    return data;
+}
+
+void HEIN::SkinnedModelComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+    if (data.contains("ModelPath"))
+    {
+        std::string narrowModelPath = data["ModelPath"];
+        m_modelPath = std::wstring(narrowModelPath.begin(), narrowModelPath.end());
+    }
+    if (data.contains("TextureDir"))
+    {
+        std::string narrowTextureDir = data["TextureDir"];
+        m_textureDir = std::wstring(narrowTextureDir.begin(), narrowTextureDir.end());
+    }
+}
+
+void HEIN::SkinnedModelComponent::InitializeAfterDeserialize(GameContext& gameContext)
+{
+    if (!m_modelPath.empty() && !m_textureDir.empty())
+    {
+        Initialize(gameContext, m_modelPath.c_str(), m_textureDir.c_str());
+    }
 }

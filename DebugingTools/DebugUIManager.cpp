@@ -9,6 +9,7 @@
 #include <Components/ColliderComponent/SphereColliderComponent.h>
 #include <Entities/ActorManager.h>
 #include <Components/ColliderComponent/MeshColliderComponent.h>
+#include <Factory/ComponentFactory.h>
 //#include <Components/TransformComponent.h>
 
 namespace HEIN
@@ -144,13 +145,31 @@ namespace HEIN
 			}
 		}
 	}
-	void DebugUIManager::Draw(
+	EditorAction DebugUIManager::Draw(
 		HEIN::ActorManager& manager,
 		const DirectX::SimpleMath::Matrix& view,
 		const DirectX::SimpleMath::Matrix& proj
 	)
 	{
-		if (!m_isVisible) return;
+		HEIN::EditorAction currentAction = HEIN::EditorAction::None;
+
+		if (!m_isVisible) return currentAction;
+
+		ImGui::Begin("ToolBar");
+		if (ImGui::Button("PLAY")) currentAction = HEIN::EditorAction::PlayPressed;
+		ImGui::SameLine();
+		if (ImGui::Button("STOP")) 	currentAction = HEIN::EditorAction::StopPressed;
+		ImGui::SameLine();
+		if (ImGui::Button("SAVE SCENE")) currentAction = HEIN::EditorAction::SavePressed;
+		ImGui::SameLine();
+		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
+		ImGui::Separator();
+		if (ImGui::Button("Create Empty Actor"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"NewActor");
+			m_selectedActor = newActor;
+		}
+		ImGui::End();
 
 		// DRAW THE INSPECTOR WINDOW
 		ImGui::Begin("Inspector");
@@ -164,7 +183,16 @@ namespace HEIN
 		{
 			std::wstring wtag = m_selectedActor->GetTag();
 			std::string narrowTag(wtag.begin(), wtag.end());
-			ImGui::Text("Selected Actor: %s", narrowTag.c_str());
+			
+			char nameBuffer[256];
+			strncpy_s(nameBuffer, narrowTag.c_str(), sizeof(nameBuffer));
+			if (ImGui::InputText("Actor Name", nameBuffer, sizeof(nameBuffer)))
+			{
+				std::string newTag(nameBuffer);
+				std::wstring newWTag(newTag.begin(), newTag.end());
+				m_selectedActor->SetTag(newWTag);
+			}
+			
 			ImGui::Separator();
 
 			// Draw gizmo mode toggles
@@ -176,6 +204,22 @@ namespace HEIN
 
 			m_selectedActor->DrawInspector();
 
+			ImGui::Separator();
+			
+			// Add Component UI
+			std::vector<std::string> componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
+			if (ImGui::BeginCombo("Add Component", "Select Component..."))
+			{
+				for (const std::string& compName : componentNames)
+				{
+					if (ImGui::Selectable(compName.c_str()))
+					{
+						HEIN::ComponentFactory::CreateComponent(compName, m_selectedActor, &manager);
+					}
+				}
+				ImGui::EndCombo();
+			}
+
 			if (g_ActiveGizmoTarget != nullptr)
 			{
 				g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
@@ -183,6 +227,7 @@ namespace HEIN
 
 		}
 		ImGui::End();
-	}
 
+		return currentAction;
+	}
 }

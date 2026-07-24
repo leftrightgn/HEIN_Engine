@@ -99,3 +99,14 @@ void HEIN::MeshColliderComponent::Draw(
 	);
 
 }
+
+nlohmann::json HEIN::MeshColliderComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::MeshColliderComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

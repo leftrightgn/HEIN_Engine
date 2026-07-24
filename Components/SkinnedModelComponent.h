@@ -20,6 +20,9 @@ namespace HEIN
 
 		static std::unordered_map<std::wstring, std::weak_ptr<DirectX::Model>> s_modelCache;
 
+		std::wstring m_modelPath;
+		std::wstring m_textureDir;
+
 		std::shared_ptr<DirectX::Model> m_model;
 
 		std::unordered_map<std::string, std::unique_ptr<DX::AnimationSDKMESH>> m_animations;
@@ -33,6 +36,11 @@ namespace HEIN
 		float m_blendDuration = 0.0f;
 
 	public:
+		std::string GetComponentName() const override { return "SkinnedModelComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+		void InitializeAfterDeserialize(GameContext& gameContext) override;
+
 
 		SkinnedModelComponent(Actor* owner);
 

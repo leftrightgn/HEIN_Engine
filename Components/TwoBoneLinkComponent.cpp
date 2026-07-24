@@ -84,3 +84,14 @@ void HEIN::TwoBoneLinkComponent::LateUpdate(float deltaTime)
 	// pass the exact world distance!
 	m_linkedCapsule->SetHeight(worldDistance);
 }
+
+nlohmann::json HEIN::TwoBoneLinkComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::TwoBoneLinkComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

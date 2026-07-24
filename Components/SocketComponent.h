@@ -38,6 +38,10 @@ namespace HEIN
         TransformComponent* m_transform;
 
     public:
+		std::string GetComponentName() const override { return "SocketComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
         SocketComponent(Actor* owner);
 
         void Start() override;

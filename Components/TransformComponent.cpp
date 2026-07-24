@@ -121,6 +121,34 @@ DirectX::SimpleMath::Vector3 HEIN::TransformComponent::GetRotationEuler() const
    return euler;
 }
 
+nlohmann::json HEIN::TransformComponent::Serialize()
+{
+    nlohmann::json data;
+    data["Position"] = { m_position.x, m_position.y, m_position.z };
+    data["Scale"] = { m_scale.x, m_scale.y, m_scale.z };
+
+    DirectX::SimpleMath::Vector3 euler = GetRotationEuler();
+    data["RotationEuler"] = { euler.x, euler.y, euler.z };
+
+    return data;
+}
+
+void HEIN::TransformComponent::Deserialize(const nlohmann::json& data)
+{
+    if (data.contains("Position"))
+    {
+        SetPosition(DirectX::SimpleMath::Vector3(data["Position"][0], data["Position"][1], data["Position"][2]));
+    }
+    if (data.contains("Scale"))
+    {
+        SetScale(DirectX::SimpleMath::Vector3(data["Scale"][0], data["Scale"][1], data["Scale"][2]));
+    }
+    if (data.contains("RotationEuler"))
+    {
+        SetRotationEuler(DirectX::SimpleMath::Vector3(data["RotationEuler"][0], data["RotationEuler"][1], data["RotationEuler"][2]));
+    }
+}
+
 DirectX::SimpleMath::Matrix HEIN::TransformComponent::GetWorldMatrix() const
 {
 

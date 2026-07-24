@@ -14,3 +14,14 @@ void HEIN::DamageDealerComponent::Initialize(float damageAmount, DamageType dama
 	m_damageAmount = damageAmount;
 	m_damageType = damageType;
 }
+
+nlohmann::json HEIN::DamageDealerComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::DamageDealerComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

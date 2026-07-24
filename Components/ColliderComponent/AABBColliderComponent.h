@@ -14,6 +14,10 @@ namespace HEIN
 		DirectX::BoundingBox m_worldAABB;
 
 	public:
+		std::string GetComponentName() const override { return "AABBColliderComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		AABBColliderComponent(Actor* owner);
 	

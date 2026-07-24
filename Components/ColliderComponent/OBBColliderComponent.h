@@ -15,6 +15,10 @@ namespace HEIN
 		DirectX::BoundingOrientedBox m_worldOBB;
 
 	public:
+		std::string GetComponentName() const override { return "OBBColliderComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		OBBColliderComponent(Actor* owner);
 

@@ -34,6 +34,9 @@ namespace HEIN
 		CameraController(Actor* owner);
 
 		void Start() override {}
+		std::string GetComponentName() const override { return "CameraController"; }
+		nlohmann::json Serialize() override { return IComponent::Serialize(); }
+		void Deserialize(const nlohmann::json& data) override { IComponent::Deserialize(data); }
 
 		void RegisterCamera(CameraType key, CameraFactory factory);
 		

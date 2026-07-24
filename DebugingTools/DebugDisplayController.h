@@ -30,6 +30,8 @@ namespace HEIN
 		HEIN::ActorID m_debugStageID = HEIN::INVALID_ACTOR_ID;
 		HEIN::ActorID m_debugEnemyID = HEIN::INVALID_ACTOR_ID;
 		HEIN::ActorID m_debugCameraID = HEIN::INVALID_ACTOR_ID;
+
+		HEIN::EditorAction m_currentAction = HEIN::EditorAction::None;
 	public:
 
 		DebugDisplayController();
@@ -55,6 +57,7 @@ namespace HEIN
 
 		void SetDebugTargets(HEIN::ActorID playerID, HEIN::ActorID swordID, HEIN::ActorID axeID, HEIN::ActorID stageID, HEIN::ActorID enemyID);
 
+		EditorAction GetUIAction() const { return m_currentAction; }
 	};
 }
 

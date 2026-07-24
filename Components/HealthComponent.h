@@ -13,6 +13,10 @@ namespace HEIN
 		bool m_isInvincible;
 
 	public:
+		std::string GetComponentName() const override { return "HealthComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		HealthComponent(Actor* owner);
 

@@ -186,7 +186,11 @@ namespace HEIN
         {
             ImGuizmo::BeginFrame();
 
-            m_debugUI.Draw(actorManager, view, m_projMatrix);
+           m_currentAction = m_debugUI.Draw(actorManager, view, m_projMatrix);
+        }
+        else
+        {
+            m_currentAction = HEIN::EditorAction::None;
         }
     }
 	const DirectX::SimpleMath::Matrix DebugDisplayController::GetViewMatrix() const

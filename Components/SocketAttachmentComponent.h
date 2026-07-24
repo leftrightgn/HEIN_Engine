@@ -17,6 +17,10 @@ namespace HEIN
 		std::wstring m_socketName;
 
 	public:
+		std::string GetComponentName() const override { return "SocketAttachmentComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		SocketAttachmentComponent(Actor* owner, ActorManager* manager);
 

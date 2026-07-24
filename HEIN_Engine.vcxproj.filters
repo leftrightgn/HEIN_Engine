@@ -37,6 +37,9 @@
     <ClInclude Include="Components\TargetTrackingComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
+    <ClInclude Include="Factory\ComponentFactory.h">
+      <Filter>Factory</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

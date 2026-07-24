@@ -20,6 +20,10 @@ namespace HEIN
 		bool m_isGrounded = false;
 
 	public:
+		std::string GetComponentName() const override { return "RigidBodyComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		static constexpr float GRAVITY_FORCE = -45.0f;
 

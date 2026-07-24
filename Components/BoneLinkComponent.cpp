@@ -80,3 +80,14 @@ void HEIN::BoneLinkComponent::LateUpdate(float deltaTime)
 }
 
 
+
+nlohmann::json HEIN::BoneLinkComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::BoneLinkComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

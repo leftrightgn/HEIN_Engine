@@ -70,3 +70,14 @@ void HEIN::OBBColliderComponent::Draw(
 
     gameContext.debugCollisionRenderer->QueueOBB(m_worldOBB, debugColor);
 }
+
+nlohmann::json HEIN::OBBColliderComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::OBBColliderComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

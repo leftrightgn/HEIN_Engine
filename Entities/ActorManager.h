@@ -40,6 +40,12 @@ namespace HEIN
 		void CleanUpDestroyedActors();
 
 		const std::unordered_map<ActorID, std::unique_ptr<Actor>>& GetAllActors() const { return m_actors; }
+
+		nlohmann::json Serialize();
+		void Deserialize(const nlohmann::json& sceneData);
+		void InitializeAfterDeserialize(GameContext& gameContext);
+
+		void ClearAllActors();
 	private:
 
 		// internal helper for scene graph map

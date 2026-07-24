@@ -8,6 +8,15 @@
 
 namespace HEIN
 {
+	enum class EditorAction
+	{
+		None,
+		PlayPressed,
+		StopPressed,
+		SavePressed,
+		LoadPressed
+	};
+
 	class ActorManager;
 	class IGizmoEditable;
 
@@ -35,7 +44,7 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& proj
 		);
 
-		void Draw(
+		EditorAction Draw(
 			HEIN::ActorManager& manager,
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj

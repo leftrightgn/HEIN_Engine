@@ -181,3 +181,14 @@ void HEIN::CapsuleColliderComponent::Draw(
 		}
 	}
 }
+
+nlohmann::json HEIN::CapsuleColliderComponent::Serialize()
+{
+    nlohmann::json data = IComponent::Serialize();
+    return data;
+}
+
+void HEIN::CapsuleColliderComponent::Deserialize(const nlohmann::json& data)
+{
+    IComponent::Deserialize(data);
+}

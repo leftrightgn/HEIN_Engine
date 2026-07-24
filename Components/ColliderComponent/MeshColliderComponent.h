@@ -17,6 +17,10 @@ namespace HEIN
 		std::vector<uint16_t> m_debugIndices;
 
 	public:
+		std::string GetComponentName() const override { return "MeshColliderComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+
 
 		MeshColliderComponent(Actor* owner);
 
