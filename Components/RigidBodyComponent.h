@@ -15,14 +15,15 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 m_acceleration;
 
 		float m_mass;
-		float m_useGravity;
-		float m_isKinematic;
+		bool m_useGravity;
+		bool m_isKinematic;
 		bool m_isGrounded = false;
 
 	public:
 		std::string GetComponentName() const override { return "RigidBodyComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI() override;
 
 
 		static constexpr float GRAVITY_FORCE = -45.0f;

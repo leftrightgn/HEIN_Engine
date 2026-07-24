@@ -3,6 +3,8 @@
 #include "Components/IComponent.h"
 #include <Components/TransformComponent.h>
 #include <Factory/ComponentFactory.h>
+#include "ActorManager.h"
+#include <ImGui/imgui.h>
 
 
 HEIN::Actor::Actor(ActorID id, const std::wstring& tag)
@@ -55,13 +57,33 @@ void HEIN::Actor::Start()
 
 void HEIN::Actor::DrawInspector()
 {
+	HEIN::IComponent* compToRemove = nullptr;
+
 	for (auto& comp : m_components)
 	{
+		ImGui::PushID(comp.get());
 		comp->OnInspectorGUI();
+		
+		// ponytail: We don't want them removing TransformComponent since the engine relies heavily on it being there!
+		if (comp->GetComponentName() != "TransformComponent")
+		{
+			if (ImGui::Button("Remove Component", ImVec2(ImGui::GetContentRegionAvail().x, 0)))
+			{
+				compToRemove = comp.get();
+			}
+		}
+
+		ImGui::Separator();
+		ImGui::PopID();
+	}
+
+	if (compToRemove)
+	{
+		RemoveComponent(compToRemove);
 	}
 }
 
-nlohmann::json HEIN::Actor::Serialize()
+nlohmann::json HEIN::Actor::Serialize(ActorManager* manager)
 {
 	nlohmann::json actorData;
 
@@ -86,10 +108,25 @@ nlohmann::json HEIN::Actor::Serialize()
 	}
 
 	actorData["Components"] = componentArray;
+
+	nlohmann::json childrenArray = nlohmann::json::array();
+	if (manager != nullptr)
+	{
+		for (ActorID childID : m_childrensID)
+		{
+			Actor* child = manager->GetActor(childID);
+			if (child != nullptr)
+			{
+				childrenArray.push_back(child->Serialize(manager));
+			}
+		}
+	}
+	actorData["Children"] = childrenArray;
+
 	return actorData;
 }
 
-void HEIN::Actor::Deserialize(const nlohmann::json& actorData)
+void HEIN::Actor::Deserialize(const nlohmann::json& actorData, ActorManager* manager)
 {
 	if (actorData.contains("Name"))
 	{
@@ -100,16 +137,68 @@ void HEIN::Actor::Deserialize(const nlohmann::json& actorData)
 
 	if (actorData.contains("Components"))
 	{
+		size_t existingCompIndex = 0;
 		for (const auto& compData : actorData["Components"])
 		{
 			std::string compType = compData["Type"];
 
-			HEIN::IComponent* newComp = ComponentFactory::CreateComponent(compType, this);
+			HEIN::IComponent* targetComp = nullptr;
 
-			if (newComp != nullptr)
+			// Sequential matching allows multiple components of the same type to map correctly
+			while (existingCompIndex < m_components.size())
 			{
-				newComp->Deserialize(compData["Data"]);
+				if (m_components[existingCompIndex]->GetComponentName() == compType)
+				{
+					targetComp = m_components[existingCompIndex].get();
+					existingCompIndex++; // Advance for next component match
+					break;
+				}
+				existingCompIndex++;
 			}
+
+			if (targetComp != nullptr)
+			{
+				if (compData.contains("Data") && !compData["Data"].is_null())
+				{
+					targetComp->Deserialize(compData["Data"]);
+				}
+			}
+			else
+			{
+				HEIN::IComponent* newComp = ComponentFactory::CreateComponent(compType, this, manager);
+
+				if (newComp != nullptr)
+				{
+					if (compData.contains("Data") && !compData["Data"].is_null())
+					{
+						newComp->Deserialize(compData["Data"]);
+					}
+				}
+			}
+		}
+	}
+
+	if (manager != nullptr && actorData.contains("Children"))
+	{
+		for (const auto& childData : actorData["Children"])
+		{
+			std::wstring childTag = L"Unknown";
+			if (childData.contains("Name"))
+			{
+				std::string narrowTag = childData["Name"];
+				childTag = std::wstring(narrowTag.begin(), narrowTag.end());
+			}
+
+			// Try to find the child if it already exists
+			HEIN::Actor* childActor = manager->GetActorByName(childTag);
+			if (childActor == nullptr)
+			{
+				childActor = manager->CreateActor(childTag);
+				childActor->SetParent(GetID());
+				AddChild(childActor->GetID());
+			}
+			
+			childActor->Deserialize(childData, manager);
 		}
 	}
 }

@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Framework/GameContext.h"
 #include "CapsuleColliderComponent.h"
+#include <DebugingTools/DebugUIManager.h>
 #include <DirectXColors.h>
 
 HEIN::CapsuleColliderComponent::CapsuleColliderComponent(Actor* owner)
@@ -184,11 +185,25 @@ void HEIN::CapsuleColliderComponent::Draw(
 
 nlohmann::json HEIN::CapsuleColliderComponent::Serialize()
 {
-    nlohmann::json data = IComponent::Serialize();
+    nlohmann::json data = ColliderComponent::Serialize();
+    data["Radius"] = m_radius;
+    data["Height"] = m_height;
     return data;
 }
 
 void HEIN::CapsuleColliderComponent::Deserialize(const nlohmann::json& data)
 {
-    IComponent::Deserialize(data);
+    ColliderComponent::Deserialize(data);
+    if (data.contains("Radius")) m_radius = data["Radius"];
+    if (data.contains("Height")) m_height = data["Height"];
+}
+
+void HEIN::CapsuleColliderComponent::OnInspectorGUI()
+{
+    ColliderComponent::OnInspectorGUI();
+    if (ImGui::CollapsingHeader("Capsule Properties", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::DragFloat("Radius", &m_radius, 0.05f);
+        ImGui::DragFloat("Height", &m_height, 0.05f);
+    }
 }

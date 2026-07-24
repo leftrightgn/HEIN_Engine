@@ -2,6 +2,89 @@
 #include "Framework/GameContext.h"
 #include "SkinnedModelComponent.h"
 #include "Entities/Actor.h"
+#include <ImGui/imgui.h>
+#include <ImGui/imgui_stdlib.h>
+#include <Windows.h>
+#include <commdlg.h>
+#include <shobjidl.h>
+#include <string>
+#include <filesystem>
+
+
+static std::wstring SelectFolder()
+{
+	std::wstring folderPath;
+	IFileOpenDialog* pFileOpen = nullptr;
+	
+	HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, 
+								  IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
+	
+	if (SUCCEEDED(hr))
+	{
+		DWORD dwOptions;
+		if (SUCCEEDED(pFileOpen->GetOptions(&dwOptions)))
+		{
+			pFileOpen->SetOptions(dwOptions | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR);
+		}
+		
+		if (SUCCEEDED(pFileOpen->Show(NULL)))
+		{
+			IShellItem* pItem;
+			if (SUCCEEDED(pFileOpen->GetResult(&pItem)))
+			{
+				PWSTR pszFilePath;
+				if (SUCCEEDED(pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath)))
+				{
+					folderPath = pszFilePath;
+					CoTaskMemFree(pszFilePath);
+				}
+				pItem->Release();
+			}
+		}
+		pFileOpen->Release();
+	}
+	return folderPath;
+}
+
+static std::wstring MakeRelativePath(const std::wstring& absolutePath)
+{
+    std::wstring result = absolutePath;
+
+    // 1. Try to find "Resources" (Checking both upper and lower case)
+    size_t pos = result.find(L"Resources");
+    if (pos == std::wstring::npos) 
+    {
+        pos = result.find(L"resources");
+    }
+
+    if (pos != std::wstring::npos)
+    {
+        // Crop the path starting from "Resources"
+        result = result.substr(pos);
+    }
+    else
+    {
+        // 2. Fallback to standard filesystem relative path
+        try
+        {
+            std::filesystem::path fullPath(absolutePath);
+            std::filesystem::path currentDir = std::filesystem::current_path();
+            result = std::filesystem::relative(fullPath, currentDir).wstring();
+        }
+        catch (...)
+        {
+            result = absolutePath;
+        }
+    }
+
+    // 3. Unconditionally convert ALL backslashes to forward slashes for clean JSON
+    for (wchar_t& c : result)
+    {
+        if (c == L'\\') c = L'/';
+    }
+
+    return result;
+}
 
 std::shared_ptr<DirectX::EffectFactory> HEIN::SkinnedModelComponent::s_fxFactory = nullptr;
 std::unordered_map<std::wstring, std::weak_ptr<DirectX::Model>> HEIN::SkinnedModelComponent::s_modelCache;
@@ -40,17 +123,30 @@ namespace HEIN
 		}
 		else
 		{
-			m_model = DirectX::Model::CreateFromSDKMESH(
-				device,
-				modelPath,
-				*s_fxFactory,
-				static_cast<DirectX::ModelLoaderFlags>
-				(
-					DirectX::ModelLoader_Clockwise |
-					DirectX::ModelLoader_IncludeBones
-					)
-			);
-			s_modelCache[key] = m_model;
+			try
+			{
+				m_model = DirectX::Model::CreateFromSDKMESH(
+					device,
+					modelPath,
+					*s_fxFactory,
+					static_cast<DirectX::ModelLoaderFlags>
+					(
+						DirectX::ModelLoader_Clockwise |
+						DirectX::ModelLoader_IncludeBones
+						)
+				);
+				s_modelCache[key] = m_model;
+			}
+			catch (const std::exception&)
+			{
+				// Model file not found or invalid
+				m_model = nullptr;
+			}
+		}
+
+		if (m_model == nullptr)
+		{
+			return; // Do not initialize bones if the model failed to load
 		}
 
 		m_drawBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
@@ -156,6 +252,19 @@ namespace HEIN
 		const DirectX::SimpleMath::Matrix& proj
 	)
 	{
+		if (m_needsReload)
+		{
+			if (m_textureDir.empty() && !m_modelPath.empty())
+			{
+				std::filesystem::path p(m_modelPath);
+				m_textureDir = p.parent_path().wstring() + L"/";
+			}
+
+			// Re-initialize the model from the newly set paths
+			Initialize(gameContext, m_modelPath.c_str(), m_textureDir.c_str());
+			m_needsReload = false;
+		}
+
 		if (!m_isVisible) return;
 
 		if (!m_model) return;
@@ -251,15 +360,32 @@ namespace HEIN
 	{
 		if (!m_model) return;
 
-		std::unique_ptr<DX::AnimationSDKMESH> newAnim = std::make_unique<DX::AnimationSDKMESH>();
-		DX::ThrowIfFailed(newAnim->Load(animPath));
-		newAnim->Bind(*m_model);
-
-		m_animations[name] = std::move(newAnim);
-
-		if (m_currentAnimation == nullptr)
+		try 
 		{
-			m_currentAnimation = m_animations[name].get();
+			// The Animation loader strictly requires backslashes in the file path or it will fail!
+			std::wstring safePath = animPath;
+			for (wchar_t& c : safePath) 
+			{
+				if (c == L'/') c = L'\\';
+			}
+
+			std::unique_ptr<DX::AnimationSDKMESH> newAnim = std::make_unique<DX::AnimationSDKMESH>();
+			DX::ThrowIfFailed(newAnim->Load(safePath.c_str()));
+			newAnim->Bind(*m_model);
+
+			m_animations[name] = std::move(newAnim);
+			m_animationPaths[name] = animPath;
+
+			if (m_currentAnimation == nullptr)
+			{
+				m_currentAnimation = m_animations[name].get();
+			}
+		}
+		catch (const std::exception& e)
+		{
+			char buffer[512];
+			sprintf_s(buffer, "Failed to load animation: %s\n", e.what()); m_lastError = buffer;
+			OutputDebugStringA(buffer);
 		}
 	}
 
@@ -289,7 +415,6 @@ namespace HEIN
 
 			if (!m_isBlending && m_currentAnimation == it->second.get()) return;
 			
-		
 			for (size_t i = 0; i < m_model->bones.size(); ++i)
 			{
 				m_shapShotBones[i] = m_drawBones[i];
@@ -300,10 +425,108 @@ namespace HEIN
 			m_blendTimer = 0.0f;
 			m_isBlending = true;
 
-			m_targetAnimation->SetAnimTime(0.0f);
+			// Force restart if requested
+			if (forceRestart)
+			{
+				m_targetAnimation->SetAnimTime(0.0f);
+			}
 		}
 	}
 
+		void SkinnedModelComponent::OnInspectorGUI()
+	{
+		if (ImGui::CollapsingHeader("Skinned Model Component", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (!m_lastError.empty()) ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", m_lastError.c_str());
+			ImGui::Checkbox("Visible", &m_isVisible);
+
+			// Model Path Editor
+			std::string modelPathStr = std::string(m_modelPath.begin(), m_modelPath.end());
+			if (ImGui::InputText("Model Path", &modelPathStr))
+			{
+				m_modelPath = std::wstring(modelPathStr.begin(), modelPathStr.end());
+				m_needsReload = true;
+			}
+
+			ImGui::SameLine();
+			if (ImGui::Button("Browse##Model"))
+			{
+				WCHAR szFile[260] = { 0 };
+				OPENFILENAMEW ofn = { 0 };
+				ofn.lStructSize = sizeof(ofn);
+				ofn.lpstrFile = szFile;
+				ofn.nMaxFile = sizeof(szFile) / sizeof(WCHAR);
+				ofn.lpstrFilter = L"Model Files\0*.cmo;*.sdkmesh\0All Files\0*.*\0";
+				ofn.nFilterIndex = 1;
+				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+				if (GetOpenFileNameW(&ofn) == TRUE)
+				{
+					m_modelPath = MakeRelativePath(szFile);
+					m_needsReload = true;
+				}
+			}
+
+			// Texture Dir Editor
+			std::string texDirStr = std::string(m_textureDir.begin(), m_textureDir.end());
+			if (ImGui::InputText("Texture Dir", &texDirStr))
+			{
+				m_textureDir = std::wstring(texDirStr.begin(), texDirStr.end());
+				m_needsReload = true;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Browse##Tex"))
+			{
+				std::wstring selectedFolder = SelectFolder();
+				if (!selectedFolder.empty())
+				{
+					m_textureDir = MakeRelativePath(selectedFolder);
+					
+					// Make sure it ends with a slash if it doesn't already, so the EffectFactory handles it correctly
+					if (!m_textureDir.empty() && m_textureDir.back() != L'\\' && m_textureDir.back() != L'/')
+					{
+						m_textureDir += L'/';
+					}
+					
+					m_needsReload = true;
+				}
+			}
+
+			ImGui::Separator();
+			ImGui::Text("Loaded Animations:");
+
+			for (auto& pair : m_animations)
+			{
+				if (ImGui::Button(("Play " + pair.first).c_str()))
+				{
+					CrossfadeAnimation(pair.first, 0.2f, true);
+				}
+			}
+
+			ImGui::Separator();
+			ImGui::Text("Load New Animation:");
+			
+			static std::string newAnimName = "";
+			ImGui::InputText("Anim Name", &newAnimName);
+			
+			if (ImGui::Button("Browse Animation..."))
+			{
+				WCHAR szFile[260] = { 0 };
+				OPENFILENAMEW ofn = { 0 };
+				ofn.lStructSize = sizeof(ofn);
+				ofn.lpstrFile = szFile;
+				ofn.nMaxFile = sizeof(szFile) / sizeof(WCHAR);
+				ofn.lpstrFilter = L"Animation Files\0*.sdkmesh_anim\0All Files\0*.*\0";
+				ofn.nFilterIndex = 1;
+				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+				if (GetOpenFileNameW(&ofn) == TRUE)
+				{
+					std::string name = newAnimName;
+					if (name.empty()) name = "Anim" + std::to_string(m_animations.size());
+					LoadAnimation(name, MakeRelativePath(szFile).c_str());
+				}
+			}
+		}
+	}
 }
 
 nlohmann::json HEIN::SkinnedModelComponent::Serialize()
@@ -313,6 +536,18 @@ nlohmann::json HEIN::SkinnedModelComponent::Serialize()
     std::string narrowTextureDir(m_textureDir.begin(), m_textureDir.end());
     data["ModelPath"] = narrowModelPath;
     data["TextureDir"] = narrowTextureDir;
+
+    nlohmann::json animsArray = nlohmann::json::array();
+    for (const auto& pair : m_animationPaths)
+    {
+        nlohmann::json animData;
+        animData["Name"] = pair.first;
+        std::string pathStr(pair.second.begin(), pair.second.end());
+        animData["Path"] = pathStr;
+        animsArray.push_back(animData);
+    }
+    data["Animations"] = animsArray;
+
     return data;
 }
 
@@ -329,12 +564,31 @@ void HEIN::SkinnedModelComponent::Deserialize(const nlohmann::json& data)
         std::string narrowTextureDir = data["TextureDir"];
         m_textureDir = std::wstring(narrowTextureDir.begin(), narrowTextureDir.end());
     }
+    if (data.contains("Animations"))
+    {
+        for (const auto& animData : data["Animations"])
+        {
+            std::string name = animData["Name"];
+            std::string pathStr = animData["Path"];
+            m_animationPaths[name] = std::wstring(pathStr.begin(), pathStr.end());
+        }
+    }
 }
 
 void HEIN::SkinnedModelComponent::InitializeAfterDeserialize(GameContext& gameContext)
 {
-    if (!m_modelPath.empty() && !m_textureDir.empty())
+    if (!m_modelPath.empty())
     {
+        if (m_textureDir.empty())
+        {
+            std::filesystem::path p(m_modelPath);
+            m_textureDir = p.parent_path().wstring() + L"/";
+        }
         Initialize(gameContext, m_modelPath.c_str(), m_textureDir.c_str());
+
+        for (const auto& pair : m_animationPaths)
+        {
+            LoadAnimation(pair.first, pair.second.c_str());
+        }
     }
 }

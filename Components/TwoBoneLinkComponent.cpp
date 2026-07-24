@@ -4,6 +4,7 @@
 #include "TransformComponent.h"
 #include "ColliderComponent/CapsuleColliderComponent.h"
 #include "TwoBoneLinkComponent.h"
+#include <DebugingTools/DebugUIManager.h>
 
 HEIN::TwoBoneLinkComponent::TwoBoneLinkComponent(Actor* owner)
 	: IComponent(owner)
@@ -13,6 +14,7 @@ HEIN::TwoBoneLinkComponent::TwoBoneLinkComponent(Actor* owner)
 	, m_boneAIndex(-1)
 	, m_boneBIndex(-1)
 	, m_linkedCapsule(nullptr)
+	, m_linkedColliderTag(L"")
 {
 }
 
@@ -30,19 +32,39 @@ void HEIN::TwoBoneLinkComponent::Initialize(
 void HEIN::TwoBoneLinkComponent::LinkTo(CapsuleColliderComponent* capsule)
 {
 	m_linkedCapsule = capsule;
+	if (capsule) m_linkedColliderTag = capsule->GetColliderTag();
 }
 
 void HEIN::TwoBoneLinkComponent::Start()
 {
-	if (m_targetModel != nullptr)
-	{
-		m_boneAIndex = m_targetModel->GetBoneIndex(m_boneAName);
-		m_boneBIndex = m_targetModel->GetBoneIndex(m_boneBName);
-	}
 }
 
 void HEIN::TwoBoneLinkComponent::LateUpdate(float deltaTime)
 {
+	if (m_targetModel == nullptr)
+	{
+		m_targetModel = m_owner->GetComponent<SkinnedModelComponent>();
+	}
+
+	if (m_targetModel != nullptr)
+	{
+		if (m_boneAName != L"" && m_boneAIndex == -1) m_boneAIndex = m_targetModel->GetBoneIndex(m_boneAName);
+		if (m_boneBName != L"" && m_boneBIndex == -1) m_boneBIndex = m_targetModel->GetBoneIndex(m_boneBName);
+	}
+
+	if (m_linkedCapsule == nullptr && m_linkedColliderTag != L"")
+	{
+		auto colliders = m_owner->GetComponents<CapsuleColliderComponent>();
+		for (auto* col : colliders)
+		{
+			if (col->GetColliderTag() == m_linkedColliderTag)
+			{
+				m_linkedCapsule = col;
+				break;
+			}
+		}
+	}
+
 	if (m_targetModel == nullptr || m_boneAIndex == -1 || m_boneBIndex == -1 || m_linkedCapsule == nullptr) return;
 
 	TransformComponent* ownerTransform = m_targetModel->GetOwner()->GetComponent<TransformComponent>();
@@ -88,10 +110,81 @@ void HEIN::TwoBoneLinkComponent::LateUpdate(float deltaTime)
 nlohmann::json HEIN::TwoBoneLinkComponent::Serialize()
 {
     nlohmann::json data = IComponent::Serialize();
+    std::string narrowA(m_boneAName.begin(), m_boneAName.end());
+    std::string narrowB(m_boneBName.begin(), m_boneBName.end());
+    std::string narrowCol(m_linkedColliderTag.begin(), m_linkedColliderTag.end());
+    data["BoneAName"] = narrowA;
+    data["BoneBName"] = narrowB;
+    data["LinkedColliderTag"] = narrowCol;
     return data;
 }
 
 void HEIN::TwoBoneLinkComponent::Deserialize(const nlohmann::json& data)
 {
     IComponent::Deserialize(data);
+    if (data.contains("BoneAName"))
+    {
+        std::string narrow = data["BoneAName"];
+        m_boneAName = std::wstring(narrow.begin(), narrow.end());
+    }
+    if (data.contains("BoneBName"))
+    {
+        std::string narrow = data["BoneBName"];
+        m_boneBName = std::wstring(narrow.begin(), narrow.end());
+    }
+    if (data.contains("LinkedColliderTag"))
+    {
+        std::string narrow = data["LinkedColliderTag"];
+        m_linkedColliderTag = std::wstring(narrow.begin(), narrow.end());
+    }
+}
+
+void HEIN::TwoBoneLinkComponent::OnInspectorGUI()
+{
+	if (m_targetModel == nullptr)
+	{
+		m_targetModel = m_owner->GetComponent<SkinnedModelComponent>();
+	}
+
+	if (ImGui::CollapsingHeader("TwoBoneLinkComponent", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		std::string narrowA(m_boneAName.begin(), m_boneAName.end());
+		char bufferA[256];
+		strcpy_s(bufferA, sizeof(bufferA), narrowA.c_str());
+		if (ImGui::InputText("Bone A", bufferA, sizeof(bufferA)))
+		{
+			std::string newName(bufferA);
+			m_boneAName = std::wstring(newName.begin(), newName.end());
+			if (m_targetModel) m_boneAIndex = m_targetModel->GetBoneIndex(m_boneAName);
+		}
+
+		std::string narrowB(m_boneBName.begin(), m_boneBName.end());
+		char bufferB[256];
+		strcpy_s(bufferB, sizeof(bufferB), narrowB.c_str());
+		if (ImGui::InputText("Bone B", bufferB, sizeof(bufferB)))
+		{
+			std::string newName(bufferB);
+			m_boneBName = std::wstring(newName.begin(), newName.end());
+			if (m_targetModel) m_boneBIndex = m_targetModel->GetBoneIndex(m_boneBName);
+		}
+
+		std::string narrowCol(m_linkedColliderTag.begin(), m_linkedColliderTag.end());
+		char bufferCol[256];
+		strcpy_s(bufferCol, sizeof(bufferCol), narrowCol.c_str());
+		if (ImGui::InputText("Linked Collider Tag", bufferCol, sizeof(bufferCol)))
+		{
+			std::string newName(bufferCol);
+			m_linkedColliderTag = std::wstring(newName.begin(), newName.end());
+			m_linkedCapsule = nullptr;
+			auto colliders = m_owner->GetComponents<CapsuleColliderComponent>();
+			for (auto* col : colliders)
+			{
+				if (col->GetColliderTag() == m_linkedColliderTag)
+				{
+					m_linkedCapsule = col;
+					break;
+				}
+			}
+		}
+	}
 }

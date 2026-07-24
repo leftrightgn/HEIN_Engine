@@ -145,6 +145,7 @@ void HEIN::ColliderComponent::DrawGizmo(
         DirectX::SimpleMath::Quaternion localRot;
         if (localOffset.Decompose(scale, localRot, localPos))
         {
+            localRot.Normalize();
             SetOffset(localPos);
 
             // Extract Euler angles similar to GetRotationEuler
@@ -175,10 +176,39 @@ void HEIN::ColliderComponent::DrawGizmo(
 nlohmann::json HEIN::ColliderComponent::Serialize()
 {
     nlohmann::json data = IComponent::Serialize();
+    std::string tagStr(m_colliderTag.begin(), m_colliderTag.end());
+    data["ColliderTag"] = tagStr;
+    
+    data["OffsetX"] = m_offset.x;
+    data["OffsetY"] = m_offset.y;
+    data["OffsetZ"] = m_offset.z;
+
+    data["RotX"] = m_rotationOffset.x;
+    data["RotY"] = m_rotationOffset.y;
+    data["RotZ"] = m_rotationOffset.z;
+    data["RotW"] = m_rotationOffset.w;
+
+    data["IsTrigger"] = m_isTrigger;
     return data;
 }
 
 void HEIN::ColliderComponent::Deserialize(const nlohmann::json& data)
 {
     IComponent::Deserialize(data);
+    if (data.contains("ColliderTag"))
+    {
+        std::string tagStr = data["ColliderTag"];
+        m_colliderTag = std::wstring(tagStr.begin(), tagStr.end());
+    }
+    
+    if (data.contains("OffsetX")) m_offset.x = data["OffsetX"];
+    if (data.contains("OffsetY")) m_offset.y = data["OffsetY"];
+    if (data.contains("OffsetZ")) m_offset.z = data["OffsetZ"];
+
+    if (data.contains("RotX")) m_rotationOffset.x = data["RotX"];
+    if (data.contains("RotY")) m_rotationOffset.y = data["RotY"];
+    if (data.contains("RotZ")) m_rotationOffset.z = data["RotZ"];
+    if (data.contains("RotW")) m_rotationOffset.w = data["RotW"];
+
+    if (data.contains("IsTrigger")) m_isTrigger = data["IsTrigger"];
 }

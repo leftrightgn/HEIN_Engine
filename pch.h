@@ -16,8 +16,8 @@
 
 // DirectX apps don't need GDI
 #define NODRAWTEXT
-#define NOGDI
-#define NOBITMAP
+//#define NOGDI
+//#define NOBITMAP
 
 // Include <mcx.h> if you need this
 #define NOMCX

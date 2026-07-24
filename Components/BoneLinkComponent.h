@@ -18,11 +18,13 @@ namespace HEIN
 		TransformComponent* m_linkedTransform;
 		ColliderComponent* m_linkedCollider;
 		DirectX::SimpleMath::Vector3* m_linkedPosition;
+		std::wstring m_linkedColliderTag;
 
 	public:
 		std::string GetComponentName() const override { return "BoneLinkComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI() override;
 
 
 		BoneLinkComponent(Actor* owner);

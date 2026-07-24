@@ -9,6 +9,7 @@
 #include "ImGui/imgui_impl_win32.h"
 #include "ImGui/imgui_impl_dx11.h"
 #include <Message/Messenger.h>
+#include <Factory/ComponentFactory.h>
 
 extern void ExitGame() noexcept;
 

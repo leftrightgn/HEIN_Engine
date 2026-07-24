@@ -101,6 +101,7 @@ namespace HEIN
 				rotation.x,
 				rotation.z
 			);
+			m_rotationOffset.Normalize();
 		}
 		DirectX::SimpleMath::Vector3 GetRotationOffset() const { return m_rotationEuler; }
 

@@ -12,6 +12,7 @@ namespace HEIN
 
 		std::vector<Triangle> m_localTriangles;
 		std::vector<Triangle> m_worldTriangles;
+		std::wstring m_objPath;
 
 		std::vector<DirectX::VertexPosition> m_debugVertices;
 		std::vector<uint16_t> m_debugIndices;
@@ -20,6 +21,7 @@ namespace HEIN
 		std::string GetComponentName() const override { return "MeshColliderComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI() override;
 
 
 		MeshColliderComponent(Actor* owner);

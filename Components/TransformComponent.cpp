@@ -78,6 +78,7 @@ void HEIN::TransformComponent::DrawGizmo(
         DirectX::SimpleMath::Quaternion rot;
         if (worldMat.Decompose(scale, rot, pos))
         {
+            rot.Normalize();
             SetPosition(pos);
             SetRotation(rot);
             SetScale(scale);
@@ -88,6 +89,7 @@ void HEIN::TransformComponent::DrawGizmo(
 void HEIN::TransformComponent::SetRotationEuler(const DirectX::SimpleMath::Vector3& eulerAngles)
 {
     m_rotation = DirectX::SimpleMath::Quaternion::CreateFromYawPitchRoll(eulerAngles.y, eulerAngles.x, eulerAngles.z);
+    m_rotation.Normalize();
 }
 
 DirectX::SimpleMath::Vector3 HEIN::TransformComponent::GetRotationEuler() const
@@ -124,11 +126,10 @@ DirectX::SimpleMath::Vector3 HEIN::TransformComponent::GetRotationEuler() const
 nlohmann::json HEIN::TransformComponent::Serialize()
 {
     nlohmann::json data;
-    data["Position"] = { m_position.x, m_position.y, m_position.z };
-    data["Scale"] = { m_scale.x, m_scale.y, m_scale.z };
+    data["Position"] = nlohmann::json::array({ m_position.x, m_position.y, m_position.z });
+    data["Scale"] = nlohmann::json::array({ m_scale.x, m_scale.y, m_scale.z });
 
-    DirectX::SimpleMath::Vector3 euler = GetRotationEuler();
-    data["RotationEuler"] = { euler.x, euler.y, euler.z };
+    data["Rotation"] = nlohmann::json::array({ m_rotation.x, m_rotation.y, m_rotation.z, m_rotation.w });
 
     return data;
 }
@@ -143,21 +144,21 @@ void HEIN::TransformComponent::Deserialize(const nlohmann::json& data)
     {
         SetScale(DirectX::SimpleMath::Vector3(data["Scale"][0], data["Scale"][1], data["Scale"][2]));
     }
-    if (data.contains("RotationEuler"))
-    {
-        SetRotationEuler(DirectX::SimpleMath::Vector3(data["RotationEuler"][0], data["RotationEuler"][1], data["RotationEuler"][2]));
-    }
+    if (data.contains("Rotation")) { m_rotation.x = data["Rotation"][0]; m_rotation.y = data["Rotation"][1]; m_rotation.z = data["Rotation"][2]; m_rotation.w = data["Rotation"][3]; m_rotation.Normalize(); } else if (data.contains("RotationEuler")) { SetRotationEuler(DirectX::SimpleMath::Vector3(data["RotationEuler"][0], data["RotationEuler"][1], data["RotationEuler"][2])); }
 }
 
 DirectX::SimpleMath::Matrix HEIN::TransformComponent::GetWorldMatrix() const
 {
+    // Ensure strictly normalized before passing to CreateFromQuaternion!
+    DirectX::SimpleMath::Quaternion normRot = m_rotation;
+    normRot.Normalize();
 
     // the order of matrix multiplication is Scale * Rotation * Translation
     // CreateFromYawPitchRoll takes (Y, X, Z) 
     return  DirectX::SimpleMath::Matrix::CreateScale(m_scale) *
-        DirectX::SimpleMath::Matrix::CreateFromQuaternion(m_rotation) *
+        DirectX::SimpleMath::Matrix::CreateFromQuaternion(normRot) *
         DirectX::SimpleMath::Matrix::CreateTranslation(m_position) *
-        m_parentMatrix;;
+        m_parentMatrix;
 }
 
 void HEIN::TransformComponent::Update(float /*deltaTime*/)

@@ -168,8 +168,27 @@ namespace HEIN
         actorManager.DrawAll(gameContext, view, m_projMatrix);
 
         DirectX::BoundingFrustum mainCamFrustum(mainProj, false);
-        DirectX::SimpleMath::Matrix mainCamWorld = mainView.Invert();
+        
+        DirectX::SimpleMath::Matrix mainCamWorld;
+        if (std::abs(mainView.Determinant()) < 1e-6f)
+        {
+            // ponytail: The view matrix is numerically singular (e.g. camera just spawned and looking down).
+            // Inverting it will yield NaNs, which destroys the frustum and asserts in GetCorners().
+            mainCamWorld = DirectX::SimpleMath::Matrix::Identity;
+        }
+        else
+        {
+            mainCamWorld = mainView.Invert();
+        }
+
         mainCamFrustum.Transform(mainCamFrustum, mainCamWorld);
+
+        // ponytail: Floating point inaccuracies during Matrix Invert -> Transform can yield a non-unit quaternion.
+        // We must normalize it before DrawFrustum reads it, otherwise XMQuaternionIsUnit asserts.
+        DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&mainCamFrustum.Orientation);
+        q = DirectX::XMQuaternionNormalize(q);
+        DirectX::XMStoreFloat4(&mainCamFrustum.Orientation, q);
+
         gameContext.debugRenderer->Begin(view, m_projMatrix);
         gameContext.debugRenderer->DrawFrustum(mainCamFrustum, DirectX::XMVectorSet(1.0f, 1.0f, 0.0f, 1.0f));
         DirectX::BoundingSphere camEye(mainCamWorld.Translation(), 0.3f);

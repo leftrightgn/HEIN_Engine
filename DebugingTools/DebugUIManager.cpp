@@ -10,6 +10,8 @@
 #include <Entities/ActorManager.h>
 #include <Components/ColliderComponent/MeshColliderComponent.h>
 #include <Factory/ComponentFactory.h>
+#include <Windows.h>
+#include <vector>
 //#include <Components/TransformComponent.h>
 
 namespace HEIN
@@ -163,11 +165,31 @@ namespace HEIN
 		if (ImGui::Button("SAVE SCENE")) currentAction = HEIN::EditorAction::SavePressed;
 		ImGui::SameLine();
 		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
+		ImGui::SameLine();
+		if (ImGui::Button("NEW SCENE")) currentAction = HEIN::EditorAction::NewScenePressed;
 		ImGui::Separator();
 		if (ImGui::Button("Create Empty Actor"))
 		{
 			HEIN::Actor* newActor = manager.CreateActor(L"NewActor");
 			m_selectedActor = newActor;
+		}
+		ImGui::End();
+
+		// DRAW THE HIERARCHY WINDOW
+		ImGui::Begin("Hierarchy");
+		for (const auto& pair : manager.GetAllActors())
+		{
+			HEIN::Actor* actor = pair.second.get();
+			std::wstring tag = actor->GetTag();
+			std::string narrowTag(tag.begin(), tag.end());
+			
+			std::string label = narrowTag + "##" + std::to_string(actor->GetID());
+			
+			bool isSelected = (m_selectedActor == actor);
+			if (ImGui::Selectable(label.c_str(), isSelected))
+			{
+				m_selectedActor = actor;
+			}
 		}
 		ImGui::End();
 
@@ -208,6 +230,12 @@ namespace HEIN
 			
 			// Add Component UI
 			std::vector<std::string> componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
+			if (componentNames.empty())
+			{
+				HEIN::ComponentFactory::Initialize();
+				componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
+			}
+
 			if (ImGui::BeginCombo("Add Component", "Select Component..."))
 			{
 				for (const std::string& compName : componentNames)

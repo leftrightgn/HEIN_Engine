@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <Framework/GameContext.h>
+#include <ImGui/imgui.h>
 
 HEIN::MeshColliderComponent::MeshColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::Mesh)
@@ -11,6 +12,7 @@ HEIN::MeshColliderComponent::MeshColliderComponent(Actor* owner)
 
 void HEIN::MeshColliderComponent::LoadFromObj(const wchar_t* filePath)
 {
+	m_objPath = filePath;
 	std::ifstream file(filePath);
 	if (!file.is_open()) return;
 
@@ -82,6 +84,7 @@ void HEIN::MeshColliderComponent::Draw(
 	DirectX::SimpleMath::Vector3 scale, pos;
 	DirectX::SimpleMath::Quaternion rot;
 	worldMatrix.Decompose(scale, rot, pos);
+    rot.Normalize();
 
 	DirectX::SimpleMath::Color debugColor = DirectX::SimpleMath::Color(DirectX::Colors::Red);
 	if (m_isCollidingThisFrame)
@@ -102,11 +105,42 @@ void HEIN::MeshColliderComponent::Draw(
 
 nlohmann::json HEIN::MeshColliderComponent::Serialize()
 {
-    nlohmann::json data = IComponent::Serialize();
+    nlohmann::json data = ColliderComponent::Serialize();
+    std::string pathStr(m_objPath.begin(), m_objPath.end());
+    data["ObjPath"] = pathStr;
     return data;
 }
 
 void HEIN::MeshColliderComponent::Deserialize(const nlohmann::json& data)
 {
-    IComponent::Deserialize(data);
+    ColliderComponent::Deserialize(data);
+    if (data.contains("ObjPath"))
+    {
+        std::string pathStr = data["ObjPath"];
+        m_objPath = std::wstring(pathStr.begin(), pathStr.end());
+        if (!m_objPath.empty())
+        {
+            LoadFromObj(m_objPath.c_str());
+        }
+    }
+}
+
+void HEIN::MeshColliderComponent::OnInspectorGUI()
+{
+    ColliderComponent::OnInspectorGUI();
+    if (ImGui::CollapsingHeader("MeshCollider Properties", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        std::string narrowPath(m_objPath.begin(), m_objPath.end());
+        char bufferPath[256];
+        strcpy_s(bufferPath, sizeof(bufferPath), narrowPath.c_str());
+        if (ImGui::InputText("Obj Path", bufferPath, sizeof(bufferPath)))
+        {
+            std::string newPath(bufferPath);
+            m_objPath = std::wstring(newPath.begin(), newPath.end());
+            if (!m_objPath.empty())
+            {
+                LoadFromObj(m_objPath.c_str());
+            }
+        }
+    }
 }
