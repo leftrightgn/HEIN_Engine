@@ -2,6 +2,7 @@
 #include "OBBColliderComponent.h"
 #include "Components/StaticModelComponent.h"
 #include <DirectXColors.h>
+#include <ImGui/imgui.h>
 
 HEIN::OBBColliderComponent::OBBColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::OBB)
@@ -73,11 +74,26 @@ void HEIN::OBBColliderComponent::Draw(
 
 nlohmann::json HEIN::OBBColliderComponent::Serialize()
 {
-    nlohmann::json data = IComponent::Serialize();
+    nlohmann::json data = ColliderComponent::Serialize();
+    data["ExtentsX"] = m_extents.x;
+    data["ExtentsY"] = m_extents.y;
+    data["ExtentsZ"] = m_extents.z;
     return data;
 }
 
 void HEIN::OBBColliderComponent::Deserialize(const nlohmann::json& data)
 {
-    IComponent::Deserialize(data);
+    ColliderComponent::Deserialize(data);
+    if (data.contains("ExtentsX")) m_extents.x = data["ExtentsX"];
+    if (data.contains("ExtentsY")) m_extents.y = data["ExtentsY"];
+    if (data.contains("ExtentsZ")) m_extents.z = data["ExtentsZ"];
+}
+
+void HEIN::OBBColliderComponent::OnInspectorGUI()
+{
+    ColliderComponent::OnInspectorGUI();
+    if (ImGui::CollapsingHeader("OBB Properties", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::DragFloat3("Extents", &m_extents.x, 0.05f);
+    }
 }

@@ -2,6 +2,7 @@
 #include "RigidBodyComponent.h"
 #include "Entities/Actor.h"
 #include <Components/TransformComponent.h>
+#include <DebugingTools/DebugUIManager.h>
 
 HEIN::RigidBodyComponent::RigidBodyComponent(Actor* owner)
 	: IComponent(owner)
@@ -58,10 +59,26 @@ DirectX::SimpleMath::Vector3 HEIN::RigidBodyComponent::GetVelocity() const
 nlohmann::json HEIN::RigidBodyComponent::Serialize()
 {
     nlohmann::json data = IComponent::Serialize();
+    data["Mass"] = m_mass;
+    data["UseGravity"] = m_useGravity;
+    data["IsKinematic"] = m_isKinematic;
     return data;
 }
 
 void HEIN::RigidBodyComponent::Deserialize(const nlohmann::json& data)
 {
     IComponent::Deserialize(data);
+    if (data.contains("Mass")) m_mass = data["Mass"];
+    if (data.contains("UseGravity")) m_useGravity = data["UseGravity"];
+    if (data.contains("IsKinematic")) m_isKinematic = data["IsKinematic"];
+}
+
+void HEIN::RigidBodyComponent::OnInspectorGUI()
+{
+	if (ImGui::CollapsingHeader("RigidBodyComponent", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::DragFloat("Mass", &m_mass, 0.1f, 0.0f, 1000.0f);
+		ImGui::Checkbox("Use Gravity", &m_useGravity);
+		ImGui::Checkbox("Is Kinematic", &m_isKinematic);
+	}
 }

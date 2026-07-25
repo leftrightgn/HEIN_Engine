@@ -52,6 +52,7 @@ namespace HEIN
 
 		static HEIN::IComponent* CreateComponent(const std::string& name, HEIN::Actor* owner, HEIN::ActorManager* manager = nullptr)
 		{
+			if (m_creators.empty()) Initialize();
 			auto it = m_creators.find(name);
 			if (it != m_creators.end())
 			{
@@ -62,6 +63,7 @@ namespace HEIN
 
 		static std::vector<std::string> GetRegisteredComponentNames()
 		{
+			if (m_creators.empty()) Initialize();
 			std::vector<std::string> names;
 			for (const auto& pair : m_creators)
 			{

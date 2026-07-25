@@ -1,10 +1,35 @@
 #include "pch.h"
 #include "CameraController.h"
+#include "DebugCameraMode.h"
 
 
 HEIN::CameraController::CameraController(Actor* owner)
 	: IComponent(owner)
 {
+}
+
+void HEIN::CameraController::Start()
+{
+	if (m_cameraStack.empty())
+	{
+		RegisterCamera(
+			HEIN::CameraType::Debug,
+			[]() { return std::make_unique<HEIN::DebugCameraMode>(); }
+		);
+		SetFirstCamera(HEIN::CameraType::Debug);
+	}
+}
+
+void HEIN::CameraController::InitializeAfterDeserialize(GameContext& gameContext)
+{
+	if (m_cameraStack.empty())
+	{
+		RegisterCamera(
+			HEIN::CameraType::Debug,
+			[]() { return std::make_unique<HEIN::DebugCameraMode>(); }
+		);
+		SetFirstCamera(HEIN::CameraType::Debug);
+	}
 }
 
 void HEIN::CameraController::RegisterCamera(CameraType key, CameraFactory factory)

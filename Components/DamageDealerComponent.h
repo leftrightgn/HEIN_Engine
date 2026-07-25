@@ -23,6 +23,7 @@ namespace HEIN
 		std::string GetComponentName() const override { return "DamageDealerComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI() override;
 
 
 		DamageDealerComponent(Actor* owner);

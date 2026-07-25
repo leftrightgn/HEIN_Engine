@@ -119,9 +119,10 @@ nlohmann::json HEIN::ActorManager::Serialize()
     {
         HEIN::Actor* actor = pair.second.get();
 
-        if (actor != nullptr)
+        // ponytail: Only serialize ROOT actors. Children are serialized recursively by their parents!
+        if (actor != nullptr && actor->GetParentID() == HEIN::INVALID_ACTOR_ID)
         {
-            actorsArray.push_back(actor->Serialize());
+            actorsArray.push_back(actor->Serialize(this));
         }
 
     }
@@ -141,15 +142,19 @@ void HEIN::ActorManager::Deserialize(const nlohmann::json& sceneData)
             if (actorData.contains("Name"))
             {
                 std::string narrowTag = actorData["Name"];
-
                 actorTag = std::wstring(narrowTag.begin(), narrowTag.end());
             }
 
-            HEIN::Actor* newActor = CreateActor(actorTag);
-
-            if (newActor != nullptr)
+            HEIN::Actor* targetActor = GetActorByName(actorTag);
+            
+            if (targetActor == nullptr)
             {
-                newActor->Deserialize(actorData);
+                targetActor = CreateActor(actorTag);
+            }
+
+            if (targetActor != nullptr)
+            {
+                targetActor->Deserialize(actorData, this);
             }
         }
         

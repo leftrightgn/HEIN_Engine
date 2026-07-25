@@ -14,7 +14,8 @@ namespace HEIN
 		PlayPressed,
 		StopPressed,
 		SavePressed,
-		LoadPressed
+		LoadPressed,
+		NewScenePressed
 	};
 
 	class ActorManager;

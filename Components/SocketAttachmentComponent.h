@@ -12,14 +12,16 @@ namespace HEIN
 	{
 	private:
 
-		HEIN::ActorManager* m_manager;
-		HEIN::ActorID m_targetActorID;
+		HEIN::ActorManager* m_actorManager;
+		ActorID m_socketOwnerActorID;
+		std::wstring m_socketOwnerTag;
 		std::wstring m_socketName;
 
 	public:
 		std::string GetComponentName() const override { return "SocketAttachmentComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI() override;
 
 
 		SocketAttachmentComponent(Actor* owner, ActorManager* manager);

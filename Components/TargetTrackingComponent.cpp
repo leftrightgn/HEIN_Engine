@@ -2,6 +2,7 @@
 #include "TargetTrackingComponent.h"
 #include <Entities/ActorManager.h>
 #include <Components/TransformComponent.h>
+#include <ImGui/imgui.h>
 
 HEIN::ActorID HEIN::TargetTrackingComponent::FindBestTarget() const
 {
@@ -115,10 +116,26 @@ void HEIN::TargetTrackingComponent::Update(float deltaTime)
 nlohmann::json HEIN::TargetTrackingComponent::Serialize()
 {
     nlohmann::json data = IComponent::Serialize();
+    data["TargetType"] = static_cast<int>(m_targetTypeToFind);
     return data;
 }
 
 void HEIN::TargetTrackingComponent::Deserialize(const nlohmann::json& data)
 {
     IComponent::Deserialize(data);
+    if (data.contains("TargetType")) m_targetTypeToFind = static_cast<ActorType>(data["TargetType"]);
+}
+
+void HEIN::TargetTrackingComponent::OnInspectorGUI()
+{
+    if (ImGui::CollapsingHeader("TargetTrackingComponent", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        int type = static_cast<int>(m_targetTypeToFind);
+        if (ImGui::Combo("Target Type", &type, "None\0Player\0Enemy\0Environment\0\0"))
+        {
+            m_targetTypeToFind = static_cast<ActorType>(type);
+        }
+        ImGui::Text("Is Locked On: %s", m_isLockedOn ? "True" : "False");
+        ImGui::Text("Distance: %.2f", m_distanceToTarget);
+    }
 }

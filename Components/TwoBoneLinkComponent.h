@@ -18,11 +18,13 @@ namespace HEIN
 
 		// Target
 		CapsuleColliderComponent* m_linkedCapsule;
+		std::wstring m_linkedColliderTag;
 
 	public:
 		std::string GetComponentName() const override { return "TwoBoneLinkComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI() override;
 
 
 		TwoBoneLinkComponent(Actor* owner);

@@ -25,6 +25,7 @@ namespace HEIN
 	constexpr ActorID INVALID_ACTOR_ID = 0;
 
 	class IComponent;
+	class ActorManager;
 
 	class Actor
 	{
@@ -60,8 +61,8 @@ namespace HEIN
 
 		void DrawInspector();
 
-		nlohmann::json Serialize();
-		void Deserialize(const nlohmann::json& actorData);
+		nlohmann::json Serialize(ActorManager* manager = nullptr);
+		void Deserialize(const nlohmann::json& actorData, ActorManager* manager = nullptr);
 		void InitializeAfterDeserialize(GameContext& gameContext);
 
 		ActorID GetID() const { return m_id; }
@@ -106,6 +107,17 @@ namespace HEIN
 				}
 			}
 			return nullptr;
+		}
+
+		void RemoveComponent(HEIN::IComponent* componentToRemove)
+		{
+			m_components.erase(
+				std::remove_if(m_components.begin(), m_components.end(),
+					[componentToRemove](const std::unique_ptr<HEIN::IComponent>& comp) {
+						return comp.get() == componentToRemove;
+					}),
+				m_components.end()
+			);
 		}
 
 		template <typename T>

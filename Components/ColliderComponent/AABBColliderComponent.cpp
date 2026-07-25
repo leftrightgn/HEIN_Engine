@@ -2,6 +2,7 @@
 #include "AABBColliderComponent.h"
 #include "Components/StaticModelComponent.h"
 #include <DirectXColors.h>
+#include <ImGui/imgui.h>
 
 HEIN::AABBColliderComponent::AABBColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::AABB)
@@ -56,11 +57,26 @@ void HEIN::AABBColliderComponent::Draw(
 
 nlohmann::json HEIN::AABBColliderComponent::Serialize()
 {
-    nlohmann::json data = IComponent::Serialize();
+    nlohmann::json data = ColliderComponent::Serialize();
+    data["ExtentsX"] = m_extents.x;
+    data["ExtentsY"] = m_extents.y;
+    data["ExtentsZ"] = m_extents.z;
     return data;
 }
 
 void HEIN::AABBColliderComponent::Deserialize(const nlohmann::json& data)
 {
-    IComponent::Deserialize(data);
+    ColliderComponent::Deserialize(data);
+    if (data.contains("ExtentsX")) m_extents.x = data["ExtentsX"];
+    if (data.contains("ExtentsY")) m_extents.y = data["ExtentsY"];
+    if (data.contains("ExtentsZ")) m_extents.z = data["ExtentsZ"];
+}
+
+void HEIN::AABBColliderComponent::OnInspectorGUI()
+{
+    ColliderComponent::OnInspectorGUI();
+    if (ImGui::CollapsingHeader("AABB Properties", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::DragFloat3("Extents", &m_extents.x, 0.05f);
+    }
 }

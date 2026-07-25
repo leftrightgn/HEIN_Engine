@@ -107,6 +107,8 @@ void HEIN::SocketComponent::DrawGizmo(
 
         if (boneWorld.Decompose(extractedScale, extractedRotation, extractedTranslation))
         {
+            extractedRotation.Normalize();
+
             // Strip out the scaling to prevent the socket math from warping
             DirectX::SimpleMath::Matrix cleanBoneMatrix =
                 DirectX::SimpleMath::Matrix::CreateFromQuaternion(extractedRotation) *
@@ -142,6 +144,7 @@ void HEIN::SocketComponent::DrawGizmo(
 
                 if (newLocal.Decompose(scale, rot, pos))
                 {
+                    rot.Normalize();
                     // Save the new position
                     socket.localPosition = pos;
 
@@ -210,6 +213,8 @@ DirectX::SimpleMath::Matrix HEIN::SocketComponent::GetSocketWorldMatrix(const st
             DirectX::SimpleMath::Matrix::CreateFromYawPitchRoll(socket.localRotation.y, socket.localRotation.x, socket.localRotation.z) *
             DirectX::SimpleMath::Matrix::CreateTranslation(socket.localPosition);
 
+        extractedRotation.Normalize();
+
         DirectX::SimpleMath::Matrix cleanBoneMatrix =
             DirectX::SimpleMath::Matrix::CreateFromQuaternion(extractedRotation) *
             DirectX::SimpleMath::Matrix::CreateTranslation(extractedTranslation);
@@ -222,10 +227,51 @@ DirectX::SimpleMath::Matrix HEIN::SocketComponent::GetSocketWorldMatrix(const st
 nlohmann::json HEIN::SocketComponent::Serialize()
 {
     nlohmann::json data = IComponent::Serialize();
+    nlohmann::json socketsArr = nlohmann::json::array();
+    for (const auto& pair : m_sockets)
+    {
+        nlohmann::json sData;
+        std::string nStr(pair.second.name.begin(), pair.second.name.end());
+        std::string bStr(pair.second.boneName.begin(), pair.second.boneName.end());
+        sData["Name"] = nStr;
+        sData["BoneName"] = bStr;
+        sData["PosX"] = pair.second.localPosition.x;
+        sData["PosY"] = pair.second.localPosition.y;
+        sData["PosZ"] = pair.second.localPosition.z;
+        sData["RotX"] = pair.second.localRotation.x;
+        sData["RotY"] = pair.second.localRotation.y;
+        sData["RotZ"] = pair.second.localRotation.z;
+        socketsArr.push_back(sData);
+    }
+    data["Sockets"] = socketsArr;
     return data;
 }
 
 void HEIN::SocketComponent::Deserialize(const nlohmann::json& data)
 {
     IComponent::Deserialize(data);
+    if (data.contains("Sockets"))
+    {
+        for (const auto& sData : data["Sockets"])
+        {
+            Socket s;
+            if (sData.contains("Name"))
+            {
+                std::string nStr = sData["Name"];
+                s.name = std::wstring(nStr.begin(), nStr.end());
+            }
+            if (sData.contains("BoneName"))
+            {
+                std::string bStr = sData["BoneName"];
+                s.boneName = std::wstring(bStr.begin(), bStr.end());
+            }
+            if (sData.contains("PosX")) s.localPosition.x = sData["PosX"];
+            if (sData.contains("PosY")) s.localPosition.y = sData["PosY"];
+            if (sData.contains("PosZ")) s.localPosition.z = sData["PosZ"];
+            if (sData.contains("RotX")) s.localRotation.x = sData["RotX"];
+            if (sData.contains("RotY")) s.localRotation.y = sData["RotY"];
+            if (sData.contains("RotZ")) s.localRotation.z = sData["RotZ"];
+            m_sockets[s.name] = s;
+        }
+    }
 }

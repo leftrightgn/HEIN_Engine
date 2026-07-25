@@ -16,6 +16,9 @@
     <ClCompile Include="Components\TargetTrackingComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
+    <ClCompile Include="ImGui\imgui_stdlib.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -39,6 +42,9 @@
     </ClInclude>
     <ClInclude Include="Factory\ComponentFactory.h">
       <Filter>Factory</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_stdlib.h">
+      <Filter>ImGui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

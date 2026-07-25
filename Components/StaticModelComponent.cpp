@@ -20,7 +20,14 @@ void HEIN::StaticModelComponent::Initialize(
     m_fxFactory = std::make_unique<DirectX::EffectFactory>(device);
     static_cast<DirectX::EffectFactory*>(m_fxFactory.get())->SetDirectory(textureDir);
 
-    m_model = DirectX::Model::CreateFromSDKMESH(device, modelPath, *m_fxFactory);
+    try
+    {
+        m_model = DirectX::Model::CreateFromSDKMESH(device, modelPath, *m_fxFactory);
+    }
+    catch (const std::exception&)
+    {
+        m_model = nullptr;
+    }
 }
 
 void HEIN::StaticModelComponent::Update(float)

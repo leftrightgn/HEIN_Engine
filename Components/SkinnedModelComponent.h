@@ -26,6 +26,8 @@ namespace HEIN
 		std::shared_ptr<DirectX::Model> m_model;
 
 		std::unordered_map<std::string, std::unique_ptr<DX::AnimationSDKMESH>> m_animations;
+		std::unordered_map<std::string, std::wstring> m_animationPaths;
+		std::string m_lastError;
 
 		DX::AnimationSDKMESH* m_currentAnimation = nullptr;
 		DX::AnimationSDKMESH* m_targetAnimation = nullptr;
@@ -34,12 +36,16 @@ namespace HEIN
 		bool m_isBlending = false;
 		float m_blendTimer = 0.0f;
 		float m_blendDuration = 0.0f;
+		
+		bool m_needsReload = false;
 
 	public:
 		std::string GetComponentName() const override { return "SkinnedModelComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
 		void InitializeAfterDeserialize(GameContext& gameContext) override;
+
+		void OnInspectorGUI() override;
 
 
 		SkinnedModelComponent(Actor* owner);
