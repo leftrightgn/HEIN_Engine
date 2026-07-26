@@ -14,6 +14,7 @@ namespace HEIN
 		PlayPressed,
 		StopPressed,
 		SavePressed,
+		AutoSavePressed,
 		LoadPressed,
 		NewScenePressed
 	};
