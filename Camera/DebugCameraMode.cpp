@@ -43,7 +43,7 @@ void HEIN::DebugCameraMode::ProcessInput(const CameraInputState& input)
 
     m_lastScrollValue = currentScroll;
 
-    if (actualScrollDelta != 0.0f)
+    if (actualScrollDelta != 0.0f && !input.ignoreScroll)
     {
         m_distance -= (actualScrollDelta / SCROLL_WHEEL_DELTA);
         m_distance = std::max(MIN_DISTANCE, m_distance); // Prevent zooming past the center point
@@ -81,7 +81,7 @@ void HEIN::DebugCameraMode::ProcessInput(const CameraInputState& input)
     const float pitchLimit = DirectX::XM_PIDIV2 - PITCH_LIMIT_OFFSET;
     m_pitch = std::clamp(m_pitch, -pitchLimit, pitchLimit);
 
-    if (input.movementIntent.LengthSquared() > 0.0f)
+    if (input.movementIntent.LengthSquared() > 0.0f && !input.ignoreMovement)
     {
         DirectX::SimpleMath::Quaternion rotation =
             DirectX::SimpleMath::Quaternion::CreateFromYawPitchRoll(m_yaw, PITCH, YAW);

@@ -157,12 +157,21 @@ namespace HEIN
 
 		if (!m_isVisible) return currentAction;
 
-		ImGui::Begin("ToolBar");
+		ImGuiIO& io = ImGui::GetIO();
+		float screenW = io.DisplaySize.x;
+		float screenH = io.DisplaySize.y;
+		ImGuiWindowFlags staticFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+
+		ImGui::SetNextWindowPos(ImVec2(screenW * 0.10f, 0.0f), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(screenW * 0.65f, 80.0f), ImGuiCond_Always);
+		ImGui::Begin("ToolBar", nullptr, staticFlags);
 		if (ImGui::Button("PLAY")) currentAction = HEIN::EditorAction::PlayPressed;
 		ImGui::SameLine();
 		if (ImGui::Button("STOP")) 	currentAction = HEIN::EditorAction::StopPressed;
 		ImGui::SameLine();
 		if (ImGui::Button("SAVE SCENE")) currentAction = HEIN::EditorAction::SavePressed;
+		ImGui::SameLine();
+		if (ImGui::Button("AUTO SAVE")) currentAction = HEIN::EditorAction::AutoSavePressed;
 		ImGui::SameLine();
 		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
 		ImGui::SameLine();
@@ -176,7 +185,9 @@ namespace HEIN
 		ImGui::End();
 
 		// DRAW THE HIERARCHY WINDOW
-		ImGui::Begin("Hierarchy");
+		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(screenW * 0.10f, screenH), ImGuiCond_Always);
+		ImGui::Begin("Hierarchy", nullptr, staticFlags);
 		for (const auto& pair : manager.GetAllActors())
 		{
 			HEIN::Actor* actor = pair.second.get();
@@ -194,7 +205,9 @@ namespace HEIN
 		ImGui::End();
 
 		// DRAW THE INSPECTOR WINDOW
-		ImGui::Begin("Inspector");
+		ImGui::SetNextWindowPos(ImVec2(screenW * 0.75f, 0.0f), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(screenW * 0.25f, screenH), ImGuiCond_Always);
+		ImGui::Begin("Inspector", nullptr, staticFlags);
 
 		if (m_selectedActor == nullptr || manager.GetActor(m_selectedActor->GetID()) == nullptr)
 		{

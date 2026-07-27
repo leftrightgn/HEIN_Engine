@@ -34,8 +34,19 @@ namespace HEIN
 
     void DebugDisplayController::Update(const GameContext& gameContext, HEIN::ActorManager& mainActorManager)
     {
-        if (gameContext.keyboardTracker.pressed.F2) m_isMagnified = !m_isMagnified;
         if (gameContext.keyboardTracker.pressed.F3) m_isVisible = !m_isVisible;
+
+        if (!m_isVisible)
+        {
+            m_isMagnified = false;
+            if (gameContext.mainCamera != nullptr)
+            {
+                gameContext.mainCamera->UpdateMouseMode();
+            }
+            return;
+        }
+
+        if (gameContext.keyboardTracker.pressed.F2) m_isMagnified = !m_isMagnified;
 
         m_debugUI.Update(gameContext, mainActorManager, GetViewMatrix(), m_projMatrix);
 
@@ -55,7 +66,8 @@ namespace HEIN
             std::pair<int, int> mouseDelta = gameContext.inputManager->GetMouseDelta();
             bool isHeld = gameContext.inputManager->IsDebugDrugHeld(gameContext);
 
-            if (ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing())
+            bool isUICapturingMouse = ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+            if (isUICapturingMouse)
             {
                 isHeld = false;
                 mouseDelta = { 0, 0 };
@@ -72,7 +84,7 @@ namespace HEIN
             debugInput.mouseY = m_virtualMouseY;
             bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift;
 
-            if (isShiftHeld)
+            if (isShiftHeld || ImGui::GetIO().WantCaptureKeyboard)
             {
                 debugInput.movementIntent = DirectX::SimpleMath::Vector3(0.0f, 0.0f, 0.0f);
             }
@@ -82,6 +94,8 @@ namespace HEIN
             }
             debugInput.isLeftMouseDown = isHeld;
             debugInput.scrollWheelDelta = static_cast<float>(gameContext.mouseState.scrollWheelValue);
+            debugInput.ignoreScroll = isUICapturingMouse;
+            debugInput.ignoreMovement = ImGui::GetIO().WantCaptureKeyboard;
 
             cameraComp->ProcessInput(debugInput);
         }
