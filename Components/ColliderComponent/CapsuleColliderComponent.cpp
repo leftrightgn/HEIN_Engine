@@ -198,9 +198,9 @@ void HEIN::CapsuleColliderComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("Height")) m_height = data["Height"];
 }
 
-void HEIN::CapsuleColliderComponent::OnInspectorGUI()
+void HEIN::CapsuleColliderComponent::OnInspectorGUI(GameContext& gameContext)
 {
-    ColliderComponent::OnInspectorGUI();
+    ColliderComponent::OnInspectorGUI(gameContext);
     if (ImGui::CollapsingHeader("Capsule Properties", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::DragFloat("Radius", &m_radius, 0.05f);

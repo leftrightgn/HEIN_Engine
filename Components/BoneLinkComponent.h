@@ -21,12 +21,7 @@ namespace HEIN
 		std::wstring m_linkedColliderTag;
 
 	public:
-		std::string GetComponentName() const override { return "BoneLinkComponent"; }
-		nlohmann::json Serialize() override;
-		void Deserialize(const nlohmann::json& data) override;
-		void OnInspectorGUI() override;
-
-
+		
 		BoneLinkComponent(Actor* owner);
 	
 		void Initialize(SkinnedModelComponent* targetModel, const std::wstring& targetBoneName);
@@ -46,6 +41,13 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& /*view*/,
 			const DirectX::SimpleMath::Matrix& /*proj*/
 		) override { }
+
+		std::string GetComponentName() const override { return "BoneLinkComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI(GameContext& gameContext) override;
+
+
 	};
 }
 

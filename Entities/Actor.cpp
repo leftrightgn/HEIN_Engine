@@ -55,14 +55,14 @@ void HEIN::Actor::Start()
 	}
 }
 
-void HEIN::Actor::DrawInspector()
+void HEIN::Actor::DrawInspector(GameContext& gameContext)
 {
 	HEIN::IComponent* compToRemove = nullptr;
 
 	for (auto& comp : m_components)
 	{
 		ImGui::PushID(comp.get());
-		comp->OnInspectorGUI();
+		comp->OnInspectorGUI(gameContext);
 		
 		// ponytail: We don't want them removing TransformComponent since the engine relies heavily on it being there!
 		if (comp->GetComponentName() != "TransformComponent")

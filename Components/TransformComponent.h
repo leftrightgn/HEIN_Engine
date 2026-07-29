@@ -13,12 +13,14 @@ namespace HEIN
         DirectX::SimpleMath::Vector3 m_scale;
         DirectX::SimpleMath::Matrix m_parentMatrix;
     public:
+        std::string GetComponentName() const override { return "TransformComponent"; }
+        nlohmann::json Serialize() override;
+        void Deserialize(const nlohmann::json& data) override;
+        void OnInspectorGUI(GameContext& gameContext) override;
 
         TransformComponent(Actor* owner);
 
         void Update(float deltaTime) override;
-
-        void OnInspectorGUI() override;
 
         void DrawGizmo(
             const DirectX::SimpleMath::Matrix& view,
@@ -47,9 +49,7 @@ namespace HEIN
 
         void SetParentMatrix(const DirectX::SimpleMath::Matrix& parent) { m_parentMatrix = parent; }
 
-        std::string GetComponentName() const override { return "TransformComponent"; }
-        nlohmann::json Serialize() override;
-        void Deserialize(const nlohmann::json& data) override;
+       
 
         // --- Core 3D Math ---
 

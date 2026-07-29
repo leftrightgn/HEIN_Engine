@@ -15,11 +15,9 @@ namespace HEIN
     public:
 		std::wstring m_modelPath;
 		std::wstring m_textureDir;
+    public:
 
-		std::string GetComponentName() const override { return "StaticModelComponent"; }
-		nlohmann::json Serialize() override;
-		void Deserialize(const nlohmann::json& data) override;
-		void InitializeAfterDeserialize(GameContext& gameContext) override;
+		
 
         StaticModelComponent(Actor* owner);
 
@@ -38,6 +36,10 @@ namespace HEIN
             const DirectX::SimpleMath::Matrix& proj
         );
 
+        std::string GetComponentName() const override { return "StaticModelComponent"; }
+        nlohmann::json Serialize() override;
+        void Deserialize(const nlohmann::json& data) override;
+        void InitializeAfterDeserialize(GameContext& gameContext) override;
 
         DirectX::BoundingBox GetBoundingBox() const;
         DirectX::BoundingSphere GetBoundingSphere() const;

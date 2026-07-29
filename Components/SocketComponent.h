@@ -54,7 +54,7 @@ namespace HEIN
             const DirectX::SimpleMath::Vector3& newRot
         );
 
-        void OnInspectorGUI() override;
+        void OnInspectorGUI(GameContext& gameContext) override;
 
         void DrawGizmo(
             const DirectX::SimpleMath::Matrix& view,

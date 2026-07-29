@@ -47,6 +47,7 @@ namespace HEIN
 		);
 
 		EditorAction Draw(
+			GameContext& gameContext,
 			HEIN::ActorManager& manager,
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj

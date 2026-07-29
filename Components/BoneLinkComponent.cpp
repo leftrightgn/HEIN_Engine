@@ -128,7 +128,7 @@ void HEIN::BoneLinkComponent::Deserialize(const nlohmann::json& data)
     }
 }
 
-void HEIN::BoneLinkComponent::OnInspectorGUI()
+void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
 {
 	if (m_targetModel == nullptr)
 	{

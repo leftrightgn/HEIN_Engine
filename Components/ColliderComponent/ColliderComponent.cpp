@@ -46,7 +46,7 @@ DirectX::SimpleMath::Matrix HEIN::ColliderComponent::CalculateWorldMatrix()
 	return finalMatrix;
 }
 
-void HEIN::ColliderComponent::OnInspectorGUI()
+void HEIN::ColliderComponent::OnInspectorGUI(GameContext& gameContext)
 {
     ImGui::PushID((void*)this);
 

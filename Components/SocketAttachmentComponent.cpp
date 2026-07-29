@@ -80,7 +80,7 @@ void HEIN::SocketAttachmentComponent::Deserialize(const nlohmann::json& data)
     }
 }
 
-void HEIN::SocketAttachmentComponent::OnInspectorGUI()
+void HEIN::SocketAttachmentComponent::OnInspectorGUI(GameContext& gameContext)
 {
 	if (ImGui::CollapsingHeader("SocketAttachmentComponent", ImGuiTreeNodeFlags_DefaultOpen))
 	{

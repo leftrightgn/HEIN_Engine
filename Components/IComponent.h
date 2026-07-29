@@ -35,7 +35,7 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& /*proj*/
 		) {}
 
-		virtual void OnInspectorGUI() {}
+		virtual void OnInspectorGUI(GameContext& gamecontext) {}
 
 		virtual std::string GetComponentName() const { return "Unknown"; }
 		virtual nlohmann::json Serialize() { return nlohmann::json(); }

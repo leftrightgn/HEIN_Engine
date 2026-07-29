@@ -65,7 +65,7 @@ namespace HEIN
 		void Start() override;
 		void Update(float /*deltaTime*/) override {}
 
-		void OnInspectorGUI() override;
+		void OnInspectorGUI(GameContext& gameContext) override;
 		void DrawGizmo(
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj,

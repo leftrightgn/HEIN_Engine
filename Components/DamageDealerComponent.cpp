@@ -33,7 +33,7 @@ void HEIN::DamageDealerComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("IsActive")) m_isActive = data["IsActive"];
 }
 
-void HEIN::DamageDealerComponent::OnInspectorGUI()
+void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& gameContext)
 {
     if (ImGui::CollapsingHeader("DamageDealerComponent", ImGuiTreeNodeFlags_DefaultOpen))
     {

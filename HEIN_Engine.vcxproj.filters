@@ -19,6 +19,12 @@
     <ClCompile Include="ImGui\imgui_stdlib.cpp">
       <Filter>ImGui</Filter>
     </ClCompile>
+    <ClCompile Include="Components\TerrainComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="DebugingTools\EditorUtils.cpp">
+      <Filter>DebugingTools</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -45,6 +51,12 @@
     </ClInclude>
     <ClInclude Include="ImGui\imgui_stdlib.h">
       <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\TerrainComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugingTools\EditorUtils.h">
+      <Filter>DebugingTools</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -31,7 +31,7 @@ void HEIN::SocketComponent::UpdateSocketOffset(
     }
 }
 
-void HEIN::SocketComponent::OnInspectorGUI()
+void HEIN::SocketComponent::OnInspectorGUI(GameContext& gameContext)
 {
     bool isActive = (HEIN::g_ActiveGizmoTarget == this);
     if (ImGui::RadioButton("Edit socket with Gizmo", isActive))
