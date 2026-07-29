@@ -54,7 +54,7 @@ void HEIN::HealthComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("IsGameplayInvincible")) m_isGameplayInvincible = data["IsGameplayInvincible"];
 }
 
-void HEIN::HealthComponent::OnInspectorGUI()
+void HEIN::HealthComponent::OnInspectorGUI(GameContext& gameContext)
 {
 	if (ImGui::CollapsingHeader("HealthComponent", ImGuiTreeNodeFlags_DefaultOpen))
 	{

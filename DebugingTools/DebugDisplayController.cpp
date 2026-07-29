@@ -186,7 +186,7 @@ namespace HEIN
         DirectX::SimpleMath::Matrix mainCamWorld;
         if (std::abs(mainView.Determinant()) < 1e-6f)
         {
-            // ponytail: The view matrix is numerically singular (e.g. camera just spawned and looking down).
+            // The view matrix is numerically singular (e.g. camera just spawned and looking down).
             // Inverting it will yield NaNs, which destroys the frustum and asserts in GetCorners().
             mainCamWorld = DirectX::SimpleMath::Matrix::Identity;
         }
@@ -197,7 +197,7 @@ namespace HEIN
 
         mainCamFrustum.Transform(mainCamFrustum, mainCamWorld);
 
-        // ponytail: Floating point inaccuracies during Matrix Invert -> Transform can yield a non-unit quaternion.
+        // Floating point inaccuracies during Matrix Invert -> Transform can yield a non-unit quaternion.
         // We must normalize it before DrawFrustum reads it, otherwise XMQuaternionIsUnit asserts.
         DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&mainCamFrustum.Orientation);
         q = DirectX::XMQuaternionNormalize(q);
@@ -219,7 +219,7 @@ namespace HEIN
         {
             ImGuizmo::BeginFrame();
 
-           m_currentAction = m_debugUI.Draw(actorManager, view, m_projMatrix);
+           m_currentAction = m_debugUI.Draw(gameContext, actorManager, view, m_projMatrix);
         }
         else
         {

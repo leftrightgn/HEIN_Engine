@@ -89,9 +89,9 @@ void HEIN::OBBColliderComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("ExtentsZ")) m_extents.z = data["ExtentsZ"];
 }
 
-void HEIN::OBBColliderComponent::OnInspectorGUI()
+void HEIN::OBBColliderComponent::OnInspectorGUI(GameContext& gameContext)
 {
-    ColliderComponent::OnInspectorGUI();
+    ColliderComponent::OnInspectorGUI(gameContext);
     if (ImGui::CollapsingHeader("OBB Properties", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::DragFloat3("Extents", &m_extents.x, 0.05f);

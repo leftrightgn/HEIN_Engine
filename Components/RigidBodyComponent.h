@@ -23,7 +23,7 @@ namespace HEIN
 		std::string GetComponentName() const override { return "RigidBodyComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
-		void OnInspectorGUI() override;
+		void OnInspectorGUI(GameContext& gameContext) override;
 
 
 		static constexpr float GRAVITY_FORCE = -45.0f;

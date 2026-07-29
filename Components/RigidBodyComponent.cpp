@@ -73,7 +73,7 @@ void HEIN::RigidBodyComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("IsKinematic")) m_isKinematic = data["IsKinematic"];
 }
 
-void HEIN::RigidBodyComponent::OnInspectorGUI()
+void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& gameContext)
 {
 	if (ImGui::CollapsingHeader("RigidBodyComponent", ImGuiTreeNodeFlags_DefaultOpen))
 	{

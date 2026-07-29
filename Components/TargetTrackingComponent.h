@@ -26,7 +26,7 @@ namespace HEIN
 		std::string GetComponentName() const override { return "TargetTrackingComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
-		void OnInspectorGUI() override;
+		void OnInspectorGUI(GameContext& gameContext) override;
 
 
 		TargetTrackingComponent(Actor* owner, ActorManager* manager, HEIN::ActorType targetType = HEIN::ActorType::Default);

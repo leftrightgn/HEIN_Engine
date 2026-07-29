@@ -126,7 +126,7 @@ void HEIN::TargetTrackingComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("TargetType")) m_targetTypeToFind = static_cast<ActorType>(data["TargetType"]);
 }
 
-void HEIN::TargetTrackingComponent::OnInspectorGUI()
+void HEIN::TargetTrackingComponent::OnInspectorGUI(GameContext& gameContext)
 {
     if (ImGui::CollapsingHeader("TargetTrackingComponent", ImGuiTreeNodeFlags_DefaultOpen))
     {

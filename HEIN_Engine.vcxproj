@@ -181,10 +181,14 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Components\TerrainComponent.h" />
+    <ClInclude Include="DebugingTools\EditorUtils.h" />
     <ClInclude Include="Factory\ComponentFactory.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Components\TerrainComponent.cpp" />
+    <ClCompile Include="DebugingTools\EditorUtils.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

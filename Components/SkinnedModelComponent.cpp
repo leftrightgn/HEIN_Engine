@@ -5,86 +5,10 @@
 #include <ImGui/imgui.h>
 #include <ImGui/imgui_stdlib.h>
 #include <Windows.h>
-#include <commdlg.h>
-#include <shobjidl.h>
+#include "DebugingTools/EditorUtils.h"
 #include <string>
 #include <filesystem>
 
-
-static std::wstring SelectFolder()
-{
-	std::wstring folderPath;
-	IFileOpenDialog* pFileOpen = nullptr;
-	
-	HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, 
-								  IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
-	
-	if (SUCCEEDED(hr))
-	{
-		DWORD dwOptions;
-		if (SUCCEEDED(pFileOpen->GetOptions(&dwOptions)))
-		{
-			pFileOpen->SetOptions(dwOptions | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR);
-		}
-		
-		if (SUCCEEDED(pFileOpen->Show(NULL)))
-		{
-			IShellItem* pItem;
-			if (SUCCEEDED(pFileOpen->GetResult(&pItem)))
-			{
-				PWSTR pszFilePath;
-				if (SUCCEEDED(pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath)))
-				{
-					folderPath = pszFilePath;
-					CoTaskMemFree(pszFilePath);
-				}
-				pItem->Release();
-			}
-		}
-		pFileOpen->Release();
-	}
-	return folderPath;
-}
-
-static std::wstring MakeRelativePath(const std::wstring& absolutePath)
-{
-    std::wstring result = absolutePath;
-
-    // 1. Try to find "Resources" (Checking both upper and lower case)
-    size_t pos = result.find(L"Resources");
-    if (pos == std::wstring::npos) 
-    {
-        pos = result.find(L"resources");
-    }
-
-    if (pos != std::wstring::npos)
-    {
-        // Crop the path starting from "Resources"
-        result = result.substr(pos);
-    }
-    else
-    {
-        // 2. Fallback to standard filesystem relative path
-        try
-        {
-            std::filesystem::path fullPath(absolutePath);
-            std::filesystem::path currentDir = std::filesystem::current_path();
-            result = std::filesystem::relative(fullPath, currentDir).wstring();
-        }
-        catch (...)
-        {
-            result = absolutePath;
-        }
-    }
-
-    // 3. Unconditionally convert ALL backslashes to forward slashes for clean JSON
-    for (wchar_t& c : result)
-    {
-        if (c == L'\\') c = L'/';
-    }
-
-    return result;
-}
 
 std::shared_ptr<DirectX::EffectFactory> HEIN::SkinnedModelComponent::s_fxFactory = nullptr;
 std::unordered_map<std::wstring, std::weak_ptr<DirectX::Model>> HEIN::SkinnedModelComponent::s_modelCache;
@@ -433,10 +357,12 @@ namespace HEIN
 		}
 	}
 
-		void SkinnedModelComponent::OnInspectorGUI()
+		void SkinnedModelComponent::OnInspectorGUI(GameContext& gameContext)
 	{
+			
 		if (ImGui::CollapsingHeader("Skinned Model Component", ImGuiTreeNodeFlags_DefaultOpen))
 		{
+			HWND windowHandle = gameContext.deviceResources.GetWindow();
 			if (!m_lastError.empty()) ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", m_lastError.c_str());
 			ImGui::Checkbox("Visible", &m_isVisible);
 
@@ -451,17 +377,10 @@ namespace HEIN
 			ImGui::SameLine();
 			if (ImGui::Button("Browse##Model"))
 			{
-				WCHAR szFile[260] = { 0 };
-				OPENFILENAMEW ofn = { 0 };
-				ofn.lStructSize = sizeof(ofn);
-				ofn.lpstrFile = szFile;
-				ofn.nMaxFile = sizeof(szFile) / sizeof(WCHAR);
-				ofn.lpstrFilter = L"Model Files\0*.cmo;*.sdkmesh\0All Files\0*.*\0";
-				ofn.nFilterIndex = 1;
-				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-				if (GetOpenFileNameW(&ofn) == TRUE)
+				std::wstring file = HEIN::EditorUtils::OpenFileDialog(L"Model Files\0*.cmo;*.sdkmesh\0All Files\0*.*\0", windowHandle);
+				if (!file.empty())
 				{
-					m_modelPath = MakeRelativePath(szFile);
+					m_modelPath = HEIN::EditorUtils::MakeRelativePath(file);
 					m_needsReload = true;
 				}
 			}
@@ -476,10 +395,10 @@ namespace HEIN
 			ImGui::SameLine();
 			if (ImGui::Button("Browse##Tex"))
 			{
-				std::wstring selectedFolder = SelectFolder();
+				std::wstring selectedFolder = HEIN::EditorUtils::SelectFolder(windowHandle);
 				if (!selectedFolder.empty())
 				{
-					m_textureDir = MakeRelativePath(selectedFolder);
+					m_textureDir = HEIN::EditorUtils::MakeRelativePath(selectedFolder);
 					
 					// Make sure it ends with a slash if it doesn't already, so the EffectFactory handles it correctly
 					if (!m_textureDir.empty() && m_textureDir.back() != L'\\' && m_textureDir.back() != L'/')
@@ -510,19 +429,12 @@ namespace HEIN
 			
 			if (ImGui::Button("Browse Animation..."))
 			{
-				WCHAR szFile[260] = { 0 };
-				OPENFILENAMEW ofn = { 0 };
-				ofn.lStructSize = sizeof(ofn);
-				ofn.lpstrFile = szFile;
-				ofn.nMaxFile = sizeof(szFile) / sizeof(WCHAR);
-				ofn.lpstrFilter = L"Animation Files\0*.sdkmesh_anim\0All Files\0*.*\0";
-				ofn.nFilterIndex = 1;
-				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-				if (GetOpenFileNameW(&ofn) == TRUE)
+				std::wstring file = HEIN::EditorUtils::OpenFileDialog(L"Animation Files\0*.sdkmesh_anim\0All Files\0*.*\0", windowHandle);
+				if (!file.empty())
 				{
 					std::string name = newAnimName;
 					if (name.empty()) name = "Anim" + std::to_string(m_animations.size());
-					LoadAnimation(name, MakeRelativePath(szFile).c_str());
+					LoadAnimation(name, HEIN::EditorUtils::MakeRelativePath(file).c_str());
 				}
 			}
 		}

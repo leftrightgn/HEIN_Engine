@@ -24,7 +24,7 @@ namespace HEIN
 		std::string GetComponentName() const override { return "TwoBoneLinkComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
-		void OnInspectorGUI() override;
+		void OnInspectorGUI(GameContext& gameContext) override;
 
 
 		TwoBoneLinkComponent(Actor* owner);

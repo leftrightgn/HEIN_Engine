@@ -21,7 +21,7 @@ namespace HEIN
 		std::string GetComponentName() const override { return "SocketAttachmentComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
-		void OnInspectorGUI() override;
+		void OnInspectorGUI(GameContext& gameContext) override;
 
 
 		SocketAttachmentComponent(Actor* owner, ActorManager* manager);

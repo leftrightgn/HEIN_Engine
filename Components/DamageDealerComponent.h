@@ -20,19 +20,19 @@ namespace HEIN
 		bool m_isActive;
 
 	public:
-		std::string GetComponentName() const override { return "DamageDealerComponent"; }
-		nlohmann::json Serialize() override;
-		void Deserialize(const nlohmann::json& data) override;
-		void OnInspectorGUI() override;
-
-
+		
 		DamageDealerComponent(Actor* owner);
 
 		void Initialize(float damageAmount, DamageType damageType = DamageType::Physical);
 
 		void Start() override{}
 		void Update(float /*deltaTime*/) override{}
-		
+
+		std::string GetComponentName() const override { return "DamageDealerComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI(GameContext& gameContext) override;
+
 		float GetDamageAmount() const { return m_damageAmount; }
 		DamageType GetDamageType() const { return m_damageType; }
 		

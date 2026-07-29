@@ -148,6 +148,7 @@ namespace HEIN
 		}
 	}
 	EditorAction DebugUIManager::Draw(
+		GameContext& gameContext,
 		HEIN::ActorManager& manager,
 		const DirectX::SimpleMath::Matrix& view,
 		const DirectX::SimpleMath::Matrix& proj
@@ -160,54 +161,20 @@ namespace HEIN
 		ImGuiIO& io = ImGui::GetIO();
 		float screenW = io.DisplaySize.x;
 		float screenH = io.DisplaySize.y;
-		ImGuiWindowFlags staticFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
 
-		ImGui::SetNextWindowPos(ImVec2(screenW * 0.10f, 0.0f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(screenW * 0.65f, 80.0f), ImGuiCond_Always);
-		ImGui::Begin("ToolBar", nullptr, staticFlags);
-		if (ImGui::Button("PLAY")) currentAction = HEIN::EditorAction::PlayPressed;
-		ImGui::SameLine();
-		if (ImGui::Button("STOP")) 	currentAction = HEIN::EditorAction::StopPressed;
-		ImGui::SameLine();
-		if (ImGui::Button("SAVE SCENE")) currentAction = HEIN::EditorAction::SavePressed;
-		ImGui::SameLine();
-		if (ImGui::Button("AUTO SAVE")) currentAction = HEIN::EditorAction::AutoSavePressed;
-		ImGui::SameLine();
-		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
-		ImGui::SameLine();
-		if (ImGui::Button("NEW SCENE")) currentAction = HEIN::EditorAction::NewScenePressed;
-		ImGui::Separator();
-		if (ImGui::Button("Create Empty Actor"))
-		{
-			HEIN::Actor* newActor = manager.CreateActor(L"NewActor");
-			m_selectedActor = newActor;
-		}
-		ImGui::End();
+		// Lock the Height to always be screenH, but allow Width to be resized (min 100, max screenW)
+		ImGui::SetNextWindowSizeConstraints(ImVec2(100.0f, screenH), ImVec2(screenW, screenH));
 
-		// DRAW THE HIERARCHY WINDOW
-		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(screenW * 0.10f, screenH), ImGuiCond_Always);
-		ImGui::Begin("Hierarchy", nullptr, staticFlags);
-		for (const auto& pair : manager.GetAllActors())
-		{
-			HEIN::Actor* actor = pair.second.get();
-			std::wstring tag = actor->GetTag();
-			std::string narrowTag(tag.begin(), tag.end());
-			
-			std::string label = narrowTag + "##" + std::to_string(actor->GetID());
-			
-			bool isSelected = (m_selectedActor == actor);
-			if (ImGui::Selectable(label.c_str(), isSelected))
-			{
-				m_selectedActor = actor;
-			}
-		}
-		ImGui::End();
+		// Set the starting size (only applies the very first time it opens)
+		ImGui::SetNextWindowSize(ImVec2(screenW * 0.25f, screenH), ImGuiCond_FirstUseEver);
 
-		// DRAW THE INSPECTOR WINDOW
-		ImGui::SetNextWindowPos(ImVec2(screenW * 0.75f, 0.0f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(screenW * 0.25f, screenH), ImGuiCond_Always);
-		ImGui::Begin("Inspector", nullptr, staticFlags);
+		// The last parameter ImVec2(1.0f, 0.0f) is the Pivot (1.0 = Right edge, 0.0 = Top edge)
+		ImGui::SetNextWindowPos(ImVec2(screenW, 0.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+
+		ImGui::Begin("Inspector");
+		
+		ImVec2 inspectorPos = ImGui::GetWindowPos();
+		ImVec2 inspectorSize = ImGui::GetWindowSize();
 
 		if (m_selectedActor == nullptr || manager.GetActor(m_selectedActor->GetID()) == nullptr)
 		{
@@ -218,7 +185,7 @@ namespace HEIN
 		{
 			std::wstring wtag = m_selectedActor->GetTag();
 			std::string narrowTag(wtag.begin(), wtag.end());
-			
+
 			char nameBuffer[256];
 			strncpy_s(nameBuffer, narrowTag.c_str(), sizeof(nameBuffer));
 			if (ImGui::InputText("Actor Name", nameBuffer, sizeof(nameBuffer)))
@@ -227,7 +194,7 @@ namespace HEIN
 				std::wstring newWTag(newTag.begin(), newTag.end());
 				m_selectedActor->SetTag(newWTag);
 			}
-			
+
 			ImGui::Separator();
 
 			// Draw gizmo mode toggles
@@ -237,10 +204,10 @@ namespace HEIN
 
 			ImGui::Separator();
 
-			m_selectedActor->DrawInspector();
+			m_selectedActor->DrawInspector(gameContext);
 
 			ImGui::Separator();
-			
+
 			// Add Component UI
 			std::vector<std::string> componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
 			if (componentNames.empty())
@@ -268,6 +235,58 @@ namespace HEIN
 
 		}
 		ImGui::End();
+
+		ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+
+		
+		float hierarchyWidth = screenW * 0.10f;
+		float toolbarWidth = inspectorPos.x - hierarchyWidth;
+		if (toolbarWidth < 10.0f) toolbarWidth = 10.0f; // Ensure a minimum width
+
+		ImGui::SetNextWindowPos(ImVec2(hierarchyWidth, 0.0f), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(toolbarWidth, 80.0f), ImGuiCond_Always);
+
+		ImGui::Begin("ToolBar", nullptr, toolbarFlags);
+		if (ImGui::Button("PLAY")) currentAction = HEIN::EditorAction::PlayPressed;
+		ImGui::SameLine();
+		if (ImGui::Button("STOP")) 	currentAction = HEIN::EditorAction::StopPressed;
+		ImGui::SameLine();
+		if (ImGui::Button("SAVE SCENE")) currentAction = HEIN::EditorAction::SavePressed;
+		ImGui::SameLine();
+		if (ImGui::Button("AUTO SAVE")) currentAction = HEIN::EditorAction::AutoSavePressed;
+		ImGui::SameLine();
+		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
+		ImGui::SameLine();
+		if (ImGui::Button("NEW SCENE")) currentAction = HEIN::EditorAction::NewScenePressed;
+		ImGui::Separator();
+		if (ImGui::Button("Create Empty Actor"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"NewActor");
+			m_selectedActor = newActor;
+		}
+		ImGui::End();
+
+		// DRAW THE HIERARCHY WINDOW
+		ImGuiWindowFlags staticFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(screenW * 0.10f, screenH), ImGuiCond_Always);
+		ImGui::Begin("Hierarchy", nullptr, staticFlags);
+		for (const auto& pair : manager.GetAllActors())
+		{
+			HEIN::Actor* actor = pair.second.get();
+			std::wstring tag = actor->GetTag();
+			std::string narrowTag(tag.begin(), tag.end());
+			
+			std::string label = narrowTag + "##" + std::to_string(actor->GetID());
+			
+			bool isSelected = (m_selectedActor == actor);
+			if (ImGui::Selectable(label.c_str(), isSelected))
+			{
+				m_selectedActor = actor;
+			}
+		}
+		ImGui::End();
+		
 
 		return currentAction;
 	}

@@ -125,9 +125,9 @@ void HEIN::MeshColliderComponent::Deserialize(const nlohmann::json& data)
     }
 }
 
-void HEIN::MeshColliderComponent::OnInspectorGUI()
+void HEIN::MeshColliderComponent::OnInspectorGUI(GameContext& gameContext)
 {
-    ColliderComponent::OnInspectorGUI();
+    ColliderComponent::OnInspectorGUI(gameContext);
     if (ImGui::CollapsingHeader("MeshCollider Properties", ImGuiTreeNodeFlags_DefaultOpen))
     {
         std::string narrowPath(m_objPath.begin(), m_objPath.end());

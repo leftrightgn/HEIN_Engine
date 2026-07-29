@@ -13,7 +13,7 @@ HEIN::TransformComponent::TransformComponent(Actor* owner)
 {
 }
 
-void HEIN::TransformComponent::OnInspectorGUI()
+void HEIN::TransformComponent::OnInspectorGUI(GameContext& gameContext)
 {
     bool isActive = (HEIN::g_ActiveGizmoTarget == this);
     if (ImGui::RadioButton("Edit Transform with Gizmo", isActive))

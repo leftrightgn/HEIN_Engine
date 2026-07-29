@@ -45,8 +45,7 @@ namespace HEIN
 		void Deserialize(const nlohmann::json& data) override;
 		void InitializeAfterDeserialize(GameContext& gameContext) override;
 
-		void OnInspectorGUI() override;
-
+		void OnInspectorGUI(GameContext& gameContext) override;
 
 		SkinnedModelComponent(Actor* owner);
 
@@ -63,7 +62,7 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& world, 
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj
-		);
+		) override;
 
 		DirectX::SimpleMath::Vector3 GetBoneWorldPosition(
 			const wchar_t* boneName,
