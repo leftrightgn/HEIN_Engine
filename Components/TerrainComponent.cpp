@@ -20,11 +20,15 @@ HEIN::TerrainComponent::TerrainComponent(Actor* owner)
 bool HEIN::TerrainComponent::Initialize(
 	GameContext& gameContext,
 	const wchar_t* heightMapFilename, 
-	float heightScale
+	const wchar_t* textureFilename,
+	float heightScale,
+	float textureTiling
 )
 {
 	m_heightMapFilename = heightMapFilename;
 	m_heightScale = heightScale;
+	m_textureFilename = textureFilename;
+	m_texutreTiling = textureTiling;
 
 	ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
 
@@ -34,6 +38,11 @@ bool HEIN::TerrainComponent::Initialize(
 		OutputDebugStringA("FailedToLoadTheBmpFile!");
 		return false;
 	}
+
+	m_vertexCount = m_terrainWidth * m_terrainHeight;
+
+	CalculateNormals();
+
 	// Build the vertices/ indices and create the GPU Buffer
 	if (!InitializeBuffer(device))
 	{
@@ -41,24 +50,109 @@ bool HEIN::TerrainComponent::Initialize(
 		return false;
 	}
 
-	// Initialize BasicEffect before using it for shader bytecode
-	m_effect = std::make_unique<DirectX::BasicEffect>(device);
-	m_effect->SetVertexColorEnabled(true);
+	if (!m_textureFilename.empty())
+	{
+		HRESULT hr = DirectX::CreateDDSTextureFromFile(device, m_textureFilename.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
+		if (FAILED(hr))
+		{
+			// Fallback: If CWD changed, try relative to the most likely project directories
+			std::wstring fallback = L"../Dual/" + m_textureFilename;
+			hr = DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
+			if (FAILED(hr))
+			{
+				fallback = L"../../Dual/Dual/" + m_textureFilename;
+				DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
+			}
+		}
+	}
 
-	// Create InputLayout and vertextPositionColor
-	const void* shaderByteCode;
-	size_t byteCodeLength;
-	m_effect->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
+	// Compile and load Custom shaders
+	Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderBlob;
+	Microsoft::WRL::ComPtr<ID3DBlob> pixelShaderBlob;
+	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
 
+	// Compile Vertex Shader
+	HRESULT hr = D3DCompileFromFile(
+		L"../External/Engine/Shaders/Terrain_VS.hlsl",
+		nullptr,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		"main",
+		"vs_5_0",
+		D3DCOMPILE_ENABLE_STRICTNESS,
+		0,
+		&vertexShaderBlob,
+		&errorBlob
+	);
+	if (FAILED(hr))
+	{
+		if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+		return false;
+	}
+
+	// Compile Pixel Shader
+	hr = D3DCompileFromFile(
+		L"../External/Engine/Shaders/Terrain_PS.hlsl",
+		nullptr,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		"main",
+		"ps_5_0",
+		D3DCOMPILE_ENABLE_STRICTNESS,
+		0,
+		&pixelShaderBlob,
+		&errorBlob
+	);
+	if (FAILED(hr))
+	{
+		if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+		return false;
+	}
+
+	device->CreateVertexShader(
+		vertexShaderBlob->GetBufferPointer(),
+		vertexShaderBlob->GetBufferSize(),
+		nullptr,
+		m_vertexShader.ReleaseAndGetAddressOf()
+	);
+	device->CreatePixelShader(
+		pixelShaderBlob->GetBufferPointer(),
+		pixelShaderBlob->GetBufferSize(),
+		nullptr,
+		m_pixelShader.ReleaseAndGetAddressOf()
+	);
+
+	// Create input layOut
 	DX::ThrowIfFailed(
 		device->CreateInputLayout(
-			DirectX::VertexPositionColor::InputElements,
-			DirectX::VertexPositionColor::InputElementCount,
-			shaderByteCode,
-			byteCodeLength,
+			DirectX::VertexPositionNormalColorTexture::InputElements,
+			DirectX::VertexPositionNormalColorTexture::InputElementCount,
+			vertexShaderBlob->GetBufferPointer(),
+			vertexShaderBlob->GetBufferSize(),
 			m_inputLayout.ReleaseAndGetAddressOf()
 		)
 	);
+
+	// Create Constant Buffer
+	D3D11_BUFFER_DESC matrixBufferDesc = {};
+	matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	matrixBufferDesc.ByteWidth = sizeof(MatrixBufferType);
+	matrixBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	matrixBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	device->CreateBuffer(&matrixBufferDesc, nullptr, m_matrixBuffer.ReleaseAndGetAddressOf());
+
+	D3D11_BUFFER_DESC lightBufferDesc = {};
+	lightBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	lightBufferDesc.ByteWidth = sizeof(LightBufferType);
+	lightBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	lightBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	device->CreateBuffer(&lightBufferDesc, nullptr, m_lightBuffer.ReleaseAndGetAddressOf());
+
+	// Creat Sampler State
+	D3D11_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	device->CreateSamplerState(&samplerDesc, m_sampleState.ReleaseAndGetAddressOf());
 
 	return true;
 }
@@ -70,6 +164,12 @@ void HEIN::TerrainComponent::Draw(
 	const DirectX::SimpleMath::Matrix& proj
 )
 {
+	if (m_needsReload)
+	{
+		Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_heightScale, m_texutreTiling);
+		m_needsReload = false;
+	}
+
 	if (!m_isVisible || !m_vertexBuffer || !m_indexBuffer) return;
 
 	ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
@@ -82,26 +182,58 @@ void HEIN::TerrainComponent::Draw(
 	{
 		finalworld = transform->GetWorldMatrix();
 	}
-	m_effect->SetWorld(finalworld);
-	m_effect->SetView(view);
-	m_effect->SetProjection(proj);
-
-	context->IASetInputLayout(m_inputLayout.Get());
-
+	context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
 	// If the frameWire mode is enabled , switch to rasterizer state 
 	if (m_isWireFrame) context->RSSetState(gameContext.commonStates.Wireframe());
 	else context->RSSetState(gameContext.commonStates.CullClockwise());
 
-	m_effect->Apply(context);
+	// Set Vertex/Index Buffer and Input LayOut
 
-	UINT stride = sizeof(DirectX::VertexPositionColor);
+	UINT stride = sizeof(DirectX::VertexPositionNormalColorTexture);
 	UINT offset = 0;
 	context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
 	context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 	context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->IASetInputLayout(m_inputLayout.Get());
 
+	// Update Matix Constant Buffer
+	D3D11_MAPPED_SUBRESOURCE mappdedResource;
+	if (SUCCEEDED(context->Map(m_matrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappdedResource)))
+	{
+		MatrixBufferType* dataPtr = (MatrixBufferType*)mappdedResource.pData;
+		// HLSL requires matrices to be transposed 
+		dataPtr->world = finalworld.Transpose();
+		dataPtr->view = view.Transpose();
+		dataPtr->projection = proj.Transpose();
+		context->Unmap(m_matrixBuffer.Get(), 0);
+	}
+	context->VSSetConstantBuffers(0, 1, m_matrixBuffer.GetAddressOf());
+
+	if (SUCCEEDED(context->Map(m_lightBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappdedResource)))
+	{
+		LightBufferType* dataPtr = (LightBufferType*)mappdedResource.pData;
+
+		DirectX::SimpleMath::Vector3 safeLightDir = m_lightDirection;
+		safeLightDir.Normalize();
+
+		dataPtr->diffuseColor = DirectX::SimpleMath::Vector4(m_diffuseColor.x, m_diffuseColor.y, m_diffuseColor.z, 1.0f);
+		dataPtr->lightDirection = safeLightDir;
+		dataPtr->hasTexture = m_texture ? 1.0f : 0.0f;
+		context->Unmap(m_lightBuffer.Get(), 0);
+	}
+	context->PSSetConstantBuffers(1, 1, m_lightBuffer.GetAddressOf());
+
+	context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+	context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+
+	if (m_texture)
+	{
+		context->PSSetShaderResources(0, 1, m_texture.GetAddressOf());
+	}
+	context->PSSetSamplers(0, 1, m_sampleState.GetAddressOf());
+
+	// DRAW THE TERRAIN!
 	context->DrawIndexed(m_indexCount, 0, 0);
-
 	// Reset the rasterizer state to Default
 	if (m_isWireFrame) context->RSSetState(gameContext.commonStates.CullClockwise());
 
@@ -111,8 +243,16 @@ nlohmann::json HEIN::TerrainComponent::Serialize()
 	nlohmann::json data = IComponent::Serialize();
 	std::string narrowPath(m_heightMapFilename.begin(), m_heightMapFilename.end());
 	data["HeightMapPath"] = narrowPath;
+	std::string texPath(m_textureFilename.begin(), m_textureFilename.end());
+	data["TexturePath"] = texPath;
 	data["HeightScale"] = m_heightScale;
 	data["isWiredFrame"] = m_isWireFrame;
+	data["TextureTiling"] = m_texutreTiling;
+	
+	// Added Light and Visibility Saving
+	data["IsVisible"] = m_isVisible;
+	data["LightDirection"] = nlohmann::json::array({ m_lightDirection.x, m_lightDirection.y, m_lightDirection.z });
+	data["DiffuseColor"] = nlohmann::json::array({ m_diffuseColor.x, m_diffuseColor.y, m_diffuseColor.z });
 
 	return data;
 }
@@ -125,15 +265,31 @@ void HEIN::TerrainComponent::Deserialize(const nlohmann::json& data)
 		std::string narrowPath = data["HeightMapPath"];
 		m_heightMapFilename = std::wstring(narrowPath.begin(), narrowPath.end());
 	}
+	if (data.contains("TexturePath"))
+	{
+		std::string texPath = data["TexturePath"];
+		m_textureFilename = std::wstring(texPath.begin(), texPath.end());
+	}
 	if (data.contains("HeightScale")) m_heightScale = data["HeightScale"];
 	if (data.contains("isWiredFrame")) m_isWireFrame = data["isWiredFrame"];
+	if (data.contains("TextureTiling")) m_texutreTiling = data["TextureTiling"];
+	
+	// Added Light and Visibility Loading
+	if (data.contains("IsVisible")) m_isVisible = data["IsVisible"];
+	if (data.contains("LightDirection")) m_lightDirection = DirectX::SimpleMath::Vector3(data["LightDirection"][0], data["LightDirection"][1], data["LightDirection"][2]);
+	if (data.contains("DiffuseColor"))
+	{
+		m_diffuseColor = DirectX::SimpleMath::Vector3(data["DiffuseColor"][0], data["DiffuseColor"][1], data["DiffuseColor"][2]);
+	}
+	
+	m_needsReload = true; // Ponytail: lazy initialization instead of hardcoding GameScene
 }
 
 void HEIN::TerrainComponent::InitializeAfterDeserialize(GameContext& gameContext)
 {
 	if (!m_heightMapFilename.empty())
 	{
-		Initialize(gameContext, m_heightMapFilename.c_str(), m_heightScale);
+		Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_heightScale, m_texutreTiling);
 	}
 }
 
@@ -150,14 +306,18 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			// Recreate the buffer with the new scale immediately
 			InitializeBuffer(gameContext.deviceResources.GetD3DDevice());
 		}
-
+		if (ImGui::DragFloat("Texture Tiling", &m_texutreTiling, 0.5f, 1.0f, 128.0f))
+		{
+			// Recreate the buffer to apply the new UV coordinates
+			InitializeBuffer(gameContext.deviceResources.GetD3DDevice());
+		}
 		ImGui::Separator();
 
 		std::string pathStr = std::string(m_heightMapFilename.begin(), m_heightMapFilename.end());
 		if (ImGui::InputText("HeightMap File", &pathStr, ImGuiInputTextFlags_EnterReturnsTrue))
 		{
 			m_heightMapFilename = std::wstring(pathStr.begin(), pathStr.end());
-			Initialize(gameContext, m_heightMapFilename.c_str(), m_heightScale);
+			Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_heightScale, m_texutreTiling);
 		}
 		
 		ImGui::SameLine();
@@ -167,7 +327,30 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			if (!selectedFile.empty())
 			{
 				m_heightMapFilename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
-				Initialize(gameContext, m_heightMapFilename.c_str(), m_heightScale);
+				Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_heightScale, m_texutreTiling);
+			}
+		}
+
+		ImGui::Separator();
+
+		std::string texPathStr = std::string(m_textureFilename.begin(), m_textureFilename.end());
+		if (ImGui::InputText("Texture File", &texPathStr, ImGuiInputTextFlags_EnterReturnsTrue))
+		{
+			m_textureFilename = std::wstring(texPathStr.begin(), texPathStr.end());
+			if (!m_textureFilename.empty())
+			{
+				DirectX::CreateDDSTextureFromFile(gameContext.deviceResources.GetD3DDevice(), m_textureFilename.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
+			}
+		}
+		
+		ImGui::SameLine();
+		if (ImGui::Button("Browse Texture..."))
+		{
+			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"DDS Files\0*.dds\0All Files\0*.*\0", windowHandle);
+			if (!selectedFile.empty())
+			{
+				m_textureFilename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
+				DirectX::CreateDDSTextureFromFile(gameContext.deviceResources.GetD3DDevice(), m_textureFilename.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
 			}
 		}
 	}
@@ -237,15 +420,71 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 	return true;
 }
 
+bool HEIN::TerrainComponent::CalculateNormals()
+{
+	// Initialize all normals to Zero
+	for (int i = 0; i < m_vertexCount; i++)
+	{
+		m_heightMap[i].nx = 0.0f;
+		m_heightMap[i].ny = 0.0f;
+		m_heightMap[i].nz = 0.0f;
+	}
+
+	// Go Through every quad in the gird and calculate the face normals
+	for (int j = 0; j < (m_terrainHeight - 1); j ++)
+	{
+		for (int i = 0; i < (m_terrainWidth - 1); i++)
+		{
+			int index1 = (m_terrainHeight - 1 - j) * m_terrainWidth + i; // Bottom Left
+			int index2 = (m_terrainHeight - 1 - j) * m_terrainWidth + (i + 1); // Bottom Right
+			int index3 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + i; // Up Left
+			int index4 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + (i + 1); // Up Right
+
+			// Triangle 1 
+			DirectX::SimpleMath::Vector3 v1(m_heightMap[index3].x, m_heightMap[index3].y * m_heightScale, m_heightMap[index3].z);
+			DirectX::SimpleMath::Vector3 v2(m_heightMap[index4].x, m_heightMap[index4].y * m_heightScale, m_heightMap[index4].z);
+			DirectX::SimpleMath::Vector3 v3(m_heightMap[index1].x, m_heightMap[index1].y * m_heightScale, m_heightMap[index1].z);
+
+			DirectX::SimpleMath::Vector3 edge1 = v2 - v1;
+			DirectX::SimpleMath::Vector3 edge2 = v3 - v1;
+			DirectX::SimpleMath::Vector3 normal1 = edge1.Cross(edge2); // Math to find the direction the face points
+
+			m_heightMap[index3].nx += normal1.x; m_heightMap[index3].ny += normal1.y; m_heightMap[index3].nz += normal1.z;
+			m_heightMap[index4].nx += normal1.x; m_heightMap[index4].ny += normal1.y; m_heightMap[index4].nz += normal1.z;
+			m_heightMap[index1].nx += normal1.x; m_heightMap[index1].ny += normal1.y; m_heightMap[index1].nz += normal1.z;
+
+			// Triangle 2
+			v1 = DirectX::SimpleMath::Vector3(m_heightMap[index1].x, m_heightMap[index1].y * m_heightScale, m_heightMap[index1].z);
+			v2 = DirectX::SimpleMath::Vector3(m_heightMap[index4].x, m_heightMap[index4].y * m_heightScale, m_heightMap[index4].z);
+			v3 = DirectX::SimpleMath::Vector3(m_heightMap[index2].x, m_heightMap[index2].y * m_heightScale, m_heightMap[index2].z);
+
+			edge1 = v2 - v1;
+			edge2 = v3 - v1;
+			normal1 = edge1.Cross(edge2);
+
+			m_heightMap[index1].nx += normal1.x; m_heightMap[index1].ny += normal1.y; m_heightMap[index1].nz += normal1.z;
+			m_heightMap[index4].nx += normal1.x; m_heightMap[index4].ny += normal1.y; m_heightMap[index4].nz += normal1.z;
+			m_heightMap[index2].nx += normal1.x; m_heightMap[index2].ny += normal1.y; m_heightMap[index2].nz += normal1.z;
+		}
+	}
+	for (int i = 0; i < m_vertexCount; i++)
+	{
+		DirectX::SimpleMath::Vector3 n(m_heightMap[i].nx, m_heightMap[i].ny, m_heightMap[i].nz);
+		n.Normalize();
+		m_heightMap[i].nx = n.x;
+		m_heightMap[i].ny = n.y;
+		m_heightMap[i].nz = n.z;
+	}
+
+	return true;
+}
+
 bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 {
-	// Calculate the Count 
-	m_vertexCount = m_terrainWidth * m_terrainHeight;
-
 	// Indices (6 indices per quad (2 triangles) to connect the vertices)
 	m_indexCount = (m_terrainWidth - 1) * (m_terrainHeight - 1) * 6;
 
-	std::vector<DirectX::VertexPositionColor> vertices(m_vertexCount);
+	std::vector<DirectX::VertexPositionNormalColorTexture> vertices(m_vertexCount);
 	std::vector<uint32_t> indices(m_indexCount);
 
 	float halfWidth = (float)m_terrainWidth / 2.0f;
@@ -257,6 +496,29 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 		vertices[i].position.x = m_heightMap[i].x - halfWidth;
 		vertices[i].position.y = m_heightMap[i].y * m_heightScale;
 		vertices[i].position.z = m_heightMap[i].z - halfDepth;
+
+		vertices[i].normal.x = m_heightMap[i].nx;
+		vertices[i].normal.y = m_heightMap[i].ny;
+		vertices[i].normal.z = m_heightMap[i].nz;
+
+		int gridX = i % m_terrainWidth;
+		int gridY = i / m_terrainWidth;
+
+		float u = ((float)gridX / (float)(m_terrainWidth - 1));
+		float v = ((float)gridY / (float)(m_terrainHeight - 1));
+
+		// To flip Vertically(Upside Down)
+		v = 1.0f - v;
+
+		// To flip Horizonally(Mirroed)
+		//u = 1.0f - u;
+
+		vertices[i].textureCoordinate.x = u * m_texutreTiling;
+		vertices[i].textureCoordinate.y = v * m_texutreTiling;
+
+		// Maps exactly 1 full texture per terrain quad
+		/*vertices[i].textureCoordinate.x = (float)gridX;
+		vertices[i].textureCoordinate.y = (float)gridY;*/
 
 		float h = m_heightMap[i].y;
 
@@ -291,7 +553,7 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 	// Create the DirectX Buffer
 	D3D11_BUFFER_DESC vertexBufferDesc = {};
 	vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	vertexBufferDesc.ByteWidth = sizeof(DirectX::VertexPositionColor) * m_vertexCount;
+	vertexBufferDesc.ByteWidth = sizeof(DirectX::VertexPositionNormalColorTexture) * m_vertexCount;
 	vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
 	D3D11_SUBRESOURCE_DATA vertexData = {};
