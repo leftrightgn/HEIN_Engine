@@ -21,17 +21,23 @@ bool HEIN::TerrainComponent::Initialize(
 	GameContext& gameContext,
 	const wchar_t* heightMapFilename, 
 	const wchar_t* textureFilename,
+	const wchar_t* colorMapFilename,
 	float heightScale,
 	float textureTiling
 )
 {
-	m_heightMapFilename = heightMapFilename;
+	m_heightMapFilename = heightMapFilename ? heightMapFilename : L"";
+	m_textureFilename = textureFilename ? textureFilename : L"";
+	m_colorMapFilename = colorMapFilename ? colorMapFilename : L"";
 	m_heightScale = heightScale;
-	m_textureFilename = textureFilename;
 	m_texutreTiling = textureTiling;
 
 	ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
 
+	if (m_heightMapFilename.empty())
+	{
+		return false;
+	}
 	// Read the Bmp File and populate the HeightMap
 	if (!LoadHeightMap(heightMapFilename))
 	{
@@ -41,6 +47,18 @@ bool HEIN::TerrainComponent::Initialize(
 
 	m_vertexCount = m_terrainWidth * m_terrainHeight;
 
+	if (!m_colorMapFilename.empty() && LoadColorMap(m_colorMapFilename.c_str()))
+	{
+		// Color map successfully applied to the grid
+	}
+	else
+	{
+		for (int i = 0; i < m_vertexCount; i++)
+		{
+			m_heightMap[i].r = 1.0f; m_heightMap[i].g = 1.0f; m_heightMap[i].b = 1.0f;
+		}
+	}
+
 	CalculateNormals();
 
 	// Build the vertices/ indices and create the GPU Buffer
@@ -49,6 +67,8 @@ bool HEIN::TerrainComponent::Initialize(
 		OutputDebugStringA("FailedToCreateBuffer!");
 		return false;
 	}
+
+	m_texture.Reset();
 
 	if (!m_textureFilename.empty())
 	{
@@ -166,7 +186,7 @@ void HEIN::TerrainComponent::Draw(
 {
 	if (m_needsReload)
 	{
-		Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_heightScale, m_texutreTiling);
+		Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_colorMapFilename.c_str(), m_heightScale, m_texutreTiling);
 		m_needsReload = false;
 	}
 
@@ -245,6 +265,8 @@ nlohmann::json HEIN::TerrainComponent::Serialize()
 	data["HeightMapPath"] = narrowPath;
 	std::string texPath(m_textureFilename.begin(), m_textureFilename.end());
 	data["TexturePath"] = texPath;
+	std::string colorPath(m_colorMapFilename.begin(), m_colorMapFilename.end());
+	data["ColorMapPath"] = colorPath;
 	data["HeightScale"] = m_heightScale;
 	data["isWiredFrame"] = m_isWireFrame;
 	data["TextureTiling"] = m_texutreTiling;
@@ -265,10 +287,27 @@ void HEIN::TerrainComponent::Deserialize(const nlohmann::json& data)
 		std::string narrowPath = data["HeightMapPath"];
 		m_heightMapFilename = std::wstring(narrowPath.begin(), narrowPath.end());
 	}
+	else
+	{
+		m_heightMapFilename = L"";
+	}
 	if (data.contains("TexturePath"))
 	{
 		std::string texPath = data["TexturePath"];
 		m_textureFilename = std::wstring(texPath.begin(), texPath.end());
+	}
+	else
+	{
+		m_textureFilename = L"";
+	}
+	if (data.contains("ColorMapPath")) 
+	{
+		std::string colorPath = data["ColorMapPath"];
+		m_colorMapFilename = std::wstring(colorPath.begin(), colorPath.end());
+	}
+	else 
+	{
+		m_colorMapFilename = L"";
 	}
 	if (data.contains("HeightScale")) m_heightScale = data["HeightScale"];
 	if (data.contains("isWiredFrame")) m_isWireFrame = data["isWiredFrame"];
@@ -282,14 +321,21 @@ void HEIN::TerrainComponent::Deserialize(const nlohmann::json& data)
 		m_diffuseColor = DirectX::SimpleMath::Vector3(data["DiffuseColor"][0], data["DiffuseColor"][1], data["DiffuseColor"][2]);
 	}
 	
-	m_needsReload = true; // Ponytail: lazy initialization instead of hardcoding GameScene
+	m_needsReload = true; 
 }
 
 void HEIN::TerrainComponent::InitializeAfterDeserialize(GameContext& gameContext)
 {
 	if (!m_heightMapFilename.empty())
 	{
-		Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_heightScale, m_texutreTiling);
+		Initialize(
+			gameContext,
+			m_heightMapFilename.c_str(),
+			m_textureFilename.c_str(),
+			m_colorMapFilename.c_str(),
+			m_heightScale,
+			m_texutreTiling
+		);
 	}
 }
 
@@ -311,13 +357,26 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			// Recreate the buffer to apply the new UV coordinates
 			InitializeBuffer(gameContext.deviceResources.GetD3DDevice());
 		}
+
+		ImGui::Separator();
+		ImGui::Text("Lighting");
+		ImGui::DragFloat3("Light Direction", &m_lightDirection.x, 0.05f, -1.0f, 1.0f);
+		ImGui::ColorEdit3("Diffuse Color", &m_diffuseColor.x);
+		
 		ImGui::Separator();
 
 		std::string pathStr = std::string(m_heightMapFilename.begin(), m_heightMapFilename.end());
 		if (ImGui::InputText("HeightMap File", &pathStr, ImGuiInputTextFlags_EnterReturnsTrue))
 		{
 			m_heightMapFilename = std::wstring(pathStr.begin(), pathStr.end());
-			Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_heightScale, m_texutreTiling);
+			Initialize(
+				gameContext,
+				m_heightMapFilename.c_str(),
+				m_textureFilename.c_str(),
+				m_colorMapFilename.c_str(),
+				m_heightScale,
+				m_texutreTiling
+			);
 		}
 		
 		ImGui::SameLine();
@@ -327,7 +386,14 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			if (!selectedFile.empty())
 			{
 				m_heightMapFilename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
-				Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_heightScale, m_texutreTiling);
+				Initialize(
+					gameContext,
+					m_heightMapFilename.c_str(), 
+					m_textureFilename.c_str(),
+					m_colorMapFilename.c_str(), 
+					m_heightScale, 
+					m_texutreTiling
+				);
 			}
 		}
 
@@ -341,6 +407,10 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			{
 				DirectX::CreateDDSTextureFromFile(gameContext.deviceResources.GetD3DDevice(), m_textureFilename.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
 			}
+			else
+			{
+				m_texture.Reset();
+			}
 		}
 		
 		ImGui::SameLine();
@@ -352,6 +422,39 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 				m_textureFilename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
 				DirectX::CreateDDSTextureFromFile(gameContext.deviceResources.GetD3DDevice(), m_textureFilename.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
 			}
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("Remove Texture"))
+		{
+			m_textureFilename.clear();
+			m_texture.Reset();
+		}
+
+		ImGui::Separator();
+		std::string colorPathStr = std::string(m_colorMapFilename.begin(), m_colorMapFilename.end());
+		if (ImGui::InputText("ColorMap File", &colorPathStr, ImGuiInputTextFlags_EnterReturnsTrue))
+		{
+			m_colorMapFilename = std::wstring(colorPathStr.begin(), colorPathStr.end());
+			m_needsReload = true;
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("Browse ColorMap..."))
+		{
+			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"Bitmap Files\0*.bmp\0All Files\0*.*\0", windowHandle);
+			if (!selectedFile.empty())
+			{
+				m_colorMapFilename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
+				m_needsReload = true; 
+			}
+		}
+		
+		ImGui::SameLine();
+		if (ImGui::Button("Remove ColorMap"))
+		{
+			m_colorMapFilename.clear();
+			m_needsReload = true;
 		}
 	}
 }
@@ -520,12 +623,11 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 		/*vertices[i].textureCoordinate.x = (float)gridX;
 		vertices[i].textureCoordinate.y = (float)gridY;*/
 
-		float h = m_heightMap[i].y;
-
-		DirectX::XMVECTOR color = DirectX::XMVectorLerp(
-			DirectX::Colors::DarkGreen, DirectX::Colors::White, h
-		);
-		DirectX::XMStoreFloat4(&vertices[i].color, color);
+		// Pass the exact painted color to the GPU
+		vertices[i].color.x = m_heightMap[i].r;
+		vertices[i].color.y = m_heightMap[i].g;
+		vertices[i].color.z = m_heightMap[i].b;
+		vertices[i].color.w = 1.0f; // Alpha
 
 	}
 
@@ -573,5 +675,62 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 		device->CreateBuffer(&indexBufferDesc, &indexData, m_indexBuffer.ReleaseAndGetAddressOf())
 	);
 
+	return true;
+}
+
+bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
+{
+	FILE* filePtr;
+	BITMAPFILEHEADER bitmapFileHeader;
+	BITMAPINFOHEADER bitmapInfoHeader;
+	int imageSize, index, i, j;
+	unsigned char* bitmapImage;
+
+	// open the color map file
+	int error = _wfopen_s(&filePtr, filename, L"rb");
+	if (error != 0) return false;
+
+	fread(&bitmapFileHeader, sizeof(bitmapFileHeader), 1, filePtr);
+	fread(&bitmapInfoHeader, sizeof(bitmapInfoHeader), 1, filePtr);
+
+	if (bitmapInfoHeader.biWidth != m_terrainWidth || bitmapInfoHeader.biHeight != m_terrainHeight)
+	{
+		OutputDebugStringA("ColorMap dimensions do not match HeightMap!");
+		fclose(filePtr);
+		return false;
+	}
+
+	int bytesPerPixel = bitmapInfoHeader.biBitCount / 8;
+	if (bytesPerPixel < 3) bytesPerPixel = 3;
+
+	// Calculate the "Row Pitch" (the actual length of a row in bytes).
+	// RULE: The BMP file format requires every row of pixels to be padded with 
+	// empty bytes so that its total length is always a multiple of 4.
+	// The math `(x + 3) & ~3` is a fast bitwise trick that rounds the byte count 
+	// UP to the nearest multiple of 4.
+	int rowPitch = (m_terrainWidth * bytesPerPixel + 3) & ~3;
+	imageSize = rowPitch * m_terrainHeight;
+
+	bitmapImage = new unsigned char[imageSize];
+	fseek(filePtr, bitmapFileHeader.bfOffBits, SEEK_SET);
+	fread(bitmapImage, 1, imageSize, filePtr);
+	fclose(filePtr);
+
+	// Read the image Data into the RGB fields
+	for (j = 0; j < m_terrainHeight; j++)
+	{
+		for (i = 0; i < m_terrainWidth; i++)
+		{
+			int pixelOffset = j * rowPitch + i * bytesPerPixel;
+			index = (m_terrainHeight - 1 - j) * m_terrainWidth + i;
+
+			// Windows BMP files store pixels in BGR (Blue, Green, Red) format!
+			m_heightMap[index].b = (float)bitmapImage[pixelOffset] / 255.0f;
+			m_heightMap[index].g = (float)bitmapImage[pixelOffset + 1] / 255.0f;
+			m_heightMap[index].r = (float)bitmapImage[pixelOffset + 2] / 255.0f;
+		}
+	}
+
+	delete[] bitmapImage;
 	return true;
 }
