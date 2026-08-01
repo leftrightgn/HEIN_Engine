@@ -12,8 +12,15 @@ PixelInputType main(VertexInputType input)
     
     output.tex = input.tex;
     output.color = input.color;
-    output.normal = mul(input.normal, (float3x3)worldMatrix);
+    output.normal = mul(input.normal, (float3x3) worldMatrix);
     output.normal = normalize(output.normal);
+    
+    output.tangent = mul(input.tangent, (float3x3) worldMatrix);
+    output.tangent = normalize(output.tangent);
+    
+    output.binormal = mul(input.binormal, (float3x3) worldMatrix);
+    output.binormal = normalize(output.binormal);
+    
     
     return output;
 }
