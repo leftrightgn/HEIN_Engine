@@ -31,6 +31,7 @@ namespace HEIN
 		{
 			float x, y, z;
 			float nx, ny, nz;
+			float r, g, b;
 		};
 
 		int m_terrainWidth;
@@ -57,6 +58,9 @@ namespace HEIN
 		int m_indexCount;
 
 		std::wstring m_textureFilename;
+
+		std::wstring m_colorMapFilename;
+
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_texture;
 		float m_texutreTiling = 1.0f;
 
@@ -75,9 +79,10 @@ namespace HEIN
 		bool Initialize(
 			GameContext& gameContext,
 			const wchar_t* heightMapFilename,
-			const wchar_t* textureFilename,
-			float heightScale,
-			float textureTiling
+			const wchar_t* textureFilename = L"",
+			const wchar_t* colorMapFilename = L"",
+			float heightScale = 10.0f,
+			float textureTiling = 1.0f
 		);
 
 		void Update(float deltaTime) override {}
@@ -100,6 +105,7 @@ namespace HEIN
 		bool LoadHeightMap(const wchar_t* filename);
 		bool CalculateNormals();
 		bool InitializeBuffer(ID3D11Device* device);
+		bool LoadColorMap(const wchar_t* filename);
 
 	};
 }
