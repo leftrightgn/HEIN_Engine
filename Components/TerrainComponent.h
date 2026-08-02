@@ -23,7 +23,9 @@ namespace HEIN
 			DirectX::SimpleMath::Vector4 diffuseColor;
 			DirectX::SimpleMath::Vector3 lightDirection;
 			float hasTexture;
-
+			float textureTiling;
+			float hasNormalMap;
+			DirectX::SimpleMath::Vector2 padding;
 		};
 
 		// Data
@@ -31,7 +33,20 @@ namespace HEIN
 		{
 			float x, y, z;
 			float nx, ny, nz;
+			float tx, ty, tz; // tangent
+			float bx, by, bz; // binormal
 			float r, g, b;
+		};
+
+		// Custom Vertex Sturcture
+		struct TerrainVertexType
+		{
+			DirectX::SimpleMath::Vector3 position;
+			DirectX::SimpleMath::Vector2 texture;
+			DirectX::SimpleMath::Vector3 normal;
+			DirectX::SimpleMath::Vector3 tangent;
+			DirectX::SimpleMath::Vector3 binormal;
+			DirectX::SimpleMath::Vector4 color;
 		};
 
 		int m_terrainWidth;
@@ -61,7 +76,11 @@ namespace HEIN
 
 		std::wstring m_colorMapFilename;
 
+		std::wstring m_normalMapFilename;
+
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_texture;
+
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_normalTexture;
 		float m_texutreTiling = 1.0f;
 
 		// Light Controls
@@ -81,6 +100,7 @@ namespace HEIN
 			const wchar_t* heightMapFilename,
 			const wchar_t* textureFilename = L"",
 			const wchar_t* colorMapFilename = L"",
+			const wchar_t* normalMapFilename = L"",
 			float heightScale = 10.0f,
 			float textureTiling = 1.0f
 		);

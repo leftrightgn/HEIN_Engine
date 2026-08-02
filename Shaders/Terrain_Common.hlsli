@@ -10,24 +10,24 @@ cbuffer MatrixBuffer : register(b0)
 
 cbuffer lightBuffer : register(b1)
 {
-    float4 diffuseColor; // the color of the sunlight (RGBA)
-    float3 lightDirection; // the angle sun is shining for the (xyz)
-    
-    // WARNING: The 16-Byte Rule!
-    // GPU memory chunks MUST be packed in multiples of 16 bytes (4 floats).
-    // float4 is 16 bytes (Perfect).
-    // float3 is 12 bytes. We use the remaining 4 bytes as a flag
-    // to tell the shader if a texture is bound!
-    float hasTexture;
+    float4 diffuseColor;   // the color of the sunlight (RGBA)
+    float3 lightDirection;  // the angle sun is shining for the (xyz)
+    float  hasTexture;      // flag if diffuse texture is bound
+    float  textureTiling;
+    float  hasNormalMap;    // flag if normal map is bound
+    float2 padding;
 }
 
 //  Struct (Data format for moving vertices through pipeline)
 struct VertexInputType
 {
-    float4 position : SV_Position;
-    float3 normal   : NORMAL;
-    float4 color    : COLOR;
+    float4 position : POSITION;
     float2 tex      : TEXCOORD0;
+    float3 normal   : NORMAL;
+    float3 tangent  : TANGENT;
+    float3 binormal : BINORMAL;
+    float4 color    : COLOR;
+   
 };
 
 struct PixelInputType
@@ -35,5 +35,7 @@ struct PixelInputType
     float4 position : SV_POSITION;
     float2 tex      : TEXCOORD0;
     float3 normal   : NORMAL;
+    float3 tangent  : TANGENT;
+    float3 binormal : BINORMAL;
     float4 color    : COLOR;
 };

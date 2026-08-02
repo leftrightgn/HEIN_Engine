@@ -22,6 +22,7 @@ bool HEIN::TerrainComponent::Initialize(
 	const wchar_t* heightMapFilename, 
 	const wchar_t* textureFilename,
 	const wchar_t* colorMapFilename,
+	const wchar_t* normalMapFilename,
 	float heightScale,
 	float textureTiling
 )
@@ -29,6 +30,7 @@ bool HEIN::TerrainComponent::Initialize(
 	m_heightMapFilename = heightMapFilename ? heightMapFilename : L"";
 	m_textureFilename = textureFilename ? textureFilename : L"";
 	m_colorMapFilename = colorMapFilename ? colorMapFilename : L"";
+	m_normalMapFilename = normalMapFilename ? normalMapFilename : L"";
 	m_heightScale = heightScale;
 	m_texutreTiling = textureTiling;
 
@@ -69,7 +71,6 @@ bool HEIN::TerrainComponent::Initialize(
 	}
 
 	m_texture.Reset();
-
 	if (!m_textureFilename.empty())
 	{
 		HRESULT hr = DirectX::CreateDDSTextureFromFile(device, m_textureFilename.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
@@ -82,6 +83,22 @@ bool HEIN::TerrainComponent::Initialize(
 			{
 				fallback = L"../../Dual/Dual/" + m_textureFilename;
 				DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
+			}
+		}
+	}
+
+	m_normalTexture.Reset();
+	if (!m_normalMapFilename.empty())
+	{
+		HRESULT hrNorm = DirectX::CreateDDSTextureFromFile(device, m_normalMapFilename.c_str(), nullptr, m_normalTexture.ReleaseAndGetAddressOf());
+		if (FAILED(hrNorm))
+		{
+			std::wstring fallback = L"../Dual/" + m_normalMapFilename;
+			hrNorm = DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_normalTexture.ReleaseAndGetAddressOf());
+			if (FAILED(hrNorm))
+			{
+				fallback = L"../../Dual/Dual/" + m_normalMapFilename;
+				DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_normalTexture.ReleaseAndGetAddressOf());
 			}
 		}
 	}
@@ -105,6 +122,20 @@ bool HEIN::TerrainComponent::Initialize(
 	);
 	if (FAILED(hr))
 	{
+		hr = D3DCompileFromFile(
+			L"External/Engine/Shaders/Terrain_VS.hlsl",
+			nullptr,
+			D3D_COMPILE_STANDARD_FILE_INCLUDE,
+			"main",
+			"vs_5_0",
+			D3DCOMPILE_ENABLE_STRICTNESS,
+			0,
+			&vertexShaderBlob,
+			&errorBlob
+		);
+	}
+	if (FAILED(hr))
+	{
 		if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
 		return false;
 	}
@@ -121,6 +152,20 @@ bool HEIN::TerrainComponent::Initialize(
 		&pixelShaderBlob,
 		&errorBlob
 	);
+	if (FAILED(hr))
+	{
+		hr = D3DCompileFromFile(
+			L"External/Engine/Shaders/Terrain_PS.hlsl",
+			nullptr,
+			D3D_COMPILE_STANDARD_FILE_INCLUDE,
+			"main",
+			"ps_5_0",
+			D3DCOMPILE_ENABLE_STRICTNESS,
+			0,
+			&pixelShaderBlob,
+			&errorBlob
+		);
+	}
 	if (FAILED(hr))
 	{
 		if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
@@ -140,11 +185,22 @@ bool HEIN::TerrainComponent::Initialize(
 		m_pixelShader.ReleaseAndGetAddressOf()
 	);
 
-	// Create input layOut
+	// Create custom input layout matching TerrainVertexType
+	D3D11_INPUT_ELEMENT_DESC polygonLayout[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,                            D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+	};
+	UINT numElements = sizeof(polygonLayout) / sizeof(polygonLayout[0]);
+
 	DX::ThrowIfFailed(
 		device->CreateInputLayout(
-			DirectX::VertexPositionNormalColorTexture::InputElements,
-			DirectX::VertexPositionNormalColorTexture::InputElementCount,
+			polygonLayout,
+			numElements,
 			vertexShaderBlob->GetBufferPointer(),
 			vertexShaderBlob->GetBufferSize(),
 			m_inputLayout.ReleaseAndGetAddressOf()
@@ -186,7 +242,15 @@ void HEIN::TerrainComponent::Draw(
 {
 	if (m_needsReload)
 	{
-		Initialize(gameContext, m_heightMapFilename.c_str(), m_textureFilename.c_str(), m_colorMapFilename.c_str(), m_heightScale, m_texutreTiling);
+		Initialize(
+			gameContext,
+			m_heightMapFilename.c_str(),
+			m_textureFilename.c_str(),
+			m_colorMapFilename.c_str(),
+			m_normalMapFilename.c_str(),
+			m_heightScale,
+			m_texutreTiling
+		);
 		m_needsReload = false;
 	}
 
@@ -209,11 +273,11 @@ void HEIN::TerrainComponent::Draw(
 
 	// Set Vertex/Index Buffer and Input LayOut
 
-	UINT stride = sizeof(DirectX::VertexPositionNormalColorTexture);
+	UINT stride = sizeof(TerrainVertexType);
 	UINT offset = 0;
 	context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
 	context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-	context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context->IASetInputLayout(m_inputLayout.Get());
 
 	// Update Matix Constant Buffer
@@ -239,6 +303,9 @@ void HEIN::TerrainComponent::Draw(
 		dataPtr->diffuseColor = DirectX::SimpleMath::Vector4(m_diffuseColor.x, m_diffuseColor.y, m_diffuseColor.z, 1.0f);
 		dataPtr->lightDirection = safeLightDir;
 		dataPtr->hasTexture = m_texture ? 1.0f : 0.0f;
+		dataPtr->textureTiling = m_texutreTiling;
+		dataPtr->hasNormalMap = m_normalTexture ? 1.0f : 0.0f;
+		dataPtr->padding = DirectX::SimpleMath::Vector2(0.0f, 0.0f);
 		context->Unmap(m_lightBuffer.Get(), 0);
 	}
 	context->PSSetConstantBuffers(1, 1, m_lightBuffer.GetAddressOf());
@@ -246,10 +313,11 @@ void HEIN::TerrainComponent::Draw(
 	context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 	context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 
-	if (m_texture)
-	{
-		context->PSSetShaderResources(0, 1, m_texture.GetAddressOf());
-	}
+	ID3D11ShaderResourceView* textures[2] = {
+		m_texture ? m_texture.Get() : nullptr,
+		m_normalTexture ? m_normalTexture.Get() : nullptr
+	};
+	context->PSSetShaderResources(0, 2, textures);
 	context->PSSetSamplers(0, 1, m_sampleState.GetAddressOf());
 
 	// DRAW THE TERRAIN!
@@ -267,6 +335,8 @@ nlohmann::json HEIN::TerrainComponent::Serialize()
 	data["TexturePath"] = texPath;
 	std::string colorPath(m_colorMapFilename.begin(), m_colorMapFilename.end());
 	data["ColorMapPath"] = colorPath;
+	std::string normalPath(m_normalMapFilename.begin(), m_normalMapFilename.end());
+	data["NormalMapPath"] = normalPath;
 	data["HeightScale"] = m_heightScale;
 	data["isWiredFrame"] = m_isWireFrame;
 	data["TextureTiling"] = m_texutreTiling;
@@ -309,6 +379,15 @@ void HEIN::TerrainComponent::Deserialize(const nlohmann::json& data)
 	{
 		m_colorMapFilename = L"";
 	}
+	if (data.contains("NormalMapPath"))
+	{
+		std::string normalPath = data["NormalMapPath"];
+		m_normalMapFilename = std::wstring(normalPath.begin(), normalPath.end());
+	}
+	else
+	{
+		m_normalMapFilename = L"";
+	}
 	if (data.contains("HeightScale")) m_heightScale = data["HeightScale"];
 	if (data.contains("isWiredFrame")) m_isWireFrame = data["isWiredFrame"];
 	if (data.contains("TextureTiling")) m_texutreTiling = data["TextureTiling"];
@@ -333,6 +412,7 @@ void HEIN::TerrainComponent::InitializeAfterDeserialize(GameContext& gameContext
 			m_heightMapFilename.c_str(),
 			m_textureFilename.c_str(),
 			m_colorMapFilename.c_str(),
+			m_normalMapFilename.c_str(),
 			m_heightScale,
 			m_texutreTiling
 		);
@@ -374,6 +454,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 				m_heightMapFilename.c_str(),
 				m_textureFilename.c_str(),
 				m_colorMapFilename.c_str(),
+				m_normalMapFilename.c_str(),
 				m_heightScale,
 				m_texutreTiling
 			);
@@ -391,6 +472,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 					m_heightMapFilename.c_str(), 
 					m_textureFilename.c_str(),
 					m_colorMapFilename.c_str(), 
+					m_normalMapFilename.c_str(), 
 					m_heightScale, 
 					m_texutreTiling
 				);
@@ -429,6 +511,39 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 		{
 			m_textureFilename.clear();
 			m_texture.Reset();
+		}
+
+		ImGui::Separator();
+		std::string normalPathStr = std::string(m_normalMapFilename.begin(), m_normalMapFilename.end());
+		if (ImGui::InputText("NormalMap File", &normalPathStr, ImGuiInputTextFlags_EnterReturnsTrue))
+		{
+			m_normalMapFilename = std::wstring(normalPathStr.begin(), normalPathStr.end());
+			if (!m_normalMapFilename.empty())
+			{
+				DirectX::CreateDDSTextureFromFile(gameContext.deviceResources.GetD3DDevice(), m_normalMapFilename.c_str(), nullptr, m_normalTexture.ReleaseAndGetAddressOf());
+			}
+			else
+			{
+				m_normalTexture.Reset();
+			}
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("Browse NormalMap..."))
+		{
+			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"DDS Files\0*.dds\0All Files\0*.*\0", windowHandle);
+			if (!selectedFile.empty())
+			{
+				m_normalMapFilename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
+				DirectX::CreateDDSTextureFromFile(gameContext.deviceResources.GetD3DDevice(), m_normalMapFilename.c_str(), nullptr, m_normalTexture.ReleaseAndGetAddressOf());
+			}
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("Remove NormalMap"))
+		{
+			m_normalMapFilename.clear();
+			m_normalTexture.Reset();
 		}
 
 		ImGui::Separator();
@@ -525,38 +640,52 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 
 bool HEIN::TerrainComponent::CalculateNormals()
 {
-	// Initialize all normals to Zero
+	// Initialize all normals, tangents, and binormals to Zero
 	for (int i = 0; i < m_vertexCount; i++)
 	{
 		m_heightMap[i].nx = 0.0f;
 		m_heightMap[i].ny = 0.0f;
 		m_heightMap[i].nz = 0.0f;
+		m_heightMap[i].tx = 0.0f;
+		m_heightMap[i].ty = 0.0f;
+		m_heightMap[i].tz = 0.0f;
+		m_heightMap[i].bx = 0.0f;
+		m_heightMap[i].by = 0.0f;
+		m_heightMap[i].bz = 0.0f;
 	}
 
-	// Go Through every quad in the gird and calculate the face normals
-	for (int j = 0; j < (m_terrainHeight - 1); j ++)
+	// Go through every quad in the grid and calculate face normals, tangents, and binormals
+	for (int j = 0; j < (m_terrainHeight - 1); j++)
 	{
 		for (int i = 0; i < (m_terrainWidth - 1); i++)
 		{
-			int index1 = (m_terrainHeight - 1 - j) * m_terrainWidth + i; // Bottom Left
-			int index2 = (m_terrainHeight - 1 - j) * m_terrainWidth + (i + 1); // Bottom Right
-			int index3 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + i; // Up Left
+			int index1 = (m_terrainHeight - 1 - j) * m_terrainWidth + i;         // Bottom Left
+			int index2 = (m_terrainHeight - 1 - j) * m_terrainWidth + (i + 1);   // Bottom Right
+			int index3 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + i;   // Up Left
 			int index4 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + (i + 1); // Up Right
 
-			// Triangle 1 
+			// Triangle 1 (index3, index4, index1)
 			DirectX::SimpleMath::Vector3 v1(m_heightMap[index3].x, m_heightMap[index3].y * m_heightScale, m_heightMap[index3].z);
 			DirectX::SimpleMath::Vector3 v2(m_heightMap[index4].x, m_heightMap[index4].y * m_heightScale, m_heightMap[index4].z);
 			DirectX::SimpleMath::Vector3 v3(m_heightMap[index1].x, m_heightMap[index1].y * m_heightScale, m_heightMap[index1].z);
 
 			DirectX::SimpleMath::Vector3 edge1 = v2 - v1;
 			DirectX::SimpleMath::Vector3 edge2 = v3 - v1;
-			DirectX::SimpleMath::Vector3 normal1 = edge1.Cross(edge2); // Math to find the direction the face points
+			DirectX::SimpleMath::Vector3 normal1 = edge1.Cross(edge2);
 
 			m_heightMap[index3].nx += normal1.x; m_heightMap[index3].ny += normal1.y; m_heightMap[index3].nz += normal1.z;
 			m_heightMap[index4].nx += normal1.x; m_heightMap[index4].ny += normal1.y; m_heightMap[index4].nz += normal1.z;
 			m_heightMap[index1].nx += normal1.x; m_heightMap[index1].ny += normal1.y; m_heightMap[index1].nz += normal1.z;
 
-			// Triangle 2
+			m_heightMap[index3].tx += edge1.x; m_heightMap[index3].ty += edge1.y; m_heightMap[index3].tz += edge1.z;
+			m_heightMap[index4].tx += edge1.x; m_heightMap[index4].ty += edge1.y; m_heightMap[index4].tz += edge1.z;
+			m_heightMap[index1].tx += edge1.x; m_heightMap[index1].ty += edge1.y; m_heightMap[index1].tz += edge1.z;
+
+			m_heightMap[index3].bx += edge2.x; m_heightMap[index3].by += edge2.y; m_heightMap[index3].bz += edge2.z;
+			m_heightMap[index4].bx += edge2.x; m_heightMap[index4].by += edge2.y; m_heightMap[index4].bz += edge2.z;
+			m_heightMap[index1].bx += edge2.x; m_heightMap[index1].by += edge2.y; m_heightMap[index1].bz += edge2.z;
+
+			// Triangle 2 (index1, index4, index2)
 			v1 = DirectX::SimpleMath::Vector3(m_heightMap[index1].x, m_heightMap[index1].y * m_heightScale, m_heightMap[index1].z);
 			v2 = DirectX::SimpleMath::Vector3(m_heightMap[index4].x, m_heightMap[index4].y * m_heightScale, m_heightMap[index4].z);
 			v3 = DirectX::SimpleMath::Vector3(m_heightMap[index2].x, m_heightMap[index2].y * m_heightScale, m_heightMap[index2].z);
@@ -568,15 +697,39 @@ bool HEIN::TerrainComponent::CalculateNormals()
 			m_heightMap[index1].nx += normal1.x; m_heightMap[index1].ny += normal1.y; m_heightMap[index1].nz += normal1.z;
 			m_heightMap[index4].nx += normal1.x; m_heightMap[index4].ny += normal1.y; m_heightMap[index4].nz += normal1.z;
 			m_heightMap[index2].nx += normal1.x; m_heightMap[index2].ny += normal1.y; m_heightMap[index2].nz += normal1.z;
+
+			m_heightMap[index1].tx += edge2.x; m_heightMap[index1].ty += edge2.y; m_heightMap[index1].tz += edge2.z;
+			m_heightMap[index4].tx += edge2.x; m_heightMap[index4].ty += edge2.y; m_heightMap[index4].tz += edge2.z;
+			m_heightMap[index2].tx += edge2.x; m_heightMap[index2].ty += edge2.y; m_heightMap[index2].tz += edge2.z;
+
+			m_heightMap[index1].bx += edge1.x; m_heightMap[index1].by += edge1.y; m_heightMap[index1].bz += edge1.z;
+			m_heightMap[index4].bx += edge1.x; m_heightMap[index4].by += edge1.y; m_heightMap[index4].bz += edge1.z;
+			m_heightMap[index2].bx += edge1.x; m_heightMap[index2].by += edge1.y; m_heightMap[index2].bz += edge1.z;
 		}
 	}
+
 	for (int i = 0; i < m_vertexCount; i++)
 	{
 		DirectX::SimpleMath::Vector3 n(m_heightMap[i].nx, m_heightMap[i].ny, m_heightMap[i].nz);
-		n.Normalize();
+		if (n.LengthSquared() > 0.0001f) n.Normalize();
+		else n = DirectX::SimpleMath::Vector3(0.0f, 1.0f, 0.0f);
 		m_heightMap[i].nx = n.x;
 		m_heightMap[i].ny = n.y;
 		m_heightMap[i].nz = n.z;
+
+		DirectX::SimpleMath::Vector3 t(m_heightMap[i].tx, m_heightMap[i].ty, m_heightMap[i].tz);
+		if (t.LengthSquared() > 0.0001f) t.Normalize();
+		else t = DirectX::SimpleMath::Vector3(1.0f, 0.0f, 0.0f);
+		m_heightMap[i].tx = t.x;
+		m_heightMap[i].ty = t.y;
+		m_heightMap[i].tz = t.z;
+
+		DirectX::SimpleMath::Vector3 b(m_heightMap[i].bx, m_heightMap[i].by, m_heightMap[i].bz);
+		if (b.LengthSquared() > 0.0001f) b.Normalize();
+		else b = DirectX::SimpleMath::Vector3(0.0f, 0.0f, 1.0f);
+		m_heightMap[i].bx = b.x;
+		m_heightMap[i].by = b.y;
+		m_heightMap[i].bz = b.z;
 	}
 
 	return true;
@@ -587,7 +740,7 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 	// Indices (6 indices per quad (2 triangles) to connect the vertices)
 	m_indexCount = (m_terrainWidth - 1) * (m_terrainHeight - 1) * 6;
 
-	std::vector<DirectX::VertexPositionNormalColorTexture> vertices(m_vertexCount);
+	std::vector<TerrainVertexType> vertices(m_vertexCount);
 	std::vector<uint32_t> indices(m_indexCount);
 
 	float halfWidth = (float)m_terrainWidth / 2.0f;
@@ -604,6 +757,14 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 		vertices[i].normal.y = m_heightMap[i].ny;
 		vertices[i].normal.z = m_heightMap[i].nz;
 
+		vertices[i].tangent.x = m_heightMap[i].tx;
+		vertices[i].tangent.y = m_heightMap[i].ty;
+		vertices[i].tangent.z = m_heightMap[i].tz;
+
+		vertices[i].binormal.x = m_heightMap[i].bx;
+		vertices[i].binormal.y = m_heightMap[i].by;
+		vertices[i].binormal.z = m_heightMap[i].bz;
+
 		int gridX = i % m_terrainWidth;
 		int gridY = i / m_terrainWidth;
 
@@ -613,22 +774,14 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 		// To flip Vertically(Upside Down)
 		v = 1.0f - v;
 
-		// To flip Horizonally(Mirroed)
-		//u = 1.0f - u;
-
-		vertices[i].textureCoordinate.x = u * m_texutreTiling;
-		vertices[i].textureCoordinate.y = v * m_texutreTiling;
-
-		// Maps exactly 1 full texture per terrain quad
-		/*vertices[i].textureCoordinate.x = (float)gridX;
-		vertices[i].textureCoordinate.y = (float)gridY;*/
+		vertices[i].texture.x = u;
+		vertices[i].texture.y = v;
 
 		// Pass the exact painted color to the GPU
 		vertices[i].color.x = m_heightMap[i].r;
 		vertices[i].color.y = m_heightMap[i].g;
 		vertices[i].color.z = m_heightMap[i].b;
 		vertices[i].color.w = 1.0f; // Alpha
-
 	}
 
 	// Create the Indices
@@ -655,7 +808,7 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 	// Create the DirectX Buffer
 	D3D11_BUFFER_DESC vertexBufferDesc = {};
 	vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	vertexBufferDesc.ByteWidth = sizeof(DirectX::VertexPositionNormalColorTexture) * m_vertexCount;
+	vertexBufferDesc.ByteWidth = sizeof(TerrainVertexType) * m_vertexCount;
 	vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
 	D3D11_SUBRESOURCE_DATA vertexData = {};
