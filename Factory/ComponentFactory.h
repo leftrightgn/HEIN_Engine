@@ -21,6 +21,8 @@
 #include <Components/ColliderComponent/MeshColliderComponent.h>
 #include <Components/ColliderComponent/OBBColliderComponent.h>
 #include <Components/ColliderComponent/SphereColliderComponent.h>
+#include <Components/UIButtonComponent.h>
+#include <Components/TerrainComponent.h>
 
 namespace HEIN
 {
@@ -91,6 +93,8 @@ namespace HEIN
 			RegisterComponent<MeshColliderComponent>("MeshColliderComponent");
 			RegisterComponent<OBBColliderComponent>("OBBColliderComponent");
 			RegisterComponent<SphereColliderComponent>("SphereColliderComponent");
+			RegisterComponent<UIButtonComponent>("UIButtonComponent");
+			RegisterComponent<TerrainComponent>("TerrainComponent");
 		}
 	};
 }

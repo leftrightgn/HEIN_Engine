@@ -64,7 +64,9 @@ namespace HEIN
             CameraInputState debugInput;
 
             std::pair<int, int> mouseDelta = gameContext.inputManager->GetMouseDelta();
-            bool isHeld = gameContext.inputManager->IsDebugDrugHeld(gameContext);
+            bool isHeld = gameContext.inputManager->IsDebugDrugHeld(gameContext) || 
+                          gameContext.mouseState.rightButton || 
+                          gameContext.mouseState.middleButton;
 
             bool isUICapturingMouse = ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
             if (isUICapturingMouse)
@@ -84,13 +86,17 @@ namespace HEIN
             debugInput.mouseY = m_virtualMouseY;
             bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift;
 
-            if (isShiftHeld || ImGui::GetIO().WantCaptureKeyboard)
+            if (ImGui::GetIO().WantCaptureKeyboard)
             {
                 debugInput.movementIntent = DirectX::SimpleMath::Vector3(0.0f, 0.0f, 0.0f);
             }
             else
             {
                 debugInput.movementIntent = gameContext.inputManager->GetDebugMoveIntent(gameContext);
+                if (isShiftHeld)
+                {
+                    debugInput.movementIntent *= 2.5f; // Fast move with shift held
+                }
             }
             debugInput.isLeftMouseDown = isHeld;
             debugInput.scrollWheelDelta = static_cast<float>(gameContext.mouseState.scrollWheelValue);
@@ -114,7 +120,8 @@ namespace HEIN
             }
             else
             {
-                aspectRatio = 400.0f / 225.0f;
+                aspectRatio = (m_debugUI.GetViewportSize().y > 0.0f) ? 
+                    (m_debugUI.GetViewportSize().x / m_debugUI.GetViewportSize().y) : (400.0f / 225.0f);
                 if (gameContext.mainCamera != nullptr)
                 {
                     gameContext.mainCamera->UpdateMouseMode();
@@ -149,80 +156,140 @@ namespace HEIN
         D3D11_VIEWPORT fullscreen = gameContext.deviceResources.GetScreenViewport();
         D3D11_VIEWPORT debugViewport;
 
-        if (m_isMagnified)
-        {
-            debugViewport = fullscreen;
-            ID3D11RenderTargetView* rtv = gameContext.deviceResources.GetRenderTargetView();
-            const float clearColor[4] = { 0.2f, 0.2f, 0.2f, 1.0f };
-            context->ClearRenderTargetView(rtv, clearColor);
-        }
-        else
-        {
-            debugViewport.Width = 400.0f;
-            debugViewport.Height = 225.0f;
-            debugViewport.TopLeftX = fullscreen.Width - debugViewport.Width - 20.0f;
-            debugViewport.TopLeftY = 20.0f;
-            debugViewport.MinDepth = 0.0f;
-            debugViewport.MaxDepth = 1.0f;
-        }
-
-        context->RSSetViewports(1, &debugViewport);
-        context->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-
         DirectX::SimpleMath::Matrix view = DirectX::SimpleMath::Matrix::Identity;
         HEIN::Actor* cameraActor = m_actorManager.GetActor(m_debugCameraID);
         if (cameraActor != nullptr)
         {
             HEIN::CameraController* cameraComp = cameraActor->GetComponent<HEIN::CameraController>();
-            view = cameraComp->GetView();
+            if (cameraComp != nullptr)
+            {
+                view = cameraComp->GetView();
+            }
         }
-
-        if (skybox && m_isMagnified) skybox->Draw(gameContext, view, m_projMatrix);
-
-        actorManager.DrawAll(gameContext, view, m_projMatrix);
-
-        DirectX::BoundingFrustum mainCamFrustum(mainProj, false);
-        
-        DirectX::SimpleMath::Matrix mainCamWorld;
-        if (std::abs(mainView.Determinant()) < 1e-6f)
-        {
-            // The view matrix is numerically singular (e.g. camera just spawned and looking down).
-            // Inverting it will yield NaNs, which destroys the frustum and asserts in GetCorners().
-            mainCamWorld = DirectX::SimpleMath::Matrix::Identity;
-        }
-        else
-        {
-            mainCamWorld = mainView.Invert();
-        }
-
-        mainCamFrustum.Transform(mainCamFrustum, mainCamWorld);
-
-        // Floating point inaccuracies during Matrix Invert -> Transform can yield a non-unit quaternion.
-        // We must normalize it before DrawFrustum reads it, otherwise XMQuaternionIsUnit asserts.
-        DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&mainCamFrustum.Orientation);
-        q = DirectX::XMQuaternionNormalize(q);
-        DirectX::XMStoreFloat4(&mainCamFrustum.Orientation, q);
-
-        gameContext.debugRenderer->Begin(view, m_projMatrix);
-        gameContext.debugRenderer->DrawFrustum(mainCamFrustum, DirectX::XMVectorSet(1.0f, 1.0f, 0.0f, 1.0f));
-        DirectX::BoundingSphere camEye(mainCamWorld.Translation(), 0.3f);
-        gameContext.debugRenderer->DrawSphere(camEye, DirectX::XMVectorSet(1.0f, 0.0f, 0.0f, 1.0f));
-        gameContext.debugRenderer->End();
-
-        if (gameContext.debugCollisionRenderer != nullptr)
-        {
-            gameContext.debugCollisionRenderer->RenderAndFlush(context, gameContext.commonStates, view, m_projMatrix);
-        }
-        context->RSSetViewports(1, &fullscreen);
 
         if (m_isMagnified)
         {
-            ImGuizmo::BeginFrame();
+            // Full Editor Mode: 3D editor view occupies main viewport
+            debugViewport = fullscreen;
+            ID3D11RenderTargetView* rtv = gameContext.deviceResources.GetRenderTargetView();
+            const float clearColor[4] = { 0.2f, 0.2f, 0.2f, 1.0f };
+            context->ClearRenderTargetView(rtv, clearColor);
+            context->RSSetViewports(1, &debugViewport);
+            context->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-           m_currentAction = m_debugUI.Draw(gameContext, actorManager, view, m_projMatrix);
+            if (skybox) skybox->Draw(gameContext, view, m_projMatrix);
+            actorManager.DrawAll(gameContext, view, m_projMatrix);
+
+            // Draw frustum and wireframes in editor view
+            DirectX::BoundingFrustum mainCamFrustum(mainProj, false);
+            DirectX::SimpleMath::Matrix mainCamWorld;
+            if (std::abs(mainView.Determinant()) < 1e-6f)
+            {
+                mainCamWorld = DirectX::SimpleMath::Matrix::Identity;
+            }
+            else
+            {
+                mainCamWorld = mainView.Invert();
+            }
+            mainCamFrustum.Transform(mainCamFrustum, mainCamWorld);
+
+            DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&mainCamFrustum.Orientation);
+            q = DirectX::XMQuaternionNormalize(q);
+            DirectX::XMStoreFloat4(&mainCamFrustum.Orientation, q);
+
+            gameContext.debugRenderer->Begin(view, m_projMatrix);
+            gameContext.debugRenderer->DrawFrustum(mainCamFrustum, DirectX::XMVectorSet(1.0f, 1.0f, 0.0f, 1.0f));
+            DirectX::BoundingSphere camEye(mainCamWorld.Translation(), 0.3f);
+            gameContext.debugRenderer->DrawSphere(camEye, DirectX::XMVectorSet(1.0f, 0.0f, 0.0f, 1.0f));
+            gameContext.debugRenderer->End();
+
+            if (gameContext.debugCollisionRenderer != nullptr)
+            {
+                gameContext.debugCollisionRenderer->RenderAndFlush(context, gameContext.commonStates, view, m_projMatrix);
+            }
+
+            // Draw Editor UI & Movable Camera Viewport Window
+            ImGuizmo::BeginFrame();
+            m_currentAction = m_debugUI.Draw(gameContext, actorManager, view, m_projMatrix);
+
+            // Render live Main Camera output inside the movable Camera Viewport window
+            if (m_debugUI.IsViewportPreviewEnabled() && m_debugUI.IsViewportVisibleInUI())
+            {
+                D3D11_VIEWPORT camPreviewViewport;
+                camPreviewViewport.TopLeftX = m_debugUI.GetViewportPos().x;
+                camPreviewViewport.TopLeftY = m_debugUI.GetViewportPos().y;
+                camPreviewViewport.Width = m_debugUI.GetViewportSize().x;
+                camPreviewViewport.Height = m_debugUI.GetViewportSize().y;
+                camPreviewViewport.MinDepth = 0.0f;
+                camPreviewViewport.MaxDepth = 1.0f;
+
+                context->RSSetViewports(1, &camPreviewViewport);
+                context->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+                float pipAspect = (camPreviewViewport.Height > 0.0f) ? (camPreviewViewport.Width / camPreviewViewport.Height) : 1.777f;
+                DirectX::SimpleMath::Matrix pipProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
+                    (gameContext.mainCamera != nullptr) ? gameContext.mainCamera->GetFov() : DirectX::XM_PI / 4.0f,
+                    pipAspect,
+                    0.1f,
+                    1000.0f
+                );
+
+                if (skybox) skybox->Draw(gameContext, mainView, pipProj);
+                actorManager.DrawAll(gameContext, mainView, pipProj);
+            }
+
+            context->RSSetViewports(1, &fullscreen);
         }
         else
         {
+            // Game Mode: Render movable Debug Viewport window
+            m_debugUI.DrawViewportWindow(gameContext, false);
+
+            if (m_debugUI.IsViewportVisibleInUI())
+            {
+                debugViewport.TopLeftX = m_debugUI.GetViewportPos().x;
+                debugViewport.TopLeftY = m_debugUI.GetViewportPos().y;
+                debugViewport.Width = m_debugUI.GetViewportSize().x;
+                debugViewport.Height = m_debugUI.GetViewportSize().y;
+                debugViewport.MinDepth = 0.0f;
+                debugViewport.MaxDepth = 1.0f;
+
+                context->RSSetViewports(1, &debugViewport);
+                context->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+                if (skybox) skybox->Draw(gameContext, view, m_projMatrix);
+                actorManager.DrawAll(gameContext, view, m_projMatrix);
+
+                // Draw frustum and debug wireframes
+                DirectX::BoundingFrustum mainCamFrustum(mainProj, false);
+                DirectX::SimpleMath::Matrix mainCamWorld;
+                if (std::abs(mainView.Determinant()) < 1e-6f)
+                {
+                    mainCamWorld = DirectX::SimpleMath::Matrix::Identity;
+                }
+                else
+                {
+                    mainCamWorld = mainView.Invert();
+                }
+                mainCamFrustum.Transform(mainCamFrustum, mainCamWorld);
+
+                DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&mainCamFrustum.Orientation);
+                q = DirectX::XMQuaternionNormalize(q);
+                DirectX::XMStoreFloat4(&mainCamFrustum.Orientation, q);
+
+                gameContext.debugRenderer->Begin(view, m_projMatrix);
+                gameContext.debugRenderer->DrawFrustum(mainCamFrustum, DirectX::XMVectorSet(1.0f, 1.0f, 0.0f, 1.0f));
+                DirectX::BoundingSphere camEye(mainCamWorld.Translation(), 0.3f);
+                gameContext.debugRenderer->DrawSphere(camEye, DirectX::XMVectorSet(1.0f, 0.0f, 0.0f, 1.0f));
+                gameContext.debugRenderer->End();
+
+                if (gameContext.debugCollisionRenderer != nullptr)
+                {
+                    gameContext.debugCollisionRenderer->RenderAndFlush(context, gameContext.commonStates, view, m_projMatrix);
+                }
+            }
+
+            context->RSSetViewports(1, &fullscreen);
             m_currentAction = HEIN::EditorAction::None;
         }
     }

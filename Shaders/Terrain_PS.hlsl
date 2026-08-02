@@ -26,7 +26,16 @@ float4 main(PixelInputType input) : SV_Target
     {
         bumpMap = normalTexture.Sample(SampleType, input.tex * textureTiling);
         bumpMap = (bumpMap * 2.0f) - 1.0f;
-        bumpNormal = (bumpMap.x * input.tangent) + (bumpMap.y * input.binormal) + (bumpMap.z * input.normal);
+        
+        // ADD GRAM-SCHMIDT ORTHOGONALIZATION
+        // Force the Tangent to be exactly 90 degrees to the Normal
+        float3 perfectTangent = normalize(input.tangent - dot(input.tangent, input.normal) * input.normal);
+        
+        // Mathematically generate a perfect Binormal using the Cross Product
+        float3 perfectBinormal = cross(input.normal, perfectTangent);
+        
+        // Use the perfect vectors to apply the bump map!
+        bumpNormal = (bumpMap.x * perfectTangent) + (bumpMap.y * perfectBinormal) + (bumpMap.z * input.normal);
         bumpNormal = normalize(bumpNormal);
     }
     else

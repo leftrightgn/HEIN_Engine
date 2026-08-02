@@ -1,4 +1,4 @@
-﻿//--------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------
 // File: GameContext.h
 //
 // シーンへ渡すゲームコンテキストクラス
@@ -17,6 +17,7 @@
 namespace HEIN { 
 	class CameraController; 
 	class InputManager;
+	class SceneManager;
 }
 
 // 各シーンに渡す共通リソースを記述してください
@@ -51,5 +52,6 @@ struct GameContext
 	HEIN::EventManager* eventManager = nullptr;
 
 	HEIN::CameraController* mainCamera = nullptr;
-};
 
+	HEIN::SceneManager* sceneManager = nullptr;
+};

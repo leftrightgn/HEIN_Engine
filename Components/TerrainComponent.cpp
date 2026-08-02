@@ -429,6 +429,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 
 		if (ImGui::DragFloat("HeightScale", &m_heightScale, 0.5f, 1.0f, 100.0f))
 		{
+			CalculateNormals();
 			// Recreate the buffer with the new scale immediately
 			InitializeBuffer(gameContext.deviceResources.GetD3DDevice());
 		}

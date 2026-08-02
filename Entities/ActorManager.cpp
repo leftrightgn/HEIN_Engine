@@ -95,16 +95,44 @@ void HEIN::ActorManager::DrawAll(
     const DirectX::SimpleMath::Matrix& proj
 )
 {
+    // Pass 1: Draw all 3D components for all actors
     for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
     {
         pair.second->Draw(gameContext, view, proj);
     }
+
+    // Pass 2: Draw all 2D UI components on top of 3D geometry
+    for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
+    {
+        pair.second->Draw2D(gameContext);
+    }
+}
+
+void HEIN::ActorManager::DeleteActor(ActorID id)
+{
+    DestroyID(id);
+    CleanUpDestroyedActors();
 }
 
 void HEIN::ActorManager::CleanUpDestroyedActors()
 {
+    if (m_pendingDestorys.empty()) return;
+
     for (ActorID deadID : m_pendingDestorys)
     {
+        Actor* deadActor = GetActor(deadID);
+        if (deadActor != nullptr)
+        {
+            ActorID parentID = deadActor->GetParentID();
+            if (parentID != HEIN::INVALID_ACTOR_ID)
+            {
+                Actor* parent = GetActor(parentID);
+                if (parent != nullptr)
+                {
+                    parent->RemoveChild(deadID);
+                }
+            }
+        }
         m_actors.erase(deadID);
     }
     m_pendingDestorys.clear();

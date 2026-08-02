@@ -313,6 +313,31 @@ namespace HEIN
 		}
 	}
 
+	void SkinnedModelComponent::RemoveAnimation(const std::string& name)
+	{
+		auto it = m_animations.find(name);
+		if (it != m_animations.end())
+		{
+			if (m_currentAnimation == it->second.get())
+			{
+				m_currentAnimation = nullptr;
+			}
+			if (m_targetAnimation == it->second.get())
+			{
+				m_targetAnimation = nullptr;
+				m_isBlending = false;
+			}
+			m_animations.erase(it);
+		}
+
+		m_animationPaths.erase(name);
+
+		if (m_currentAnimation == nullptr && !m_animations.empty())
+		{
+			m_currentAnimation = m_animations.begin()->second.get();
+		}
+	}
+
 	void SkinnedModelComponent::ChangeAnimation(const std::string& name)
 	{
 		auto it = m_animations.find(name);
@@ -327,33 +352,34 @@ namespace HEIN
 		std::unordered_map<std::string, std::unique_ptr<DX::AnimationSDKMESH>>::iterator it =
 			m_animations.find(name);
 
-		if (it != m_animations.end())
+		if (it == m_animations.end()) return;
+
+		if (m_currentAnimation == nullptr)
 		{
-			if (m_currentAnimation == nullptr)
-			{
-				m_currentAnimation = it->second.get();
-				return;
-			}
+			m_currentAnimation = it->second.get();
+			return;
+		}
 
-			if (m_isBlending && m_targetAnimation == it->second.get()) return;
+		if (m_isBlending && m_targetAnimation == it->second.get()) return;
 
-			if (!m_isBlending && m_currentAnimation == it->second.get()) return;
-			
+		if (m_model)
+		{
 			for (size_t i = 0; i < m_model->bones.size(); ++i)
 			{
 				m_shapShotBones[i] = m_drawBones[i];
 			}
+		}
 
-			m_targetAnimation = it->second.get();
-			m_blendDuration = duration;
-			m_blendTimer = 0.0f;
-			m_isBlending = true;
+		// Begin Crossfade
+		m_isBlending = true;
+		m_blendTimer = 0.0f;
+		m_blendDuration = duration;
 
-			// Force restart if requested
-			if (forceRestart)
-			{
-				m_targetAnimation->SetAnimTime(0.0f);
-			}
+		m_targetAnimation = it->second.get();
+
+		if (forceRestart)
+		{
+			m_targetAnimation->SetAnimTime(0.0f);
 		}
 	}
 
@@ -413,12 +439,30 @@ namespace HEIN
 			ImGui::Separator();
 			ImGui::Text("Loaded Animations:");
 
+			std::string animToRemove = "";
 			for (auto& pair : m_animations)
 			{
-				if (ImGui::Button(("Play " + pair.first).c_str()))
+				ImGui::PushID(pair.first.c_str());
+				if (ImGui::Button("Play"))
 				{
 					CrossfadeAnimation(pair.first, 0.2f, true);
 				}
+				ImGui::SameLine();
+				ImGui::Text("%s", pair.first.c_str());
+				ImGui::SameLine();
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 0.8f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+				if (ImGui::Button("Remove"))
+				{
+					animToRemove = pair.first;
+				}
+				ImGui::PopStyleColor(2);
+				ImGui::PopID();
+			}
+
+			if (!animToRemove.empty())
+			{
+				RemoveAnimation(animToRemove);
 			}
 
 			ImGui::Separator();

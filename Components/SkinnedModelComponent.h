@@ -86,6 +86,7 @@ namespace HEIN
 		int GetBoneIndex(const std::wstring boneName);
 
 		void LoadAnimation(const std::string& name, const wchar_t* animPath);
+		void RemoveAnimation(const std::string& name);
 		void ChangeAnimation(const std::string& name);
 		void CrossfadeAnimation(const std::string& name, float duration, bool forceRestart = false);
 

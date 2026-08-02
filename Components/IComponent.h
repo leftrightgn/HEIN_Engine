@@ -35,6 +35,9 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& /*proj*/
 		) {}
 
+		virtual bool Is2D() const { return false; }
+		virtual void Draw2D(GameContext& /*gameContext*/) {}
+
 		virtual void OnInspectorGUI(GameContext& gamecontext) {}
 
 		virtual std::string GetComponentName() const { return "Unknown"; }

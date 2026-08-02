@@ -55,9 +55,17 @@ namespace HEIN
 		const DirectX::SimpleMath::Matrix GetViewMatrix() const;
 		const DirectX::SimpleMath::Matrix GetProjMatrix() const;
 
-		void SetDebugTargets(HEIN::ActorID playerID, HEIN::ActorID swordID, HEIN::ActorID axeID, HEIN::ActorID stageID, HEIN::ActorID enemyID);
+		void SetDebugTargets(
+			HEIN::ActorID playerID = HEIN::INVALID_ACTOR_ID,
+			HEIN::ActorID swordID = HEIN::INVALID_ACTOR_ID,
+			HEIN::ActorID axeID = HEIN::INVALID_ACTOR_ID,
+			HEIN::ActorID stageID = HEIN::INVALID_ACTOR_ID,
+			HEIN::ActorID enemyID = HEIN::INVALID_ACTOR_ID
+		);
 
 		EditorAction GetUIAction() const { return m_currentAction; }
+		DebugUIManager& GetDebugUI() { return m_debugUI; }
+		const DebugUIManager& GetDebugUI() const { return m_debugUI; }
 	};
 }
 

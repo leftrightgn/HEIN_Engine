@@ -25,6 +25,7 @@
     <ClCompile Include="DebugingTools\EditorUtils.cpp">
       <Filter>DebugingTools</Filter>
     </ClCompile>
+    <ClCompile Include="Components\UIButtonComponent.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -58,6 +59,7 @@
     <ClInclude Include="DebugingTools\EditorUtils.h">
       <Filter>DebugingTools</Filter>
     </ClInclude>
+    <ClInclude Include="Components\UIButtonComponent.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
