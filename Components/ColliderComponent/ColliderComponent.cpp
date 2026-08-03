@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "ColliderComponent.h"
 #include "Components/TransformComponent.h"
+#include "Components/StaticModelComponent.h"
 #include "Entities/Actor.h"
 #include <DebugingTools/DebugUIManager.h>
 
@@ -21,12 +22,25 @@ void HEIN::ColliderComponent::Start()
 	if (GetOwner() != nullptr)
 	{
 		m_transform = GetOwner()->GetComponent<TransformComponent>();
+		// If attached to an actor with a static model, default to Environment layer
+		if (m_layer == CollisionLayer::Layer_Default)
+		{
+			if (GetOwner()->GetComponent<StaticModelComponent>() != nullptr)
+			{
+				m_layer = CollisionLayer::Layer_Environment;
+			}
+		}
 	}
 }
 
 
 DirectX::SimpleMath::Matrix HEIN::ColliderComponent::CalculateWorldMatrix()
 {
+	if (m_transform == nullptr && GetOwner() != nullptr)
+	{
+		m_transform = GetOwner()->GetComponent<TransformComponent>();
+	}
+
 	DirectX::SimpleMath::Matrix localOffset =
 		DirectX::SimpleMath::Matrix::CreateFromQuaternion(m_rotationOffset) * 
 		DirectX::SimpleMath::Matrix::CreateTranslation(m_offset);
@@ -73,6 +87,53 @@ void HEIN::ColliderComponent::OnInspectorGUI(GameContext& gameContext)
         {
             std::string newTagStr(tagBuffer);
             m_colliderTag = std::wstring(newTagStr.begin(), newTagStr.end());
+        }
+
+        // Collision Layer Dropdown
+        const char* layerNames[] = { "Default (1)", "Environment (2)", "Player (4)", "Enemy (8)", "PlayerWeapon (16)", "EnemyWeapon (32)" };
+        uint32_t layerValues[] = {
+            CollisionLayer::Layer_Default,
+            CollisionLayer::Layer_Environment,
+            CollisionLayer::Layer_Player,
+            CollisionLayer::Layer_Enemy,
+            CollisionLayer::Layer_PlayerWeapon,
+            CollisionLayer::Layer_EnemyWeapon
+        };
+        int currentLayerIdx = 0;
+        for (int i = 0; i < 6; ++i)
+        {
+            if (m_layer == layerValues[i])
+            {
+                currentLayerIdx = i;
+                break;
+            }
+        }
+        if (ImGui::Combo("Collision Layer", &currentLayerIdx, layerNames, 6))
+        {
+            m_layer = layerValues[currentLayerIdx];
+        }
+
+        // Quick Collision Mask Presets / Bit Toggles
+        if (ImGui::TreeNode("Collision Mask Settings"))
+        {
+            auto DrawMaskBit = [&](const char* name, uint32_t bit)
+            {
+                bool enabled = (m_mask & bit) != 0;
+                if (ImGui::Checkbox(name, &enabled))
+                {
+                    if (enabled) m_mask |= bit;
+                    else m_mask &= ~bit;
+                }
+            };
+            DrawMaskBit("Collide with Default", CollisionLayer::Layer_Default);
+            DrawMaskBit("Collide with Environment", CollisionLayer::Layer_Environment);
+            DrawMaskBit("Collide with Player", CollisionLayer::Layer_Player);
+            DrawMaskBit("Collide with Enemy", CollisionLayer::Layer_Enemy);
+            DrawMaskBit("Collide with PlayerWeapon", CollisionLayer::Layer_PlayerWeapon);
+            DrawMaskBit("Collide with EnemyWeapon", CollisionLayer::Layer_EnemyWeapon);
+
+            if (ImGui::Button("Collide With All")) m_mask = CollisionLayer::Layer_All;
+            ImGui::TreePop();
         }
 
         // Offset
@@ -189,6 +250,8 @@ nlohmann::json HEIN::ColliderComponent::Serialize()
     data["RotW"] = m_rotationOffset.w;
 
     data["IsTrigger"] = m_isTrigger;
+    data["Layer"] = m_layer;
+    data["Mask"] = m_mask;
     return data;
 }
 
@@ -211,4 +274,6 @@ void HEIN::ColliderComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("RotW")) m_rotationOffset.w = data["RotW"];
 
     if (data.contains("IsTrigger")) m_isTrigger = data["IsTrigger"];
+    if (data.contains("Layer")) m_layer = data["Layer"];
+    if (data.contains("Mask")) m_mask = data["Mask"];
 }

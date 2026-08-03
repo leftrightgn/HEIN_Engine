@@ -197,6 +197,71 @@ void HEIN::ActorManager::InitializeAfterDeserialize(GameContext& gameContext)
     }
 }
 
+HEIN::Actor* HEIN::ActorManager::DuplicateActor(Actor* sourceActor, GameContext& gameContext, ActorID newParentID)
+{
+    if (sourceActor == nullptr) return nullptr;
+
+    // Generate unique name for copy
+    std::wstring baseName = sourceActor->GetTag();
+    std::wstring copyName = baseName + L"_Copy";
+    int count = 1;
+    while (GetActorByName(copyName) != nullptr)
+    {
+        copyName = baseName + L"_Copy" + std::to_wstring(count++);
+    }
+
+    HEIN::Actor* newActor = CreateActor(copyName);
+    if (!newActor) return nullptr;
+
+    newActor->SetActorType(sourceActor->GetActorType());
+
+    // Serialize source actor (WITHOUT children in the JSON, we duplicate children recursively)
+    nlohmann::json actorJson = sourceActor->Serialize(nullptr);
+    actorJson["Name"] = std::string(copyName.begin(), copyName.end());
+
+    newActor->Deserialize(actorJson, this);
+
+    // Parent assignment:
+    ActorID parentToSet = (newParentID != INVALID_ACTOR_ID) ? newParentID : sourceActor->GetParentID();
+    if (parentToSet != INVALID_ACTOR_ID)
+    {
+        Actor* parent = GetActor(parentToSet);
+        if (parent)
+        {
+            newActor->SetParent(parent->GetID());
+            parent->AddChild(newActor->GetID());
+        }
+    }
+
+    // If this is the root duplicated object, offset position slightly so it does not perfectly overlap
+    if (newParentID == INVALID_ACTOR_ID)
+    {
+        HEIN::TransformComponent* trans = newActor->GetComponent<HEIN::TransformComponent>();
+        if (trans)
+        {
+            DirectX::SimpleMath::Vector3 pos = trans->GetPosition();
+            pos.x += 1.0f;
+            pos.z += 1.0f;
+            trans->SetPosition(pos);
+        }
+    }
+
+    // Recursively duplicate any children of sourceActor
+    for (ActorID childID : sourceActor->GetChildren())
+    {
+        Actor* child = GetActor(childID);
+        if (child)
+        {
+            DuplicateActor(child, gameContext, newActor->GetID());
+        }
+    }
+
+    newActor->InitializeAfterDeserialize(gameContext);
+    newActor->Start();
+
+    return newActor;
+}
+
 void HEIN::ActorManager::ClearAllActors()
 {
     m_actors.clear();

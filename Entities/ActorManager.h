@@ -47,6 +47,8 @@ namespace HEIN
 		void Deserialize(const nlohmann::json& sceneData);
 		void InitializeAfterDeserialize(GameContext& gameContext);
 
+		Actor* DuplicateActor(Actor* sourceActor, GameContext& gameContext, ActorID newParentID = INVALID_ACTOR_ID);
+
 		void ClearAllActors();
 	private:
 

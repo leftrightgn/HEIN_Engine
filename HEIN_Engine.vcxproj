@@ -268,6 +268,7 @@
     <ClInclude Include="Components\IComponent.h" />
     <ClInclude Include="Components\RigidBodyComponent.h" />
     <ClInclude Include="Components\SkinnedModelComponent.h" />
+    <ClInclude Include="Components\SlidingDoorComponent.h" />
     <ClInclude Include="Components\SocketAttachmentComponent.h" />
     <ClInclude Include="Components\SocketComponent.h" />
     <ClInclude Include="Components\StaticModelComponent.h" />
@@ -336,6 +337,7 @@
     <ClCompile Include="Components\BoneLinkComponent.cpp" />
     <ClCompile Include="Components\RigidBodyComponent.cpp" />
     <ClCompile Include="Components\SkinnedModelComponent.cpp" />
+    <ClCompile Include="Components\SlidingDoorComponent.cpp" />
     <ClCompile Include="Components\SocketAttachmentComponent.cpp" />
     <ClCompile Include="Components\SocketComponent.cpp" />
     <ClCompile Include="Components\StaticModelComponent.cpp" />

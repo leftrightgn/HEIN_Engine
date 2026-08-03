@@ -1,12 +1,13 @@
 #include "pch.h"
 #include "AABBColliderComponent.h"
 #include "Components/StaticModelComponent.h"
+#include "Entities/Actor.h"
 #include <DirectXColors.h>
 #include <ImGui/imgui.h>
 
 HEIN::AABBColliderComponent::AABBColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::AABB)
-	, m_extents(DirectX::SimpleMath::Vector3::Zero)
+	, m_extents(DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f))
 {
 }
 
@@ -22,8 +23,28 @@ void HEIN::AABBColliderComponent::InitializeFromModel(StaticModelComponent* stat
         DirectX::BoundingBox box = staticModel->GetBoundingBox();
 
         m_extents = box.Extents;
-
         m_offset = box.Center;
+        m_layer = CollisionLayer::Layer_Environment;
+    }
+}
+
+void HEIN::AABBColliderComponent::Start()
+{
+    ColliderComponent::Start();
+    if (m_extents.LengthSquared() <= 0.0001f)
+    {
+        if (GetOwner() != nullptr)
+        {
+            auto* model = GetOwner()->GetComponent<StaticModelComponent>();
+            if (model != nullptr)
+            {
+                InitializeFromModel(model);
+            }
+            else
+            {
+                m_extents = DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f);
+            }
+        }
     }
 }
 
@@ -77,6 +98,18 @@ void HEIN::AABBColliderComponent::OnInspectorGUI(GameContext& gameContext)
     ColliderComponent::OnInspectorGUI(gameContext);
     if (ImGui::CollapsingHeader("AABB Properties", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::DragFloat3("Extents", &m_extents.x, 0.05f);
+        ImGui::DragFloat3("Extents", &m_extents.x, 0.05f, 0.01f, 1000.0f);
+
+        if (GetOwner() != nullptr)
+        {
+            auto* model = GetOwner()->GetComponent<StaticModelComponent>();
+            if (model != nullptr)
+            {
+                if (ImGui::Button("Auto-Fit to Static Model", ImVec2(-1, 26)))
+                {
+                    InitializeFromModel(model);
+                }
+            }
+        }
     }
 }

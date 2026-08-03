@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "CollisionMath.h"
 #include <Components/ColliderComponent/AABBColliderComponent.h>
 #include <Components/ColliderComponent/ColliderComponent.h>
@@ -42,12 +42,11 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColl
             );
         };
 
-    DirectX::SimpleMath::Vector3 localClosestOnSeg = DirectX::SimpleMath::Vector3::Zero;
+    DirectX::SimpleMath::Vector3 localClosestOnSeg = (localSegTop + localSegBottom) * 0.5f;
     DirectX::SimpleMath::Vector3 localClosestOnObb = clampToAABB(localClosestOnSeg);
 
     for (int i = 0; i < 3; ++i)
     {
-        //Use localSegBottom instead of SegBottom!
         DirectX::SimpleMath::Vector3 toObb = localClosestOnObb - localSegBottom;
         float t = (len > 0.0001f) ? toObb.Dot(d) / (len * len) : 0.5f;
         t = std::fmax(0.0f, std::fmin(1.0f, t));
@@ -57,25 +56,45 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColl
     }
 
     DirectX::SimpleMath::Vector3 localDiff = localClosestOnSeg - localClosestOnObb;
-    float distance = localDiff.Length();
+    float distanceSq = localDiff.LengthSquared();
 
-    if (distance < capsule->GetRadius())
+    if (distanceSq > 0.000001f)
     {
+        float distance = std::sqrt(distanceSq);
+        if (distance < capsule->GetRadius())
+        {
+            manifold.isColliding = true;
+            manifold.penetrationDepth = capsule->GetRadius() - distance;
+
+            DirectX::SimpleMath::Vector3 localNormal = localDiff / distance;
+            manifold.normal = DirectX::SimpleMath::Vector3::TransformNormal(localNormal, cleanTransform);
+            manifold.contactPoint = DirectX::SimpleMath::Vector3::Transform(localClosestOnObb, cleanTransform);
+        }
+    }
+    else
+    {
+        // Capsule segment is INSIDE the OBB box!
+        // Calculate distance to each of the 6 local faces and push out along the minimum penetration axis
+        float distPosX = extents.x - localClosestOnSeg.x;
+        float distNegX = localClosestOnSeg.x - (-extents.x);
+        float distPosY = extents.y - localClosestOnSeg.y;
+        float distNegY = localClosestOnSeg.y - (-extents.y);
+        float distPosZ = extents.z - localClosestOnSeg.z;
+        float distNegZ = localClosestOnSeg.z - (-extents.z);
+
+        float minDist = distPosX;
+        DirectX::SimpleMath::Vector3 localNormal(1.0f, 0.0f, 0.0f);
+
+        if (distNegX < minDist) { minDist = distNegX; localNormal = DirectX::SimpleMath::Vector3(-1.0f, 0.0f, 0.0f); }
+        if (distPosY < minDist) { minDist = distPosY; localNormal = DirectX::SimpleMath::Vector3(0.0f, 1.0f, 0.0f); }
+        if (distNegY < minDist) { minDist = distNegY; localNormal = DirectX::SimpleMath::Vector3(0.0f, -1.0f, 0.0f); }
+        if (distPosZ < minDist) { minDist = distPosZ; localNormal = DirectX::SimpleMath::Vector3(0.0f, 0.0f, 1.0f); }
+        if (distNegZ < minDist) { minDist = distNegZ; localNormal = DirectX::SimpleMath::Vector3(0.0f, 0.0f, -1.0f); }
+
         manifold.isColliding = true;
-        manifold.penetrationDepth = capsule->GetRadius() - distance;
-
-        // Rotate the normal back to world space using our clean matrix!
-        if (distance > 0.0001f)
-        {
-            localDiff.Normalize();
-            manifold.normal = DirectX::SimpleMath::Vector3::TransformNormal(localDiff, cleanTransform);
-        }
-        else
-        {
-            manifold.normal = DirectX::SimpleMath::Vector3::TransformNormal(DirectX::SimpleMath::Vector3(0.0f, 1.0f, 0.0f), cleanTransform);
-        }
-
-        manifold.contactPoint = DirectX::SimpleMath::Vector3::Transform(localClosestOnObb, cleanTransform);
+        manifold.normal = DirectX::SimpleMath::Vector3::TransformNormal(localNormal, cleanTransform);
+        manifold.penetrationDepth = (minDist > 0.0f ? minDist : 0.0f) + capsule->GetRadius();
+        manifold.contactPoint = DirectX::SimpleMath::Vector3::Transform(localClosestOnSeg, cleanTransform);
     }
 
     return manifold;
@@ -95,18 +114,10 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsAABB(HEIN::CapsuleCol
 
     if (capsule == nullptr || aabb == nullptr) return manifold;
 
-    
-    DirectX::SimpleMath::Matrix aabbWorld = aabb->GetCalculateWorldMatrix();
-    DirectX::SimpleMath::Vector3 aabbPos = aabbWorld.Translation();
-    DirectX::SimpleMath::Vector3 scale(
-        DirectX::SimpleMath::Vector3(aabbWorld._11, aabbWorld._12, aabbWorld._13).Length(),
-        DirectX::SimpleMath::Vector3(aabbWorld._21, aabbWorld._22, aabbWorld._23).Length(),
-        DirectX::SimpleMath::Vector3(aabbWorld._31, aabbWorld._32, aabbWorld._33).Length()
-    );
-
-    DirectX::SimpleMath::Vector3 extents = aabb->GetExtents() * scale;
-    float halfHeight = capsule->GetHeight() * 0.5f;
-    DirectX::SimpleMath::Vector3 capPos = capsule->GetCalculateWorldMatrix().Translation();
+    // Use the actual synchronized world AABB
+    DirectX::BoundingBox worldBox = aabb->GetWorldAABB();
+    DirectX::SimpleMath::Vector3 aabbPos = worldBox.Center;
+    DirectX::SimpleMath::Vector3 extents = worldBox.Extents;
 
     // Capsule segment
     DirectX::SimpleMath::Vector3 SegTop = capsule->GetWorldTopCenter();
@@ -126,7 +137,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsAABB(HEIN::CapsuleCol
         };
 
     // Find the closest point on the segment to the AABB
-    DirectX::SimpleMath::Vector3 closestOnSeg = capPos; // Start at center
+    DirectX::SimpleMath::Vector3 closestOnSeg = (SegTop + SegBottom) * 0.5f;
     DirectX::SimpleMath::Vector3 closestOnAABB = clampToAABB(closestOnSeg);
     
     // Perform a few iterations to find the closest points
@@ -142,23 +153,43 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsAABB(HEIN::CapsuleCol
     }
 
     DirectX::SimpleMath::Vector3 diff = closestOnSeg - closestOnAABB;
-    float distance = diff.Length();
+    float distanceSq = diff.LengthSquared();
 
-    if (distance < capsule->GetRadius())
+    if (distanceSq > 0.000001f)
     {
-        manifold.isColliding = true;
-        manifold.penetrationDepth = capsule->GetRadius() - distance;
+        float distance = std::sqrt(distanceSq);
+        if (distance < capsule->GetRadius())
+        {
+            manifold.isColliding = true;
+            manifold.penetrationDepth = capsule->GetRadius() - distance;
+            manifold.normal = diff / distance; // Outward normal from AABB toward capsule
+            manifold.contactPoint = closestOnAABB;
+        }
+    }
+    else
+    {
+        // Closest segment point is INSIDE the AABB box!
+        // Calculate distance to all 6 faces and push out along the minimum penetration axis
+        float distPosX = (aabbPos.x + extents.x) - closestOnSeg.x;
+        float distNegX = closestOnSeg.x - (aabbPos.x - extents.x);
+        float distPosY = (aabbPos.y + extents.y) - closestOnSeg.y;
+        float distNegY = closestOnSeg.y - (aabbPos.y - extents.y);
+        float distPosZ = (aabbPos.z + extents.z) - closestOnSeg.z;
+        float distNegZ = closestOnSeg.z - (aabbPos.z - extents.z);
 
-        if (distance > 0.001f)
-        {
-            diff.Normalize();
-            manifold.normal = diff;
-        }
-        else
-        {
-            // If centers are identical, use a default normal (e.g., up)
-            manifold.normal = DirectX::SimpleMath::Vector3(0.0f, 1.0f, 0.0f);
-        }
+        float minDist = distPosX;
+        DirectX::SimpleMath::Vector3 pushNormal(1.0f, 0.0f, 0.0f);
+
+        if (distNegX < minDist) { minDist = distNegX; pushNormal = DirectX::SimpleMath::Vector3(-1.0f, 0.0f, 0.0f); }
+        if (distPosY < minDist) { minDist = distPosY; pushNormal = DirectX::SimpleMath::Vector3(0.0f, 1.0f, 0.0f); }
+        if (distNegY < minDist) { minDist = distNegY; pushNormal = DirectX::SimpleMath::Vector3(0.0f, -1.0f, 0.0f); }
+        if (distPosZ < minDist) { minDist = distPosZ; pushNormal = DirectX::SimpleMath::Vector3(0.0f, 0.0f, 1.0f); }
+        if (distNegZ < minDist) { minDist = distNegZ; pushNormal = DirectX::SimpleMath::Vector3(0.0f, 0.0f, -1.0f); }
+
+        manifold.isColliding = true;
+        manifold.normal = pushNormal;
+        manifold.penetrationDepth = (minDist > 0.0f ? minDist : 0.0f) + capsule->GetRadius();
+        manifold.contactPoint = closestOnSeg;
     }
 
     return manifold;

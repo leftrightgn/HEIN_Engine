@@ -232,6 +232,9 @@
     <ClInclude Include="Components\StaticModelComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
+    <ClInclude Include="Components\SlidingDoorComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
     <ClInclude Include="Components\TransformComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
@@ -418,6 +421,9 @@
       <Filter>Components</Filter>
     </ClCompile>
     <ClCompile Include="Components\SkinnedModelComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\SlidingDoorComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
     <ClCompile Include="Components\SocketAttachmentComponent.cpp">
