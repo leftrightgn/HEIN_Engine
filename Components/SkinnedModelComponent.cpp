@@ -383,7 +383,8 @@ namespace HEIN
 		}
 	}
 
-		void SkinnedModelComponent::OnInspectorGUI(GameContext& gameContext)
+		
+	void SkinnedModelComponent::OnInspectorGUI(GameContext& gameContext)
 	{
 			
 		if (ImGui::CollapsingHeader("Skinned Model Component", ImGuiTreeNodeFlags_DefaultOpen))

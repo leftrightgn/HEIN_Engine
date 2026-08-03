@@ -40,13 +40,7 @@ namespace HEIN
 		bool m_needsReload = false;
 
 	public:
-		std::string GetComponentName() const override { return "SkinnedModelComponent"; }
-		nlohmann::json Serialize() override;
-		void Deserialize(const nlohmann::json& data) override;
-		void InitializeAfterDeserialize(GameContext& gameContext) override;
-
-		void OnInspectorGUI(GameContext& gameContext) override;
-
+		
 		SkinnedModelComponent(Actor* owner);
 
 		void Initialize(
@@ -82,6 +76,13 @@ namespace HEIN
 			const int boneNum,
 			const DirectX::SimpleMath::Matrix& actorWorldMatrix
 		);
+
+		std::string GetComponentName() const override { return "SkinnedModelComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+		void InitializeAfterDeserialize(GameContext& gameContext) override;
+
+		void OnInspectorGUI(GameContext& gameContext) override;
 
 		int GetBoneIndex(const std::wstring boneName);
 
