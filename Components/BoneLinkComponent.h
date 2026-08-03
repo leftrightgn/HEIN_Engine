@@ -6,11 +6,13 @@ namespace HEIN
 {
 	class TransformComponent;
 	class SkinnedModelComponent;
+	class StaticModelComponent;
 	class ColliderComponent;
 
 	class BoneLinkComponent : public IComponent
 	{
 		SkinnedModelComponent* m_targetModel;
+		StaticModelComponent* m_targetStaticModel;
 		std::wstring m_targetBoneName;
 		int m_targetBoneIndex;
 
@@ -26,6 +28,8 @@ namespace HEIN
 	
 		void Initialize(SkinnedModelComponent* targetModel, const std::wstring& targetBoneName);
 		void Initialize(SkinnedModelComponent* targetModel, int targetBoneIndex);
+		void Initialize(StaticModelComponent* targetModel, const std::wstring& targetBoneName);
+		void Initialize(StaticModelComponent* targetModel, int targetBoneIndex);
 
 		void LinkTo(TransformComponent* transfrom);
 		void LinkTo(ColliderComponent* collider);

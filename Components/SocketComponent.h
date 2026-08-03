@@ -5,6 +5,7 @@
 namespace HEIN
 {
     class SkinnedModelComponent;
+    class StaticModelComponent;
     class TransformComponent;
     // A struct to define a single socket attachment point
     struct Socket
@@ -35,6 +36,7 @@ namespace HEIN
         std::unordered_map<std::wstring, Socket> m_sockets;
 
         SkinnedModelComponent* m_model;
+        StaticModelComponent* m_staticModel;
         TransformComponent* m_transform;
 
     public:

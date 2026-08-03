@@ -71,6 +71,7 @@ void Game::Initialize(HWND window, int width, int height)
     m_gameContext->debugRenderer = &m_debugRenderer;
     m_gameContext->debugCollisionRenderer = &m_debugCollisionRenderer;
     m_gameContext->eventManager = &m_eventManager;
+    m_gameContext->sceneManager = &m_sceneManager;
 
 
 

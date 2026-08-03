@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "SkinnedModelComponent.h"
+#include "StaticModelComponent.h"
 #include "Entities/Actor.h"
 #include "TransformComponent.h"
 #include "ColliderComponent/CapsuleColliderComponent.h"
@@ -9,6 +10,7 @@
 HEIN::TwoBoneLinkComponent::TwoBoneLinkComponent(Actor* owner)
 	: IComponent(owner)
 	, m_targetModel(nullptr)
+	, m_targetStaticModel(nullptr)
 	, m_boneAName(L"")
 	, m_boneBName(L"")
 	, m_boneAIndex(-1)
@@ -25,6 +27,19 @@ void HEIN::TwoBoneLinkComponent::Initialize(
 )
 {
 	m_targetModel = targetModel;
+	m_targetStaticModel = nullptr;
+	m_boneAName = boneA;
+	m_boneBName = boneB;
+}
+
+void HEIN::TwoBoneLinkComponent::Initialize(
+	StaticModelComponent* targetModel,
+	const std::wstring& boneA, 
+	const std::wstring& boneB
+)
+{
+	m_targetStaticModel = targetModel;
+	m_targetModel = nullptr;
 	m_boneAName = boneA;
 	m_boneBName = boneB;
 }
@@ -41,15 +56,24 @@ void HEIN::TwoBoneLinkComponent::Start()
 
 void HEIN::TwoBoneLinkComponent::LateUpdate(float deltaTime)
 {
-	if (m_targetModel == nullptr)
+	if (m_targetModel == nullptr && m_targetStaticModel == nullptr)
 	{
 		m_targetModel = m_owner->GetComponent<SkinnedModelComponent>();
+		if (m_targetModel == nullptr)
+		{
+			m_targetStaticModel = m_owner->GetComponent<StaticModelComponent>();
+		}
 	}
 
-	if (m_targetModel != nullptr)
+	if (m_boneAName != L"" && m_boneAIndex == -1)
 	{
-		if (m_boneAName != L"" && m_boneAIndex == -1) m_boneAIndex = m_targetModel->GetBoneIndex(m_boneAName);
-		if (m_boneBName != L"" && m_boneBIndex == -1) m_boneBIndex = m_targetModel->GetBoneIndex(m_boneBName);
+		if (m_targetModel != nullptr) m_boneAIndex = m_targetModel->GetBoneIndex(m_boneAName);
+		else if (m_targetStaticModel != nullptr) m_boneAIndex = m_targetStaticModel->GetBoneIndex(m_boneAName);
+	}
+	if (m_boneBName != L"" && m_boneBIndex == -1)
+	{
+		if (m_targetModel != nullptr) m_boneBIndex = m_targetModel->GetBoneIndex(m_boneBName);
+		else if (m_targetStaticModel != nullptr) m_boneBIndex = m_targetStaticModel->GetBoneIndex(m_boneBName);
 	}
 
 	if (m_linkedCapsule == nullptr && m_linkedColliderTag != L"")
@@ -65,16 +89,21 @@ void HEIN::TwoBoneLinkComponent::LateUpdate(float deltaTime)
 		}
 	}
 
-	if (m_targetModel == nullptr || m_boneAIndex == -1 || m_boneBIndex == -1 || m_linkedCapsule == nullptr) return;
+	if ((m_targetModel == nullptr && m_targetStaticModel == nullptr) || m_boneAIndex == -1 || m_boneBIndex == -1 || m_linkedCapsule == nullptr) return;
 
-	TransformComponent* ownerTransform = m_targetModel->GetOwner()->GetComponent<TransformComponent>();
+	Actor* modelOwner = m_targetModel ? m_targetModel->GetOwner() : m_targetStaticModel->GetOwner();
+	TransformComponent* ownerTransform = modelOwner ? modelOwner->GetComponent<TransformComponent>() : nullptr;
 	if (ownerTransform == nullptr) return;
 
 	DirectX::SimpleMath::Matrix actorWorld = ownerTransform->GetWorldMatrix();
 
 	// 1. Get exact world positions
-	DirectX::SimpleMath::Vector3 posA = m_targetModel->GetBoneWorldPosition(m_boneAIndex, actorWorld);
-	DirectX::SimpleMath::Vector3 posB = m_targetModel->GetBoneWorldPosition(m_boneBIndex, actorWorld);
+	DirectX::SimpleMath::Vector3 posA = m_targetModel ? 
+		m_targetModel->GetBoneWorldPosition(m_boneAIndex, actorWorld) : 
+		m_targetStaticModel->GetBoneWorldPosition(m_boneAIndex, actorWorld);
+	DirectX::SimpleMath::Vector3 posB = m_targetModel ? 
+		m_targetModel->GetBoneWorldPosition(m_boneBIndex, actorWorld) : 
+		m_targetStaticModel->GetBoneWorldPosition(m_boneBIndex, actorWorld);
 
 	DirectX::SimpleMath::Vector3 center = (posA + posB) * 0.5f;
 
@@ -141,9 +170,13 @@ void HEIN::TwoBoneLinkComponent::Deserialize(const nlohmann::json& data)
 
 void HEIN::TwoBoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
 {
-	if (m_targetModel == nullptr)
+	if (m_targetModel == nullptr && m_targetStaticModel == nullptr)
 	{
 		m_targetModel = m_owner->GetComponent<SkinnedModelComponent>();
+		if (m_targetModel == nullptr)
+		{
+			m_targetStaticModel = m_owner->GetComponent<StaticModelComponent>();
+		}
 	}
 
 	if (ImGui::CollapsingHeader("TwoBoneLinkComponent", ImGuiTreeNodeFlags_DefaultOpen))
@@ -156,6 +189,7 @@ void HEIN::TwoBoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
 			std::string newName(bufferA);
 			m_boneAName = std::wstring(newName.begin(), newName.end());
 			if (m_targetModel) m_boneAIndex = m_targetModel->GetBoneIndex(m_boneAName);
+			else if (m_targetStaticModel) m_boneAIndex = m_targetStaticModel->GetBoneIndex(m_boneAName);
 		}
 
 		std::string narrowB(m_boneBName.begin(), m_boneBName.end());
@@ -166,6 +200,7 @@ void HEIN::TwoBoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
 			std::string newName(bufferB);
 			m_boneBName = std::wstring(newName.begin(), newName.end());
 			if (m_targetModel) m_boneBIndex = m_targetModel->GetBoneIndex(m_boneBName);
+			else if (m_targetStaticModel) m_boneBIndex = m_targetStaticModel->GetBoneIndex(m_boneBName);
 		}
 
 		std::string narrowCol(m_linkedColliderTag.begin(), m_linkedColliderTag.end());
@@ -188,3 +223,4 @@ void HEIN::TwoBoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
 		}
 	}
 }
+

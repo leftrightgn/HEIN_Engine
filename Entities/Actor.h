@@ -57,6 +57,8 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& proj
 		);
 
+		void Draw2D(GameContext& gameContext);
+
 		void Start();
 
 		void DrawInspector(GameContext& gameContext);
@@ -79,6 +81,13 @@ namespace HEIN
 		ActorType GetActorType() const { return m_type; }
 
 		void AddChild(ActorID id) { m_childrensID.push_back(id); }
+		void RemoveChild(ActorID id)
+		{
+			m_childrensID.erase(
+				std::remove(m_childrensID.begin(), m_childrensID.end(), id),
+				m_childrensID.end()
+			);
+		}
 		const std::vector<ActorID>& GetChildren() const { return m_childrensID; }
 		
 		// Template  Components

@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "SocketComponent.h"
 #include "Components/SkinnedModelComponent.h"
+#include "Components/StaticModelComponent.h"
 #include "Components/TransformComponent.h"
 #include "Entities/Actor.h"
 #include <DebugingTools/DebugUIManager.h>
@@ -8,6 +9,7 @@
 HEIN::SocketComponent::SocketComponent(Actor* owner)
     : IComponent(owner)
     , m_model(nullptr)
+    , m_staticModel(nullptr)
     , m_transform(nullptr)
 {
 }
@@ -15,6 +17,10 @@ HEIN::SocketComponent::SocketComponent(Actor* owner)
 void HEIN::SocketComponent::Start()
 {
     m_model = m_owner->GetComponent<SkinnedModelComponent>();
+    if (!m_model)
+    {
+        m_staticModel = m_owner->GetComponent<StaticModelComponent>();
+    }
     m_transform = m_owner->GetComponent<TransformComponent>();
 }
 
@@ -82,7 +88,12 @@ void HEIN::SocketComponent::DrawGizmo(
     int mode
 )
 {
-    if (m_model == nullptr || m_transform == nullptr) return;
+    if (m_model == nullptr && m_staticModel == nullptr)
+    {
+        m_model = m_owner->GetComponent<SkinnedModelComponent>();
+        if (!m_model) m_staticModel = m_owner->GetComponent<StaticModelComponent>();
+    }
+    if ((m_model == nullptr && m_staticModel == nullptr) || m_transform == nullptr) return;
 
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
@@ -99,7 +110,9 @@ void HEIN::SocketComponent::DrawGizmo(
         Socket& socket = pair.second;
 
         // Get the base Bone matrix without the socket offset
-        DirectX::SimpleMath::Matrix boneWorld = m_model->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld);
+        DirectX::SimpleMath::Matrix boneWorld = m_model ? 
+            m_model->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld) :
+            (m_staticModel ? m_staticModel->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld) : ownerWorld);
 
         DirectX::SimpleMath::Vector3 extractedScale;
         DirectX::SimpleMath::Quaternion extractedRotation;
@@ -188,8 +201,13 @@ HEIN::Socket* HEIN::SocketComponent::GetSocket(const std::wstring& socketName)
 
 DirectX::SimpleMath::Matrix HEIN::SocketComponent::GetSocketWorldMatrix(const std::wstring& socketName)
 {
+    if (m_model == nullptr && m_staticModel == nullptr)
+    {
+        m_model = m_owner->GetComponent<SkinnedModelComponent>();
+        if (!m_model) m_staticModel = m_owner->GetComponent<StaticModelComponent>();
+    }
 
-    if (!HasSocket(socketName) || m_model == nullptr || m_transform == nullptr)
+    if (!HasSocket(socketName) || (m_model == nullptr && m_staticModel == nullptr) || m_transform == nullptr)
     {
         if (m_transform != nullptr)
         {
@@ -201,7 +219,9 @@ DirectX::SimpleMath::Matrix HEIN::SocketComponent::GetSocketWorldMatrix(const st
     const Socket& socket = m_sockets[socketName];
 
     DirectX::SimpleMath::Matrix ownerWorld = m_transform->GetWorldMatrix();
-    DirectX::SimpleMath::Matrix boneWorld = m_model->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld);
+    DirectX::SimpleMath::Matrix boneWorld = m_model ? 
+        m_model->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld) :
+        (m_staticModel ? m_staticModel->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld) : ownerWorld);
 
     DirectX::SimpleMath::Vector3 extractedScale;
     DirectX::SimpleMath::Quaternion extractedRotation;

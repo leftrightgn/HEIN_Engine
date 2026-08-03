@@ -39,10 +39,23 @@ void HEIN::Actor::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matr
 
 	DirectX::SimpleMath::Matrix world = transform->GetWorldMatrix();
 
-
 	for (auto& component : m_components)
 	{
-		component->Draw(gameContext, world, view, proj);
+		if (!component->Is2D())
+		{
+			component->Draw(gameContext, world, view, proj);
+		}
+	}
+}
+
+void HEIN::Actor::Draw2D(GameContext& gameContext)
+{
+	for (auto& component : m_components)
+	{
+		if (component->Is2D())
+		{
+			component->Draw2D(gameContext);
+		}
 	}
 }
 

@@ -10,9 +10,11 @@
 #include <Entities/ActorManager.h>
 #include <Components/ColliderComponent/MeshColliderComponent.h>
 #include <Factory/ComponentFactory.h>
+#include <Components/UIButtonComponent.h>
 #include <Windows.h>
 #include <vector>
-//#include <Components/TransformComponent.h>
+#include <Components/TransformComponent.h>
+#include <Camera/CameraController.h>
 
 namespace HEIN
 {
@@ -31,6 +33,25 @@ namespace HEIN
 		}
 
 		if (!m_isVisible) return;
+
+		// Clean up dangling selection if actor was destroyed elsewhere
+		if (m_selectedActor != nullptr && !actorManager.HasActor(m_selectedActor->GetID()))
+		{
+			m_selectedActor = nullptr;
+			g_ActiveGizmoTarget = nullptr;
+		}
+
+		// Delete shortcut key
+		if (m_selectedActor != nullptr && !ImGui::GetIO().WantCaptureKeyboard)
+		{
+			if (gameContext.keyboardTracker.pressed.Delete)
+			{
+				ActorID idToDelete = m_selectedActor->GetID();
+				m_selectedActor = nullptr;
+				g_ActiveGizmoTarget = nullptr;
+				actorManager.DestroyID(idToDelete);
+			}
+		}
 
 		bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift;
 
@@ -124,6 +145,33 @@ namespace HEIN
 						}
 					}
 
+					// 3D Picking for Camera Component
+					auto* camComp = actor->GetComponent<HEIN::CameraController>();
+					if (camComp != nullptr)
+					{
+						DirectX::BoundingSphere camSphere(camComp->GetPosition(), 1.5f);
+						float d = 0.0f;
+						if (camSphere.Intersects(rayOrigin, rayDir, d))
+						{
+							hit = true;
+							if (d < actorClosestHit) actorClosestHit = d;
+						}
+					}
+
+					// 2D Screen Picking for UI Button Component
+					auto* uiBtn = actor->GetComponent<HEIN::UIButtonComponent>();
+					if (uiBtn != nullptr)
+					{
+						DirectX::SimpleMath::Vector2 bPos = uiBtn->GetPosition();
+						DirectX::SimpleMath::Vector2 bSize = uiBtn->GetSize();
+						if (mouseX >= bPos.x && mouseX <= bPos.x + bSize.x &&
+							mouseY >= bPos.y && mouseY <= bPos.y + bSize.y)
+						{
+							hit = true;
+							actorClosestHit = -1.0f; // UI always takes top priority over 3D geometry
+						}
+					}
+
 					if (hit && actorClosestHit < closestHit)
 					{
 						closestHit = actorClosestHit;
@@ -136,7 +184,29 @@ namespace HEIN
 				{
 					m_selectedActor = hitActor;
 					
-					g_ActiveGizmoTarget = nullptr;
+					if (m_selectedActor != nullptr)
+					{
+						if (auto* cam = m_selectedActor->GetComponent<HEIN::CameraController>())
+						{
+							g_ActiveGizmoTarget = cam;
+						}
+						else if (auto* btn = m_selectedActor->GetComponent<HEIN::UIButtonComponent>())
+						{
+							g_ActiveGizmoTarget = btn;
+						}
+						else if (auto* trans = m_selectedActor->GetComponent<HEIN::TransformComponent>())
+						{
+							g_ActiveGizmoTarget = trans;
+						}
+						else
+						{
+							g_ActiveGizmoTarget = nullptr;
+						}
+					}
+					else
+					{
+						g_ActiveGizmoTarget = nullptr;
+					}
 				}
 
 				m_lastleftClickTime = -1.0;
@@ -176,19 +246,34 @@ namespace HEIN
 		ImVec2 inspectorPos = ImGui::GetWindowPos();
 		ImVec2 inspectorSize = ImGui::GetWindowSize();
 
-		if (m_selectedActor == nullptr || manager.GetActor(m_selectedActor->GetID()) == nullptr)
+		if (m_selectedActor == nullptr || !manager.HasActor(m_selectedActor->GetID()))
 		{
 			m_selectedActor = nullptr;
+			g_ActiveGizmoTarget = nullptr;
 			ImGui::TextDisabled("No Actor Selected");
 		}
 		else
 		{
-			std::wstring wtag = m_selectedActor->GetTag();
+			// Delete Actor Button at top of Inspector
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.25f, 0.25f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.55f, 0.05f, 0.05f, 1.0f));
+			if (ImGui::Button("Delete Selected Actor", ImVec2(-1, 26)))
+			{
+				ActorID idToDelete = m_selectedActor->GetID();
+				m_selectedActor = nullptr;
+				g_ActiveGizmoTarget = nullptr;
+				manager.DestroyID(idToDelete);
+			}
+			ImGui::PopStyleColor(3);
+			ImGui::Separator();
+
+			std::wstring wtag = m_selectedActor ? m_selectedActor->GetTag() : L"";
 			std::string narrowTag(wtag.begin(), wtag.end());
 
 			char nameBuffer[256];
 			strncpy_s(nameBuffer, narrowTag.c_str(), sizeof(nameBuffer));
-			if (ImGui::InputText("Actor Name", nameBuffer, sizeof(nameBuffer)))
+			if (m_selectedActor && ImGui::InputText("Actor Name", nameBuffer, sizeof(nameBuffer)))
 			{
 				std::string newTag(nameBuffer);
 				std::wstring newWTag(newTag.begin(), newTag.end());
@@ -204,7 +289,10 @@ namespace HEIN
 
 			ImGui::Separator();
 
-			m_selectedActor->DrawInspector(gameContext);
+			if (m_selectedActor)
+			{
+				m_selectedActor->DrawInspector(gameContext);
+			}
 
 			ImGui::Separator();
 
@@ -216,7 +304,7 @@ namespace HEIN
 				componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
 			}
 
-			if (ImGui::BeginCombo("Add Component", "Select Component..."))
+			if (m_selectedActor && ImGui::BeginCombo("Add Component", "Select Component..."))
 			{
 				for (const std::string& compName : componentNames)
 				{
@@ -258,12 +346,87 @@ namespace HEIN
 		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
 		ImGui::SameLine();
 		if (ImGui::Button("NEW SCENE")) currentAction = HEIN::EditorAction::NewScenePressed;
+		ImGui::SameLine();
+		ImGui::Checkbox("Show Viewport", &m_showViewportPreview);
+
+		if (m_selectedActor != nullptr)
+		{
+			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
+			if (ImGui::Button("Delete Selected"))
+			{
+				ActorID idToDelete = m_selectedActor->GetID();
+				m_selectedActor = nullptr;
+				g_ActiveGizmoTarget = nullptr;
+				manager.DestroyID(idToDelete);
+			}
+			ImGui::PopStyleColor();
+		}
+
 		ImGui::Separator();
 		if (ImGui::Button("Create Empty Actor"))
 		{
 			HEIN::Actor* newActor = manager.CreateActor(L"NewActor");
 			m_selectedActor = newActor;
 		}
+		ImGui::SameLine();
+		if (ImGui::Button("+ UI Button"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"UIButton");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			auto* btn = newActor->AddComponent<HEIN::UIButtonComponent>();
+			btn->SetElementType(HEIN::UIElementType::Button);
+			btn->SetText("Button");
+			btn->Initialize(gameContext, nullptr, nullptr, nullptr);
+			newActor->Start();
+			m_selectedActor = newActor;
+			g_ActiveGizmoTarget = btn;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("+ UI Image"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"UIImage");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			auto* img = newActor->AddComponent<HEIN::UIButtonComponent>();
+			img->SetElementType(HEIN::UIElementType::Image);
+			img->Initialize(gameContext, nullptr, nullptr, nullptr);
+			newActor->Start();
+			m_selectedActor = newActor;
+			g_ActiveGizmoTarget = img;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("+ UI Text"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"UIText");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			auto* txt = newActor->AddComponent<HEIN::UIButtonComponent>();
+			txt->SetElementType(HEIN::UIElementType::Text);
+			txt->SetText("New Text Label");
+			txt->SetFontSize(1.5f);
+			txt->Initialize(gameContext, nullptr, nullptr, nullptr);
+			newActor->Start();
+			m_selectedActor = newActor;
+			g_ActiveGizmoTarget = txt;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("+ Camera"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"MainCamera");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			auto* cam = newActor->AddComponent<HEIN::CameraController>();
+			cam->SetPosition(DirectX::SimpleMath::Vector3(0.0f, 15.0f, -40.0f));
+			newActor->Start();
+			m_selectedActor = newActor;
+			g_ActiveGizmoTarget = cam;
+		}
+		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.2f, 0.9f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+		if (ImGui::Button("+ Stage"))
+		{
+			currentAction = HEIN::EditorAction::CreateStagePressed;
+		}
+		ImGui::PopStyleColor(2);
 		ImGui::End();
 
 		// DRAW THE HIERARCHY WINDOW
@@ -271,6 +434,7 @@ namespace HEIN
 		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
 		ImGui::SetNextWindowSize(ImVec2(screenW * 0.10f, screenH), ImGuiCond_Always);
 		ImGui::Begin("Hierarchy", nullptr, staticFlags);
+		ActorID actorToDelete = INVALID_ACTOR_ID;
 		for (const auto& pair : manager.GetAllActors())
 		{
 			HEIN::Actor* actor = pair.second.get();
@@ -279,15 +443,149 @@ namespace HEIN
 			
 			std::string label = narrowTag + "##" + std::to_string(actor->GetID());
 			
+			ImGui::PushID(actor->GetID());
+
 			bool isSelected = (m_selectedActor == actor);
-			if (ImGui::Selectable(label.c_str(), isSelected))
+			if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(screenW * 0.10f - 35.0f, 0)))
 			{
 				m_selectedActor = actor;
+				if (auto* cam = actor->GetComponent<HEIN::CameraController>())
+				{
+					g_ActiveGizmoTarget = cam;
+				}
+				else if (auto* btn = actor->GetComponent<HEIN::UIButtonComponent>())
+				{
+					g_ActiveGizmoTarget = btn;
+				}
+				else if (auto* trans = actor->GetComponent<HEIN::TransformComponent>())
+				{
+					g_ActiveGizmoTarget = trans;
+				}
+				else
+				{
+					g_ActiveGizmoTarget = nullptr;
+				}
 			}
+
+			// Right-click context menu
+			if (ImGui::BeginPopupContextItem())
+			{
+				m_selectedActor = actor;
+				if (ImGui::MenuItem("Delete Actor"))
+				{
+					actorToDelete = actor->GetID();
+				}
+				ImGui::EndPopup();
+			}
+
+			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.15f, 0.15f, 0.7f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
+			if (ImGui::SmallButton("X"))
+			{
+				actorToDelete = actor->GetID();
+			}
+			ImGui::PopStyleColor(3);
+
+			ImGui::PopID();
 		}
+
+		if (actorToDelete != INVALID_ACTOR_ID)
+		{
+			if (m_selectedActor && m_selectedActor->GetID() == actorToDelete)
+			{
+				m_selectedActor = nullptr;
+				g_ActiveGizmoTarget = nullptr;
+			}
+			manager.DestroyID(actorToDelete);
+		}
+
 		ImGui::End();
-		
+
+		// Draw the floating, movable and resizable Camera Viewport window
+		DrawViewportWindow(gameContext, true);
 
 		return currentAction;
+	}
+
+	void DebugUIManager::DrawViewportWindow(GameContext& gameContext, bool isMagnified)
+	{
+		D3D11_VIEWPORT screenVp = gameContext.deviceResources.GetScreenViewport();
+
+		if (isMagnified)
+		{
+			if (!m_showViewportPreview)
+			{
+				m_isViewportVisibleInUI = false;
+				return;
+			}
+
+			ImGui::SetNextWindowSize(ImVec2(380.0f, 220.0f), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowPos(ImVec2(screenVp.Width * 0.10f + 20.0f, screenVp.Height - 240.0f), ImGuiCond_FirstUseEver);
+
+			// Make the window body 100% transparent so the D3D11 3D scene renders crystal clear with NO black overlay!
+			ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.7f, 1.0f, 0.8f));
+
+			ImGuiWindowFlags winFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+			if (ImGui::Begin("Camera Viewport (Live Preview)###CameraViewportWin", &m_showViewportPreview, winFlags))
+			{
+				ImVec2 contentMin = ImGui::GetCursorScreenPos();
+				ImVec2 contentSize = ImGui::GetContentRegionAvail();
+
+				if (contentSize.x >= 50.0f && contentSize.y >= 50.0f)
+				{
+					m_viewportPos = DirectX::SimpleMath::Vector2(contentMin.x, contentMin.y);
+					m_viewportSize = DirectX::SimpleMath::Vector2(contentSize.x, contentSize.y);
+					m_isViewportVisibleInUI = true;
+				}
+				else
+				{
+					m_isViewportVisibleInUI = false;
+				}
+			}
+			else
+			{
+				m_isViewportVisibleInUI = false;
+			}
+			ImGui::End();
+			ImGui::PopStyleColor(3);
+		}
+		else
+		{
+			ImGui::SetNextWindowSize(ImVec2(400.0f, 240.0f), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowPos(ImVec2(screenVp.Width - 420.0f, 20.0f), ImGuiCond_FirstUseEver);
+
+			// Make the window body 100% transparent so the D3D11 3D scene renders crystal clear with NO black overlay!
+			ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.7f, 1.0f, 0.8f));
+
+			ImGuiWindowFlags winFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+			if (ImGui::Begin("Debug Viewport (F2 to Full Editor)###DebugViewportWin", nullptr, winFlags))
+			{
+				ImVec2 contentMin = ImGui::GetCursorScreenPos();
+				ImVec2 contentSize = ImGui::GetContentRegionAvail();
+
+				if (contentSize.x >= 50.0f && contentSize.y >= 50.0f)
+				{
+					m_viewportPos = DirectX::SimpleMath::Vector2(contentMin.x, contentMin.y);
+					m_viewportSize = DirectX::SimpleMath::Vector2(contentSize.x, contentSize.y);
+					m_isViewportVisibleInUI = true;
+				}
+				else
+				{
+					m_isViewportVisibleInUI = false;
+				}
+			}
+			else
+			{
+				m_isViewportVisibleInUI = false;
+			}
+			ImGui::End();
+			ImGui::PopStyleColor(3);
+		}
 	}
 }

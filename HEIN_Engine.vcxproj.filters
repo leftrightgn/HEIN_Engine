@@ -25,6 +25,8 @@
     <ClCompile Include="DebugingTools\EditorUtils.cpp">
       <Filter>DebugingTools</Filter>
     </ClCompile>
+    <ClCompile Include="Components\UIButtonComponent.cpp" />
+    <ClCompile Include="Camera\ManualCameraMode.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -58,6 +60,8 @@
     <ClInclude Include="DebugingTools\EditorUtils.h">
       <Filter>DebugingTools</Filter>
     </ClInclude>
+    <ClInclude Include="Components\UIButtonComponent.h" />
+    <ClInclude Include="Camera\ManualCameraMode.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

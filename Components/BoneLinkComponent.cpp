@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "BoneLinkComponent.h"
 #include "SkinnedModelComponent.h"
+#include "StaticModelComponent.h"
 #include "Entities/Actor.h"
 #include "TransformComponent.h"
 #include "ColliderComponent/ColliderComponent.h"
@@ -9,6 +10,7 @@
 HEIN::BoneLinkComponent::BoneLinkComponent(Actor* owner)
 	: IComponent(owner)
 	, m_targetModel(nullptr)
+	, m_targetStaticModel(nullptr)
 	, m_targetBoneName(L"")
 	, m_targetBoneIndex(-1)
 	, m_linkedTransform(nullptr)
@@ -21,6 +23,7 @@ HEIN::BoneLinkComponent::BoneLinkComponent(Actor* owner)
 void HEIN::BoneLinkComponent::Initialize(SkinnedModelComponent* targetModel, const std::wstring& targetBoneName)
 {
 	m_targetModel = targetModel;
+	m_targetStaticModel = nullptr;
 	m_targetBoneName = targetBoneName;
 	m_targetBoneIndex = -1;
 }
@@ -28,6 +31,23 @@ void HEIN::BoneLinkComponent::Initialize(SkinnedModelComponent* targetModel, con
 void HEIN::BoneLinkComponent::Initialize(SkinnedModelComponent* targetModel, int targetBoneIndex)
 {
 	m_targetModel = targetModel;
+	m_targetStaticModel = nullptr;
+	m_targetBoneIndex = targetBoneIndex;
+	m_targetBoneName = L"";
+}
+
+void HEIN::BoneLinkComponent::Initialize(StaticModelComponent* targetModel, const std::wstring& targetBoneName)
+{
+	m_targetStaticModel = targetModel;
+	m_targetModel = nullptr;
+	m_targetBoneName = targetBoneName;
+	m_targetBoneIndex = -1;
+}
+
+void HEIN::BoneLinkComponent::Initialize(StaticModelComponent* targetModel, int targetBoneIndex)
+{
+	m_targetStaticModel = targetModel;
+	m_targetModel = nullptr;
 	m_targetBoneIndex = targetBoneIndex;
 	m_targetBoneName = L"";
 }
@@ -54,14 +74,19 @@ void HEIN::BoneLinkComponent::Start()
 
 void HEIN::BoneLinkComponent::LateUpdate(float deltaTime)
 {
-	if (m_targetModel == nullptr)
+	if (m_targetModel == nullptr && m_targetStaticModel == nullptr)
 	{
 		m_targetModel = m_owner->GetComponent<SkinnedModelComponent>();
+		if (m_targetModel == nullptr)
+		{
+			m_targetStaticModel = m_owner->GetComponent<StaticModelComponent>();
+		}
 	}
 
-	if (m_targetModel != nullptr && m_targetBoneName != L"" && m_targetBoneIndex == -1)
+	if (m_targetBoneName != L"" && m_targetBoneIndex == -1)
 	{
-		m_targetBoneIndex = m_targetModel->GetBoneIndex(m_targetBoneName);
+		if (m_targetModel != nullptr) m_targetBoneIndex = m_targetModel->GetBoneIndex(m_targetBoneName);
+		else if (m_targetStaticModel != nullptr) m_targetBoneIndex = m_targetStaticModel->GetBoneIndex(m_targetBoneName);
 	}
 
 	if (m_linkedCollider == nullptr && m_linkedColliderTag != L"")
@@ -77,13 +102,16 @@ void HEIN::BoneLinkComponent::LateUpdate(float deltaTime)
 		}
 	}
 
-	if (m_targetModel == nullptr || m_targetBoneIndex == -1) return;
+	if ((m_targetModel == nullptr && m_targetStaticModel == nullptr) || m_targetBoneIndex == -1) return;
 
-	TransformComponent* ownerTransform = m_targetModel->GetOwner()->GetComponent<TransformComponent>();
+	Actor* modelOwner = m_targetModel ? m_targetModel->GetOwner() : m_targetStaticModel->GetOwner();
+	TransformComponent* ownerTransform = modelOwner ? modelOwner->GetComponent<TransformComponent>() : nullptr;
 	if (ownerTransform == nullptr) return;
 
 	DirectX::SimpleMath::Matrix actorWorld = ownerTransform->GetWorldMatrix();
-	DirectX::SimpleMath::Matrix boneWorld = m_targetModel->GetBoneWorldMatrix(m_targetBoneIndex, actorWorld);
+	DirectX::SimpleMath::Matrix boneWorld = m_targetModel ? 
+		m_targetModel->GetBoneWorldMatrix(m_targetBoneIndex, actorWorld) :
+		m_targetStaticModel->GetBoneWorldMatrix(m_targetBoneIndex, actorWorld);
 
 	if (m_linkedTransform != nullptr)
 	{
@@ -130,9 +158,13 @@ void HEIN::BoneLinkComponent::Deserialize(const nlohmann::json& data)
 
 void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
 {
-	if (m_targetModel == nullptr)
+	if (m_targetModel == nullptr && m_targetStaticModel == nullptr)
 	{
 		m_targetModel = m_owner->GetComponent<SkinnedModelComponent>();
+		if (m_targetModel == nullptr)
+		{
+			m_targetStaticModel = m_owner->GetComponent<StaticModelComponent>();
+		}
 	}
 
 	if (ImGui::CollapsingHeader("BoneLinkComponent", ImGuiTreeNodeFlags_DefaultOpen))
@@ -145,6 +177,7 @@ void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
 			std::string newName(buffer);
 			m_targetBoneName = std::wstring(newName.begin(), newName.end());
 			if (m_targetModel) m_targetBoneIndex = m_targetModel->GetBoneIndex(m_targetBoneName);
+			else if (m_targetStaticModel) m_targetBoneIndex = m_targetStaticModel->GetBoneIndex(m_targetBoneName);
 		}
 
 		std::string narrowCol(m_linkedColliderTag.begin(), m_linkedColliderTag.end());
@@ -167,3 +200,4 @@ void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
 		}
 	}
 }
+

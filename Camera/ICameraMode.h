@@ -34,7 +34,8 @@ namespace HEIN
 		Debug,
 		Cinematic,
 		Spring,
-		LockOn
+		LockOn,
+		Manual
 	};
 
 	// Controller interface

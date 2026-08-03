@@ -21,8 +21,10 @@ namespace HEIN
 		Actor* CreateActor(const std::wstring& tag);
 
 		void DestroyID(ActorID id);
+		void DeleteActor(ActorID id);
 
 		Actor* GetActor(ActorID id);
+		bool HasActor(ActorID id) const { return m_actors.find(id) != m_actors.end(); }
 		Actor* GetActorByName(const std::wstring& name);
 
 		void UpdateAll(float deltaTime);
