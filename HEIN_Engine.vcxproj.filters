@@ -26,6 +26,7 @@
       <Filter>DebugingTools</Filter>
     </ClCompile>
     <ClCompile Include="Components\UIButtonComponent.cpp" />
+    <ClCompile Include="Camera\ManualCameraMode.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -60,6 +61,7 @@
       <Filter>DebugingTools</Filter>
     </ClInclude>
     <ClInclude Include="Components\UIButtonComponent.h" />
+    <ClInclude Include="Camera\ManualCameraMode.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

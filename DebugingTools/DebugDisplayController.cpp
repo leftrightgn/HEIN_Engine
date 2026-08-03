@@ -11,7 +11,7 @@
 namespace HEIN
 {
 	DebugDisplayController::DebugDisplayController()
-		: m_isVisible(true)
+		: m_isVisible(false)
 		, m_isMagnified(false)
 	{
 	}

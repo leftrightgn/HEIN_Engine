@@ -181,6 +181,7 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Camera\ManualCameraMode.h" />
     <ClInclude Include="Components\TerrainComponent.h" />
     <ClInclude Include="Components\UIButtonComponent.h" />
     <ClInclude Include="DebugingTools\EditorUtils.h" />
@@ -188,6 +189,7 @@
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Camera\ManualCameraMode.cpp" />
     <ClCompile Include="Components\TerrainComponent.cpp" />
     <ClCompile Include="Components\UIButtonComponent.cpp" />
     <ClCompile Include="DebugingTools\EditorUtils.cpp" />
