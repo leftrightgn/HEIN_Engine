@@ -181,7 +181,9 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Camera\CameraCollisionHelper.h" />
     <ClInclude Include="Camera\ManualCameraMode.h" />
+    <ClInclude Include="Common\json.hpp" />
     <ClInclude Include="Components\TerrainComponent.h" />
     <ClInclude Include="Components\UIButtonComponent.h" />
     <ClInclude Include="DebugingTools\EditorUtils.h" />

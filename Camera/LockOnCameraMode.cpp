@@ -2,6 +2,7 @@
 #include "LockOnCameraMode.h"
 #include "Components/TransformComponent.h"
 #include <Entities/ActorManager.h>
+#include "CameraCollisionHelper.h"
 
 
 HEIN::LockOnCameraMode::LockOnCameraMode(
@@ -79,6 +80,16 @@ void HEIN::LockOnCameraMode::Update(CameraData& outData, float deltaTime, ICamer
 		+ (rightDir * shoulderOffset)
 		+ (DirectX::SimpleMath::Vector3::Up * heightOffset);
 
+	DirectX::SimpleMath::Vector3 focusOrigin = playerPos + DirectX::SimpleMath::Vector3(0.0f, 2.0f, 0.0f);
+	desiredPosition = CameraCollisionHelper::ResolveOcclusion(
+		m_manager,
+		m_playerID,
+		focusOrigin,
+		desiredPosition,
+		0.5f,
+		1.0f
+	);
+
 	if (!m_isInitialized)
 	{
 		m_currentPosition = desiredPosition;
@@ -86,7 +97,17 @@ void HEIN::LockOnCameraMode::Update(CameraData& outData, float deltaTime, ICamer
 	}
 
 	UpdateSpring(desiredPosition, m_currentPosition, m_positionVelocity, deltaTime);
-	outData.position = m_currentPosition;
+
+	DirectX::SimpleMath::Vector3 safePosition = CameraCollisionHelper::ResolveOcclusion(
+		m_manager,
+		m_playerID,
+		focusOrigin,
+		m_currentPosition,
+		0.5f,
+		1.0f
+	);
+
+	outData.position = safePosition;
 
 	// find both of the chest pos
 	DirectX::SimpleMath::Vector3 enemyChest = targetPos + DirectX::SimpleMath::Vector3(0.0f, 2.5f, 0.0f);

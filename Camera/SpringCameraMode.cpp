@@ -2,6 +2,7 @@
 #include "SpringCameraMode.h"
 #include "Components/TransformComponent.h"
 #include <Entities/ActorManager.h>
+#include "CameraCollisionHelper.h"
 
 
 HEIN::SpringCameraMode::SpringCameraMode(
@@ -79,6 +80,13 @@ void HEIN::SpringCameraMode::Update(CameraData& outData, float deltaTime, ICamer
 		DirectX::SimpleMath::Vector3::Up * m_heightOffset + 
 		shoulderOffset;
 
+	targetEye = CameraCollisionHelper::ResolveOcclusion(
+		m_manager,
+		m_targetID,
+		targetLookAt + DirectX::SimpleMath::Vector3::Up * m_heightOffset,
+		targetEye
+	);
+
 	if (!m_isInitialized)
 	{
 		m_currentPosition = targetEye;
@@ -89,8 +97,15 @@ void HEIN::SpringCameraMode::Update(CameraData& outData, float deltaTime, ICamer
 	UpdateSpring(targetEye, m_currentPosition, m_positionVelocity, deltaTime);
 	UpdateSpring(targetLookAt, m_currentLookAt, m_lookAtVelocity, deltaTime);
 
+	DirectX::SimpleMath::Vector3 safePosition = CameraCollisionHelper::ResolveOcclusion(
+		m_manager,
+		m_targetID,
+		m_currentLookAt,
+		m_currentPosition
+	);
+
 	outData.rotation = rotation;
-	outData.position = m_currentPosition;
+	outData.position = safePosition;
 
 	outData.viewMatrix = 
 		DirectX::SimpleMath::Matrix::CreateLookAt(

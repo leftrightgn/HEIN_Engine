@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "ThirdPersonMode.h"
 #include <Entities/ActorManager.h>
+#include "CameraCollisionHelper.h"
 
 HEIN::ThirdPersonMode::ThirdPersonMode(
 	HEIN::ActorManager* manager,
@@ -76,8 +77,18 @@ void HEIN::ThirdPersonMode::Update(CameraData& outData, float /*deltaTime*/, ICa
 	DirectX::SimpleMath::Vector3 offset = rotBackward * m_boomLength;
 	DirectX::SimpleMath::Vector3 shoulderOffset = rotRight * SHOULDER_OFFSET;
 
+	DirectX::SimpleMath::Vector3 desiredPos = focalPoint + offset + shoulderOffset;
+	DirectX::SimpleMath::Vector3 occludedPos = CameraCollisionHelper::ResolveOcclusion(
+		m_manager,
+		m_targetID,
+		focalPoint,
+		desiredPos,
+		0.5f,
+		1.0f
+	);
+
 	outData.rotation = rotation;
-	outData.position = focalPoint + offset + shoulderOffset;
+	outData.position = occludedPos;
 	outData.viewMatrix = DirectX::SimpleMath::Matrix::CreateLookAt(
 		outData.position,
 		focalPoint,
