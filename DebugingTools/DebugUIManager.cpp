@@ -246,6 +246,45 @@ namespace HEIN
 		ImVec2 inspectorPos = ImGui::GetWindowPos();
 		ImVec2 inspectorSize = ImGui::GetWindowSize();
 
+		auto SelectActor = [&](HEIN::Actor* actor)
+		{
+			m_selectedActor = actor;
+			if (actor == nullptr)
+			{
+				g_ActiveGizmoTarget = nullptr;
+				return;
+			}
+			if (auto* cam = actor->GetComponent<HEIN::CameraController>())
+			{
+				g_ActiveGizmoTarget = cam;
+			}
+			else if (auto* btn = actor->GetComponent<HEIN::UIButtonComponent>())
+			{
+				g_ActiveGizmoTarget = btn;
+			}
+			else if (auto* trans = actor->GetComponent<HEIN::TransformComponent>())
+			{
+				g_ActiveGizmoTarget = trans;
+			}
+			else
+			{
+				g_ActiveGizmoTarget = nullptr;
+			}
+		};
+
+		// Ctrl+D shortcut to duplicate selected actor
+		if (!ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false))
+		{
+			if (m_selectedActor != nullptr)
+			{
+				HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
+				if (copy != nullptr)
+				{
+					SelectActor(copy);
+				}
+			}
+		}
+
 		if (m_selectedActor == nullptr || !manager.HasActor(m_selectedActor->GetID()))
 		{
 			m_selectedActor = nullptr;
@@ -254,15 +293,27 @@ namespace HEIN
 		}
 		else
 		{
-			// Delete Actor Button at top of Inspector
+			// Inspector Header: Duplicate & Delete buttons
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.85f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.95f, 1.0f));
+			if (ImGui::Button("Duplicate Actor", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f - 4.0f, 26)))
+			{
+				HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
+				if (copy != nullptr)
+				{
+					SelectActor(copy);
+				}
+			}
+			ImGui::PopStyleColor(2);
+
+			ImGui::SameLine();
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.25f, 0.25f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.55f, 0.05f, 0.05f, 1.0f));
-			if (ImGui::Button("Delete Selected Actor", ImVec2(-1, 26)))
+			if (ImGui::Button("Delete", ImVec2(-1, 26)))
 			{
 				ActorID idToDelete = m_selectedActor->GetID();
-				m_selectedActor = nullptr;
-				g_ActiveGizmoTarget = nullptr;
+				SelectActor(nullptr);
 				manager.DestroyID(idToDelete);
 			}
 			ImGui::PopStyleColor(3);
@@ -352,12 +403,24 @@ namespace HEIN
 		if (m_selectedActor != nullptr)
 		{
 			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.85f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.95f, 1.0f));
+			if (ImGui::Button("Duplicate Actor"))
+			{
+				HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
+				if (copy != nullptr)
+				{
+					SelectActor(copy);
+				}
+			}
+			ImGui::PopStyleColor(2);
+
+			ImGui::SameLine();
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
 			if (ImGui::Button("Delete Selected"))
 			{
 				ActorID idToDelete = m_selectedActor->GetID();
-				m_selectedActor = nullptr;
-				g_ActiveGizmoTarget = nullptr;
+				SelectActor(nullptr);
 				manager.DestroyID(idToDelete);
 			}
 			ImGui::PopStyleColor();
@@ -367,7 +430,7 @@ namespace HEIN
 		if (ImGui::Button("Create Empty Actor"))
 		{
 			HEIN::Actor* newActor = manager.CreateActor(L"NewActor");
-			m_selectedActor = newActor;
+			SelectActor(newActor);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("+ UI Button"))
@@ -379,7 +442,7 @@ namespace HEIN
 			btn->SetText("Button");
 			btn->Initialize(gameContext, nullptr, nullptr, nullptr);
 			newActor->Start();
-			m_selectedActor = newActor;
+			SelectActor(newActor);
 			g_ActiveGizmoTarget = btn;
 		}
 		ImGui::SameLine();
@@ -391,7 +454,7 @@ namespace HEIN
 			img->SetElementType(HEIN::UIElementType::Image);
 			img->Initialize(gameContext, nullptr, nullptr, nullptr);
 			newActor->Start();
-			m_selectedActor = newActor;
+			SelectActor(newActor);
 			g_ActiveGizmoTarget = img;
 		}
 		ImGui::SameLine();
@@ -405,7 +468,7 @@ namespace HEIN
 			txt->SetFontSize(1.5f);
 			txt->Initialize(gameContext, nullptr, nullptr, nullptr);
 			newActor->Start();
-			m_selectedActor = newActor;
+			SelectActor(newActor);
 			g_ActiveGizmoTarget = txt;
 		}
 		ImGui::SameLine();
@@ -416,7 +479,7 @@ namespace HEIN
 			auto* cam = newActor->AddComponent<HEIN::CameraController>();
 			cam->SetPosition(DirectX::SimpleMath::Vector3(0.0f, 15.0f, -40.0f));
 			newActor->Start();
-			m_selectedActor = newActor;
+			SelectActor(newActor);
 			g_ActiveGizmoTarget = cam;
 		}
 		ImGui::SameLine();
@@ -448,29 +511,21 @@ namespace HEIN
 			bool isSelected = (m_selectedActor == actor);
 			if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(screenW * 0.10f - 35.0f, 0)))
 			{
-				m_selectedActor = actor;
-				if (auto* cam = actor->GetComponent<HEIN::CameraController>())
-				{
-					g_ActiveGizmoTarget = cam;
-				}
-				else if (auto* btn = actor->GetComponent<HEIN::UIButtonComponent>())
-				{
-					g_ActiveGizmoTarget = btn;
-				}
-				else if (auto* trans = actor->GetComponent<HEIN::TransformComponent>())
-				{
-					g_ActiveGizmoTarget = trans;
-				}
-				else
-				{
-					g_ActiveGizmoTarget = nullptr;
-				}
+				SelectActor(actor);
 			}
 
 			// Right-click context menu
 			if (ImGui::BeginPopupContextItem())
 			{
-				m_selectedActor = actor;
+				SelectActor(actor);
+				if (ImGui::MenuItem("Duplicate Actor", "Ctrl+D"))
+				{
+					HEIN::Actor* copy = manager.DuplicateActor(actor, gameContext);
+					if (copy != nullptr)
+					{
+						SelectActor(copy);
+					}
+				}
 				if (ImGui::MenuItem("Delete Actor"))
 				{
 					actorToDelete = actor->GetID();
@@ -495,8 +550,7 @@ namespace HEIN
 		{
 			if (m_selectedActor && m_selectedActor->GetID() == actorToDelete)
 			{
-				m_selectedActor = nullptr;
-				g_ActiveGizmoTarget = nullptr;
+				SelectActor(nullptr);
 			}
 			manager.DestroyID(actorToDelete);
 		}

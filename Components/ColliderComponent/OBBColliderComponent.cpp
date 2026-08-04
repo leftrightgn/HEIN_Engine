@@ -1,12 +1,13 @@
 #include "pch.h"
 #include "OBBColliderComponent.h"
 #include "Components/StaticModelComponent.h"
+#include "Entities/Actor.h"
 #include <DirectXColors.h>
 #include <ImGui/imgui.h>
 
 HEIN::OBBColliderComponent::OBBColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::OBB)
-	, m_extents(DirectX::SimpleMath::Vector3::Zero)
+	, m_extents(DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f))
 {
 }
 
@@ -22,8 +23,28 @@ void HEIN::OBBColliderComponent::InitializeFromModel(StaticModelComponent* stati
         DirectX::BoundingBox box = staticModel->GetBoundingBox();
 
         m_extents = box.Extents;
-
         m_offset = box.Center;
+        m_layer = CollisionLayer::Layer_Environment;
+    }
+}
+
+void HEIN::OBBColliderComponent::Start()
+{
+    ColliderComponent::Start();
+    if (m_extents.LengthSquared() <= 0.0001f)
+    {
+        if (GetOwner() != nullptr)
+        {
+            auto* model = GetOwner()->GetComponent<StaticModelComponent>();
+            if (model != nullptr)
+            {
+                InitializeFromModel(model);
+            }
+            else
+            {
+                m_extents = DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f);
+            }
+        }
     }
 }
 
@@ -64,7 +85,7 @@ void HEIN::OBBColliderComponent::Draw(
     if (gameContext.debugCollisionRenderer == nullptr) return;
 
     DirectX::SimpleMath::Color debugColor = DirectX::SimpleMath::Color(DirectX::Colors::Red);
-    if (m_isCollidingThisFrame)
+    if (m_isTrigger)
     {
         debugColor = DirectX::Colors::Yellow;
     }
@@ -94,6 +115,18 @@ void HEIN::OBBColliderComponent::OnInspectorGUI(GameContext& gameContext)
     ColliderComponent::OnInspectorGUI(gameContext);
     if (ImGui::CollapsingHeader("OBB Properties", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::DragFloat3("Extents", &m_extents.x, 0.05f);
+        ImGui::DragFloat3("Extents", &m_extents.x, 0.05f, 0.01f, 1000.0f);
+
+        if (GetOwner() != nullptr)
+        {
+            auto* model = GetOwner()->GetComponent<StaticModelComponent>();
+            if (model != nullptr)
+            {
+                if (ImGui::Button("Auto-Fit to Static Model", ImVec2(-1, 26)))
+                {
+                    InitializeFromModel(model);
+                }
+            }
+        }
     }
 }

@@ -1,12 +1,220 @@
 #include "pch.h"
 #include "StaticModelComponent.h"
 #include "Entities/Actor.h"
+#include <Effects.h>
+#include <DDSTextureLoader.h>
+#include <WICTextureLoader.h>
 #include <ImGui/imgui.h>
 #include <ImGui/imgui_stdlib.h>
 #include <Windows.h>
 #include "DebugingTools/EditorUtils.h"
 #include <string>
+#include <vector>
 #include <filesystem>
+
+namespace
+{
+    bool TryLoadTexture(
+        ID3D11Device* device,
+        const std::wstring& dir,
+        const wchar_t* name,
+        ID3D11ShaderResourceView** textureView
+    )
+    {
+        if (!device || !name || !textureView) return false;
+        *textureView = nullptr;
+
+        std::wstring rawName = name;
+        std::vector<std::wstring> candidates;
+
+        // Direct path in dir and raw path
+        if (!dir.empty())
+        {
+            candidates.push_back(dir + rawName);
+        }
+        candidates.push_back(rawName);
+
+        // Extract potential subnames by splitting on '_'
+    
+        size_t pos = 0;
+        while ((pos = rawName.find(L'_', pos)) != std::wstring::npos)
+        {
+            pos++;
+            if (pos < rawName.length())
+            {
+                std::wstring sub = rawName.substr(pos);
+                if (!sub.empty() && sub.find(L'.') != std::wstring::npos)
+                {
+                    if (!dir.empty()) candidates.push_back(dir + sub);
+                    candidates.push_back(sub);
+                }
+            }
+        }
+
+        // xtract just the filename if it was a path with '/' or '\\'
+        std::filesystem::path rawP(rawName);
+        std::wstring filenameOnly = rawP.filename().wstring();
+        if (!filenameOnly.empty())
+        {
+            if (!dir.empty()) candidates.push_back(dir + filenameOnly);
+            candidates.push_back(filenameOnly);
+        }
+
+        // Try loading candidates
+        for (const auto& cand : candidates)
+        {
+            if (std::filesystem::exists(cand))
+            {
+                HRESULT hr = DirectX::CreateDDSTextureFromFile(device, cand.c_str(), nullptr, textureView);
+                if (SUCCEEDED(hr) && *textureView) return true;
+
+                hr = DirectX::CreateWICTextureFromFile(device, cand.c_str(), nullptr, textureView);
+                if (SUCCEEDED(hr) && *textureView) return true;
+            }
+        }
+
+        // Fuzzy search in directory
+        if (!dir.empty() && std::filesystem::exists(dir) && std::filesystem::is_directory(dir))
+        {
+            std::wstring stem = rawP.stem().wstring();
+            size_t lastUnder = stem.rfind(L'_');
+            if (lastUnder != std::wstring::npos)
+            {
+                stem = stem.substr(lastUnder + 1);
+            }
+            std::wstring lowerStem = stem;
+            for (auto& c : lowerStem) c = towlower(c);
+
+            try
+            {
+                for (const auto& entry : std::filesystem::directory_iterator(dir))
+                {
+                    if (entry.is_regular_file())
+                    {
+                        std::wstring entryExt = entry.path().extension().wstring();
+                        for (auto& c : entryExt) c = towlower(c);
+
+                        if (entryExt == L".dds" || entryExt == L".png" || entryExt == L".jpg" || entryExt == L".tga")
+                        {
+                            std::wstring entryStem = entry.path().stem().wstring();
+                            for (auto& c : entryStem) c = towlower(c);
+
+                            if (!lowerStem.empty() && (entryStem.find(lowerStem) != std::wstring::npos || lowerStem.find(entryStem) != std::wstring::npos))
+                            {
+                                std::wstring matchPath = entry.path().wstring();
+                                HRESULT hr = DirectX::CreateDDSTextureFromFile(device, matchPath.c_str(), nullptr, textureView);
+                                if (SUCCEEDED(hr) && *textureView) return true;
+
+                                hr = DirectX::CreateWICTextureFromFile(device, matchPath.c_str(), nullptr, textureView);
+                                if (SUCCEEDED(hr) && *textureView) return true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (...) {}
+        }
+
+        // Fallback 1x1 white texture so rendering never crashes
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Width = 1;
+        desc.Height = 1;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_IMMUTABLE;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        uint32_t whitePixel = 0xFFFFFFFF;
+        D3D11_SUBRESOURCE_DATA initData = {};
+        initData.pSysMem = &whitePixel;
+        initData.SysMemPitch = sizeof(uint32_t);
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
+        if (SUCCEEDED(device->CreateTexture2D(&desc, &initData, tex.GetAddressOf())))
+        {
+            device->CreateShaderResourceView(tex.Get(), nullptr, textureView);
+            return (*textureView != nullptr);
+        }
+
+        return false;
+    }
+
+    class SmartCMOEffectFactory : public DirectX::DGSLEffectFactory
+    {
+    private:
+        ID3D11Device* m_pDevice;
+        std::wstring m_dir;
+
+    public:
+        SmartCMOEffectFactory(ID3D11Device* device)
+            : DirectX::DGSLEffectFactory(device), m_pDevice(device)
+        {
+        }
+
+        void SetDirectory(const wchar_t* path)
+        {
+            m_dir = path ? path : L"";
+            DirectX::DGSLEffectFactory::SetDirectory(path);
+        }
+
+        void CreateTexture(
+            const wchar_t* name,
+            ID3D11DeviceContext* deviceContext,
+            ID3D11ShaderResourceView** textureView
+        ) override
+        {
+            try
+            {
+                DirectX::DGSLEffectFactory::CreateTexture(name, deviceContext, textureView);
+                if (textureView && *textureView) return;
+            }
+            catch (...)
+            {
+            }
+
+            TryLoadTexture(m_pDevice, m_dir, name, textureView);
+        }
+    };
+
+    class SmartEffectFactory : public DirectX::EffectFactory
+    {
+    private:
+        ID3D11Device* m_pDevice;
+        std::wstring m_dir;
+
+    public:
+        SmartEffectFactory(ID3D11Device* device)
+            : DirectX::EffectFactory(device), m_pDevice(device)
+        {
+        }
+
+        void SetDirectory(const wchar_t* path)
+        {
+            m_dir = path ? path : L"";
+            DirectX::EffectFactory::SetDirectory(path);
+        }
+
+        void CreateTexture(
+            const wchar_t* name,
+            ID3D11DeviceContext* deviceContext,
+            ID3D11ShaderResourceView** textureView
+        ) override
+        {
+            try
+            {
+                DirectX::EffectFactory::CreateTexture(name, deviceContext, textureView);
+                if (textureView && *textureView) return;
+            }
+            catch (...)
+            {
+            }
+
+            TryLoadTexture(m_pDevice, m_dir, name, textureView);
+        }
+    };
+}
 
 std::shared_ptr<DirectX::EffectFactory> HEIN::StaticModelComponent::s_fxFactory = nullptr;
 std::unordered_map<std::wstring, std::weak_ptr<DirectX::Model>> HEIN::StaticModelComponent::s_modelCache;
@@ -38,19 +246,6 @@ void HEIN::StaticModelComponent::Initialize(
 
     ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
 
-    if (s_fxFactory == nullptr)
-    {
-        s_fxFactory = std::make_shared<DirectX::EffectFactory>(device);
-    }
-    if (!m_textureDir.empty())
-    {
-        static_cast<DirectX::EffectFactory*>(s_fxFactory.get())->SetDirectory(m_textureDir.c_str());
-    }
-    else
-    {
-        static_cast<DirectX::EffectFactory*>(s_fxFactory.get())->SetDirectory(nullptr);
-    }
-
     std::wstring key = m_modelPath;
     std::shared_ptr<DirectX::Model> cachedModel = s_modelCache[key].lock();
 
@@ -68,10 +263,20 @@ void HEIN::StaticModelComponent::Initialize(
 
             if (ext == L".cmo")
             {
+                SmartCMOEffectFactory dgslFactory(device);
+                if (!m_textureDir.empty())
+                {
+                    dgslFactory.SetDirectory(m_textureDir.c_str());
+                }
+                else
+                {
+                    dgslFactory.SetDirectory(nullptr);
+                }
+
                 m_model = DirectX::Model::CreateFromCMO(
                     device,
                     m_modelPath.c_str(),
-                    *s_fxFactory,
+                    dgslFactory,
                     static_cast<DirectX::ModelLoaderFlags>(
                         DirectX::ModelLoader_CounterClockwise |
                         DirectX::ModelLoader_IncludeBones
@@ -80,10 +285,20 @@ void HEIN::StaticModelComponent::Initialize(
             }
             else
             {
+                SmartEffectFactory sdkMeshFactory(device);
+                if (!m_textureDir.empty())
+                {
+                    sdkMeshFactory.SetDirectory(m_textureDir.c_str());
+                }
+                else
+                {
+                    sdkMeshFactory.SetDirectory(nullptr);
+                }
+
                 m_model = DirectX::Model::CreateFromSDKMESH(
                     device,
                     m_modelPath.c_str(),
-                    *s_fxFactory,
+                    sdkMeshFactory,
                     static_cast<DirectX::ModelLoaderFlags>(
                         DirectX::ModelLoader_Clockwise |
                         DirectX::ModelLoader_IncludeBones
@@ -127,7 +342,7 @@ void HEIN::StaticModelComponent::Draw(
     const DirectX::SimpleMath::Matrix& proj
 )
 {
-    if (m_needsReload)
+    if (m_needsReload || (!m_model && !m_modelPath.empty()))
     {
         if (m_textureDir.empty() && !m_modelPath.empty())
         {

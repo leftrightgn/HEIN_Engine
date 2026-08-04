@@ -23,6 +23,7 @@
 #include <Components/ColliderComponent/SphereColliderComponent.h>
 #include <Components/UIButtonComponent.h>
 #include <Components/TerrainComponent.h>
+#include <Components/SlidingDoorComponent.h>
 
 namespace HEIN
 {
@@ -95,6 +96,7 @@ namespace HEIN
 			RegisterComponent<SphereColliderComponent>("SphereColliderComponent");
 			RegisterComponent<UIButtonComponent>("UIButtonComponent");
 			RegisterComponent<TerrainComponent>("TerrainComponent");
+			RegisterComponent<SlidingDoorComponent>("SlidingDoorComponent");
 		}
 	};
 }
