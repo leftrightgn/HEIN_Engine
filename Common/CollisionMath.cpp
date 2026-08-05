@@ -446,3 +446,200 @@ bool HEIN::CollisionMath::IntersectRayTriangle(
     return false;
 
 }
+
+bool HEIN::CollisionMath::SweepSphereVSTriangle(
+    const DirectX::SimpleMath::Vector3& rayOrigin, 
+    const DirectX::SimpleMath::Vector3& rayDir, 
+    float sphereRadius, 
+    const Triangle& triangle,
+    float& outDistance
+)
+{
+    // Test the multiple part of the expended triangle
+    // Start with maximum possible distance and shrink it everytime when a closer hit
+    float closeHit = FLT_MAX;
+    bool hasHit = false;
+    float time = 0.0f;
+
+    // Calculate the triangle Normal
+    DirectX::SimpleMath::Vector3 edge1 = triangle.v1 - triangle.v0;
+    DirectX::SimpleMath::Vector3 edge2 = triangle.v2 - triangle.v0;
+    DirectX::SimpleMath::Vector3 normal = edge1.Cross(edge2);
+    normal.Normalize();
+
+    // Test the face
+    // Shift the entire triangle outward along with its normal by the camera radius
+    DirectX::SimpleMath::Vector3 offset = normal * sphereRadius;
+    Triangle shiftedTriangle = { triangle.v0 + offset, triangle.v1 + offset, triangle.v2 + offset };
+
+    DirectX::SimpleMath::Vector3 dummyNormal;
+    if (IntersectRayTriangle(rayOrigin, rayDir, shiftedTriangle, time, dummyNormal))
+    {
+        closeHit = std::min(closeHit, time); // save the closet one yet
+        hasHit = true;
+    }
+
+    // Test the edges(cylinder)
+    // treat all the three edges as thick pipe with the camera radius
+
+    // Edge 1 (vertex 0 to 1)
+    if (RayCapsuleIntersect(rayOrigin, rayDir, triangle.v0, triangle.v1, sphereRadius, time))
+    {
+        closeHit = std::min(closeHit, time);
+        hasHit = true;
+    }
+
+    // Edge2 (vertex 1 to 2)
+    if (RayCapsuleIntersect(rayOrigin, rayDir, triangle.v1, triangle.v2, sphereRadius, time))
+    {
+        closeHit = std::min(closeHit, time);
+        hasHit = true;
+    }
+
+    // Edge3 (vertex 2 to 0)
+    if (RayCapsuleIntersect(rayOrigin, rayDir, triangle.v2, triangle.v0, sphereRadius, time))
+    {
+        closeHit = std::min(closeHit, time);
+        hasHit = true;
+    }
+
+    // Test the vertices 
+
+    // Corner 1 (vertex 0)
+    if (RaySphereIntersect(rayOrigin, rayDir, triangle.v0, sphereRadius, time))
+    {
+        closeHit = std::min(closeHit, time);
+        hasHit = true;
+    }
+    // Corner 2 (vertex 1)
+    if (RaySphereIntersect(rayOrigin, rayDir, triangle.v1, sphereRadius, time))
+    {
+        closeHit = std::min(closeHit, time);
+        hasHit = true;
+    }
+    // Corner 3 (vertex 2)
+    if (RaySphereIntersect(rayOrigin, rayDir, triangle.v2, sphereRadius, time))
+    {
+        closeHit = std::min(closeHit, time);
+        hasHit = true;
+    }
+
+    if (hasHit)
+    {
+        outDistance = closeHit;
+    }
+
+    return hasHit;
+}
+
+bool HEIN::CollisionMath::SweepSphereVsAABB(
+    const DirectX::SimpleMath::Vector3& rayOrigin, 
+    const DirectX::SimpleMath::Vector3& rayDir,
+    float sphereRadius,
+    const DirectX::BoundingBox& aabb,
+    float& outHitDistance
+)
+{
+    DirectX::BoundingBox expendedAABB = aabb;
+    expendedAABB.Extents.x += sphereRadius;
+    expendedAABB.Extents.y += sphereRadius;
+    expendedAABB.Extents.z += sphereRadius;
+
+    return expendedAABB.Intersects(rayOrigin, rayDir, outHitDistance);
+}
+
+bool HEIN::CollisionMath::SweepSphereVSOBB(
+    const DirectX::SimpleMath::Vector3& rayOrigin, 
+    const DirectX::SimpleMath::Vector3& rayDir,
+    float sphereRadius, 
+    const DirectX::BoundingOrientedBox& obb,
+    float& outHitDistance
+)
+{
+    DirectX::BoundingOrientedBox expendedOBB = obb;
+    expendedOBB.Extents.x += sphereRadius;
+    expendedOBB.Extents.y += sphereRadius;
+    expendedOBB.Extents.z += sphereRadius;
+
+    return expendedOBB.Intersects(rayOrigin, rayDir, outHitDistance);
+}
+
+bool HEIN::CollisionMath::RaySphereIntersect(
+    const DirectX::SimpleMath::Vector3& rayOrigin,
+    const DirectX::SimpleMath::Vector3& rayDir, 
+    const DirectX::SimpleMath::Vector3& center,
+    float radius, 
+    float& time
+)
+{
+    DirectX::SimpleMath::Vector3 oc = rayOrigin - center;
+    // b(the Projection)
+    // this calculates the distance along the ray from its starting point (rayOrigin) to the exact point on the ray that is closest to the center of the sphere
+    float b = oc.Dot(rayDir);
+
+    // c(inside out Test)
+    // If c is positive, the camera is outside the sphere
+    // If c is exactly 0, the camera is resting perfectly on the sphere's surface
+    // If c is negative, the camera is inside the sphere
+    float c = oc.Dot(oc) - radius * radius;
+
+    // h (Discriminant)
+    //  represented as △ or b^2 - 4ac;
+    // If h < 0 (Negative): The ray completely missed the sphere
+    // If h == 0 (Zero): The ray grazed the absolute edge of the sphere, touching it at exactly one point
+    // If h > 0 (Positive): The ray pierced straight through the sphere, hitting it in two places (the entry hole and the exit hole)
+    float h = b * b - c;
+
+    if (h < 0.0f) return false;
+
+    time = -b - sqrt(h); // Calculate the exact entry distance
+
+    return time >= 0.0f;
+}
+
+bool HEIN::CollisionMath::RayCapsuleIntersect(
+    const DirectX::SimpleMath::Vector3& rayOrigin,
+    const DirectX::SimpleMath::Vector3& rayDir, 
+    const DirectX::SimpleMath::Vector3& pointA,
+    const DirectX::SimpleMath::Vector3& pointB,
+    float radius,
+    float& time
+)
+{
+    // vector(B - A)
+    DirectX::SimpleMath::Vector3 ba = pointB - pointA;
+
+    // vector(A - rayOrigin)
+    DirectX::SimpleMath::Vector3 oa = rayOrigin - pointA;
+
+    float baba = ba.Dot(ba); // the squared length of the cylinder spine
+    float bard = ba.Dot(rayDir); // how much ray point along the spine
+    float baoa = ba.Dot(oa); // how far along the spine the ray origin is 
+    float rdoa = rayDir.Dot(oa);
+    float oaoa = oa.Dot(oa); // the squared distance form point a to origin point
+
+    // Quadratic Equation Coefficients (ax^2 + bx + c = 0)
+    // 'a', 'b', and 'c' are formulated specifically for an infinite cylinder
+    float a = baba - bard * bard;
+    float b = baba * rdoa - baoa * bard;
+    float c = baba * oaoa - baba * baba - radius * radius * baba;
+
+    // h (Discriminant)
+    //  represented as △ or b^2 - 4ac;
+    float h = b * b - a * c;
+    if (h >= 0.0f)
+    {
+        float t_hit = (-b - sqrt(h)) / a;
+
+        // y(Height Check)
+        float y = baoa + t_hit * bard;
+
+        if (y > 0.0f && y < baba)
+        {
+            time = t_hit;
+            return time >= 0.0f;
+        }
+    }
+
+    return false;
+}

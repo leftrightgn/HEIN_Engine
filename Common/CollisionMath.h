@@ -42,5 +42,46 @@ namespace HEIN
 			float& outDistance,
 			DirectX::SimpleMath::Vector3& outNormal
 		);
+
+		static bool SweepSphereVSTriangle(
+			const DirectX::SimpleMath::Vector3& rayOrigin,
+			const DirectX::SimpleMath::Vector3& rayDir,
+			float sphereRadius,
+			const Triangle& triangle,
+			float& outDistance
+		);
+
+		static bool SweepSphereVsAABB(
+			const DirectX::SimpleMath::Vector3& rayOrigin,
+			const DirectX::SimpleMath::Vector3& rayDir,
+			float sphereRadius,
+			const DirectX::BoundingBox& aabb,
+			float& outHitDistance
+		);
+
+		static bool SweepSphereVSOBB(
+			const DirectX::SimpleMath::Vector3& rayOrigin,
+			const DirectX::SimpleMath::Vector3& rayDir,
+			float sphereRadius,
+			const DirectX::BoundingOrientedBox& obb,
+			float& outHitDistance
+		);
+
+		static bool RaySphereIntersect(
+			const DirectX::SimpleMath::Vector3& rayOrigin,
+			const DirectX::SimpleMath::Vector3& rayDir,
+			const DirectX::SimpleMath::Vector3& center,
+			float radius,
+			float& time
+		);
+
+		static bool RayCapsuleIntersect(
+			const DirectX::SimpleMath::Vector3& rayOrigin,
+			const DirectX::SimpleMath::Vector3& rayDir,
+			const DirectX::SimpleMath::Vector3& pointA,
+			const DirectX::SimpleMath::Vector3& pointB,
+			float radius,
+			float& time
+		);
 	};
 }
