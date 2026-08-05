@@ -8,6 +8,7 @@
 #include <Components/TransformComponent.h>
 #include "Framework/GameContext.h"
 #include <cmath>
+#include <optional>
 
 HEIN::CameraController::CameraController(Actor* owner)
 	: IComponent(owner)
@@ -414,6 +415,11 @@ void HEIN::CameraController::OnInspectorGUI(GameContext& gameContext)
 		{
 			ImGui::SameLine();
 			if (ImGui::Button("Lock-On")) RequestSwitch(CameraType::LockOn);
+		}
+		if (m_factories.find(CameraType::Cinematic) != m_factories.end())
+		{
+			ImGui::SameLine();
+			if (ImGui::Button("Cinematic")) RequestSwitch(CameraType::Cinematic);
 		}
 
 		ImGui::Separator();

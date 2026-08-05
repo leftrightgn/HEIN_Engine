@@ -12,7 +12,7 @@
 #include <vector>
 #include <filesystem>
 
-namespace
+namespace HEIN
 {
     bool TryLoadTexture(
         ID3D11Device* device,

@@ -13,23 +13,19 @@ namespace HEIN
 	class CameraCollisionHelper
 	{
 	public:
-		static DirectX::SimpleMath::Vector3 ResolveOcclusion(
+		static float ResolveOcclusionDistance(
 			ActorManager* manager,
 			ActorID ignoredActorID,
 			const DirectX::SimpleMath::Vector3& rayOrigin,
-			const DirectX::SimpleMath::Vector3& desiredCamPos,
-			float cameraRadius = 0.5f,
-			float minDistance = 0.8f
+			const DirectX::SimpleMath::Vector3& rayDir,
+			float maxDistance,
+			float cameraRadius = 1.0f,
+			float minDistance = 2.0f
 		)
 		{
-			if (manager == nullptr) return desiredCamPos;
+			if (manager == nullptr || maxDistance < 0.001f) return maxDistance;
 
-			DirectX::SimpleMath::Vector3 toCamera = desiredCamPos - rayOrigin;
-			float maxDist = toCamera.Length();
-			if (maxDist < 0.001f) return desiredCamPos;
-
-			DirectX::SimpleMath::Vector3 rayDir = toCamera / maxDist;
-			float closestHit = maxDist;
+			float closestHit = maxDistance;
 
 			for (const auto& pair : manager->GetAllActors())
 			{
@@ -42,6 +38,7 @@ namespace HEIN
 				{
 					if (mesh == nullptr || mesh->IsTrigger()) continue;
 					mesh->SyncColliderState();
+
 					const auto& triangles = mesh->GetWorldTriangles();
 					for (const auto& tri : triangles)
 					{
@@ -49,9 +46,13 @@ namespace HEIN
 						DirectX::SimpleMath::Vector3 hitNormal;
 						if (CollisionMath::IntersectRayTriangle(rayOrigin, rayDir, tri, hitDist, hitNormal))
 						{
-							if (hitDist > 0.1f && hitDist < closestHit)
+							if (hitDist >= 0.0f)
 							{
-								closestHit = hitDist;
+								float safeDist = std::max(minDistance, hitDist - cameraRadius);
+								if (safeDist < closestHit)
+								{
+									closestHit = safeDist;
+								}
 							}
 						}
 					}
@@ -64,11 +65,15 @@ namespace HEIN
 					if (aabb == nullptr || aabb->IsTrigger()) continue;
 					aabb->SyncColliderState();
 					float hitDist = 0.0f;
-					if (aabb->GetWorldAABB().Intersects(rayOrigin, rayDir, hitDist))
+					if (CollisionMath::SweepSphereVsAABB(rayOrigin, rayDir, cameraRadius, aabb->GetWorldAABB(), hitDist))
 					{
-						if (hitDist > 0.1f && hitDist < closestHit)
+						if (hitDist >= 0.0f)
 						{
-							closestHit = hitDist;
+							float safeDist = std::max(minDistance, hitDist);
+							if (safeDist < closestHit)
+							{
+								closestHit = safeDist;
+							}
 						}
 					}
 				}
@@ -80,23 +85,42 @@ namespace HEIN
 					if (obb == nullptr || obb->IsTrigger()) continue;
 					obb->SyncColliderState();
 					float hitDist = 0.0f;
-					if (obb->GetWorldOBB().Intersects(rayOrigin, rayDir, hitDist))
+					if (CollisionMath::SweepSphereVSOBB(rayOrigin, rayDir, cameraRadius, obb->GetWorldOBB(), hitDist))
 					{
-						if (hitDist > 0.1f && hitDist < closestHit)
+						if (hitDist >= 0.0f)
 						{
-							closestHit = hitDist;
+							float safeDist = std::max(minDistance, hitDist);
+							if (safeDist < closestHit)
+							{
+								closestHit = safeDist;
+							}
 						}
 					}
 				}
 			}
 
-			if (closestHit < maxDist)
-			{
-				float adjustedDist = (std::max)(closestHit - cameraRadius, minDistance);
-				return rayOrigin + rayDir * adjustedDist;
-			}
+			return closestHit;
+		}
 
-			return desiredCamPos;
+		static DirectX::SimpleMath::Vector3 ResolveOcclusion(
+			ActorManager* manager,
+			ActorID ignoredActorID,
+			const DirectX::SimpleMath::Vector3& rayOrigin,
+			const DirectX::SimpleMath::Vector3& desiredCamPos,
+			float cameraRadius = 1.0f,
+			float minDistance = 2.0f
+		)
+		{
+			if (manager == nullptr) return desiredCamPos;
+
+			DirectX::SimpleMath::Vector3 toCamera = desiredCamPos - rayOrigin;
+			float maxDist = toCamera.Length();
+			if (maxDist < 0.001f) return desiredCamPos;
+
+			DirectX::SimpleMath::Vector3 rayDir = toCamera / maxDist;
+			float safeDist = ResolveOcclusionDistance(manager, ignoredActorID, rayOrigin, rayDir, maxDist, cameraRadius, minDistance);
+
+			return rayOrigin + rayDir * safeDist;
 		}
 	};
 }
