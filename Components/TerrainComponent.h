@@ -123,6 +123,7 @@ namespace HEIN
 	private:
 
 		bool LoadHeightMap(const wchar_t* filename);
+		bool LoadRawHeightMap(const wchar_t* filename);
 		bool CalculateNormals();
 		bool InitializeBuffer(ID3D11Device* device);
 		bool LoadColorMap(const wchar_t* filename);

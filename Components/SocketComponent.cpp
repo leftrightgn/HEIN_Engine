@@ -161,18 +161,17 @@ void HEIN::SocketComponent::DrawGizmo(
                     // Save the new position
                     socket.localPosition = pos;
 
-                    // Extract and save the new Euler angles
-                    float sinp = 2.0f * (rot.w * rot.x - rot.y * rot.z);
-                    if (std::abs(sinp) >= 1.0f) socket.localRotation.x = std::copysign(DirectX::XM_PIDIV2, sinp);
-                    else socket.localRotation.x = std::asin(sinp);
+                    // Extract and save the new Euler angles for DirectX Y-X-Z order
+                    float sinp = std::clamp(2.0f * (rot.w * rot.x + rot.y * rot.z), -1.0f, 1.0f);
+                    socket.localRotation.x = std::asin(sinp);
 
-                    float siny_cosp = 2.0f * (rot.w * rot.y + rot.z * rot.x);
-                    float cosy_cosp = 1.0f - 2.0f * (rot.x * rot.x + rot.y * rot.y);
-                    socket.localRotation.y = std::atan2(siny_cosp, cosy_cosp);
+                    float siny = 2.0f * (rot.w * rot.y - rot.z * rot.x);
+                    float cosy = 1.0f - 2.0f * (rot.x * rot.x + rot.y * rot.y);
+                    socket.localRotation.y = std::atan2(siny, cosy);
 
-                    float sinr_cosp = 2.0f * (rot.w * rot.z + rot.x * rot.y);
-                    float cosr_cosp = 1.0f - 2.0f * (rot.y * rot.y + rot.z * rot.z);
-                    socket.localRotation.z = std::atan2(sinr_cosp, cosr_cosp);
+                    float sinr = 2.0f * (rot.w * rot.z - rot.x * rot.y);
+                    float cosr = 1.0f - 2.0f * (rot.x * rot.x + rot.z * rot.z);
+                    socket.localRotation.z = std::atan2(sinr, cosr);
                 }
             }
         }

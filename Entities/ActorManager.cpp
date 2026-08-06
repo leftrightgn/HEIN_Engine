@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "ActorManager.h"
 #include <Components/TransformComponent.h>
+#include <Components/SocketAttachmentComponent.h>
 
 
 // LifeCycle
@@ -147,7 +148,7 @@ nlohmann::json HEIN::ActorManager::Serialize()
     {
         HEIN::Actor* actor = pair.second.get();
 
-        // ponytail: Only serialize ROOT actors. Children are serialized recursively by their parents!
+        // Only serialize ROOT actors. Children are serialized recursively by their parents!
         if (actor != nullptr && actor->GetParentID() == HEIN::INVALID_ACTOR_ID)
         {
             actorsArray.push_back(actor->Serialize(this));
@@ -268,6 +269,101 @@ void HEIN::ActorManager::ClearAllActors()
     m_pendingDestorys.clear(); 
 }
 
+bool HEIN::ActorManager::IsDescendantOf(ActorID potentialChild, ActorID potentialParent) const
+{
+    if (potentialChild == INVALID_ACTOR_ID || potentialParent == INVALID_ACTOR_ID) return false;
+    if (potentialChild == potentialParent) return true;
+
+    auto it = m_actors.find(potentialChild);
+    if (it == m_actors.end()) return false;
+
+    for (ActorID cID : it->second->GetChildren())
+    {
+        if (cID == potentialParent || IsDescendantOf(cID, potentialParent))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void HEIN::ActorManager::SetParent(ActorID childID, ActorID newParentID, bool keepWorldTransform)
+{
+    Actor* child = GetActor(childID);
+    if (!child) return;
+
+    // Prevent parenting to self or cyclic parenting to one of child's descendants
+    if (childID == newParentID || (newParentID != INVALID_ACTOR_ID && IsDescendantOf(childID, newParentID)))
+    {
+        return;
+    }
+
+    ActorID oldParentID = child->GetParentID();
+    if (oldParentID == newParentID) return;
+
+    TransformComponent* childTransform = child->GetComponent<TransformComponent>();
+    DirectX::SimpleMath::Matrix worldMat = childTransform ? childTransform->GetWorldMatrix() : DirectX::SimpleMath::Matrix::Identity;
+
+    // Remove from old parent's children list
+    if (oldParentID != INVALID_ACTOR_ID)
+    {
+        Actor* oldParent = GetActor(oldParentID);
+        if (oldParent)
+        {
+            oldParent->RemoveChild(childID);
+        }
+    }
+
+    // Set new parent
+    child->SetParent(newParentID);
+    if (newParentID != INVALID_ACTOR_ID)
+    {
+        Actor* newParent = GetActor(newParentID);
+        if (newParent)
+        {
+            newParent->AddChild(childID);
+        }
+    }
+
+    // Keep world transform if requested
+    if (keepWorldTransform && childTransform)
+    {
+        DirectX::SimpleMath::Matrix newParentWorld = DirectX::SimpleMath::Matrix::Identity;
+        if (newParentID != INVALID_ACTOR_ID)
+        {
+            Actor* newParent = GetActor(newParentID);
+            if (newParent)
+            {
+                TransformComponent* parentTrans = newParent->GetComponent<TransformComponent>();
+                if (parentTrans)
+                {
+                    newParentWorld = parentTrans->GetWorldMatrix();
+                }
+            }
+        }
+
+        DirectX::SimpleMath::Matrix parentInverse = DirectX::SimpleMath::Matrix::Identity;
+        if (std::abs(newParentWorld.Determinant()) > 1e-6f)
+        {
+            parentInverse = newParentWorld.Invert();
+        }
+
+        DirectX::SimpleMath::Matrix localMat = worldMat * parentInverse;
+        DirectX::SimpleMath::Vector3 scale, pos;
+        DirectX::SimpleMath::Quaternion rot;
+        if (localMat.Decompose(scale, rot, pos))
+        {
+            rot.Normalize();
+            childTransform->SetPosition(pos);
+            childTransform->SetRotation(rot);
+            childTransform->SetScale(scale);
+        }
+        childTransform->SetParentMatrix(newParentWorld);
+    }
+
+    UpdateAllHierarchies();
+}
+
 void HEIN::ActorManager::CascadeTransforms(ActorID parentID)
 {
     Actor* parent = GetActor(parentID);
@@ -286,6 +382,12 @@ void HEIN::ActorManager::CascadeTransforms(ActorID parentID)
         Actor* child = GetActor(children[i]);
         if (child != nullptr)
         {
+            // If the child uses SocketAttachmentComponent, its parent matrix is dynamically driven by the bone socket
+            if (child->GetComponent<HEIN::SocketAttachmentComponent>() != nullptr)
+            {
+                continue;
+            }
+
             HEIN::TransformComponent* childTransform = child->GetComponent<HEIN::TransformComponent>();
 
             if (childTransform != nullptr)

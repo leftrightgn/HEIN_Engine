@@ -49,6 +49,9 @@ namespace HEIN
 
 		Actor* DuplicateActor(Actor* sourceActor, GameContext& gameContext, ActorID newParentID = INVALID_ACTOR_ID);
 
+		void SetParent(ActorID childID, ActorID newParentID, bool keepWorldTransform = true);
+		bool IsDescendantOf(ActorID potentialChild, ActorID potentialParent) const;
+
 		void ClearAllActors();
 	private:
 

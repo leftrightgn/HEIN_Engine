@@ -17,6 +17,12 @@ void HEIN::CapsuleColliderComponent::Initialize(float radius, float height)
 	m_height = height;
 }
 
+void HEIN::CapsuleColliderComponent::Start()
+{
+	ColliderComponent::Start();
+	SyncColliderState();
+}
+
 void HEIN::CapsuleColliderComponent::SyncColliderState()
 {
 	DirectX::SimpleMath::Matrix worldMatrix = CalculateWorldMatrix();
@@ -61,6 +67,7 @@ void HEIN::CapsuleColliderComponent::Draw(
 {
 	if (gameContext.debugCollisionRenderer == nullptr) return;
 
+	SyncColliderState();
 
 	DirectX::SimpleMath::Color debugColor = DirectX::SimpleMath::Color(DirectX::Colors::Red);
 	if (m_isCollidingThisFrame)

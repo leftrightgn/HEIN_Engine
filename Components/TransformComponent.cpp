@@ -8,6 +8,7 @@ HEIN::TransformComponent::TransformComponent(Actor* owner)
     : IComponent(owner)
     , m_position(0.0f, 0.0f, 0.0f)
     , m_rotation(DirectX::SimpleMath::Quaternion::Identity)
+    , m_rotationEuler(0.0f, 0.0f, 0.0f)
     , m_scale(1.0f, 1.0f, 1.0f)
     , m_parentMatrix(DirectX::SimpleMath::Matrix::Identity)
 {
@@ -37,19 +38,18 @@ void HEIN::TransformComponent::OnInspectorGUI(GameContext& gameContext)
         }
 
         // Rotation
-        DirectX::SimpleMath::Vector3 euler = GetRotationEuler();
-        euler.x = DirectX::XMConvertToDegrees(euler.x);
-        euler.y = DirectX::XMConvertToDegrees(euler.y);
-        euler.z = DirectX::XMConvertToDegrees(euler.z);
+        DirectX::SimpleMath::Vector3 eulerDegrees;
+        eulerDegrees.x = DirectX::XMConvertToDegrees(m_rotationEuler.x);
+        eulerDegrees.y = DirectX::XMConvertToDegrees(m_rotationEuler.y);
+        eulerDegrees.z = DirectX::XMConvertToDegrees(m_rotationEuler.z);
 
-        if (ImGui::DragFloat3("Rotation", &euler.x, 0.5f))
+        if (ImGui::DragFloat3("Rotation", &eulerDegrees.x, 0.5f))
         {
-            float radX = DirectX::XMConvertToRadians(euler.x);
-            float radY = DirectX::XMConvertToRadians(euler.y);
-            float radZ = DirectX::XMConvertToRadians(euler.z);
+            float radX = DirectX::XMConvertToRadians(eulerDegrees.x);
+            float radY = DirectX::XMConvertToRadians(eulerDegrees.y);
+            float radZ = DirectX::XMConvertToRadians(eulerDegrees.z);
 
-            DirectX::SimpleMath::Quaternion newRot = DirectX::SimpleMath::Quaternion::CreateFromYawPitchRoll(radY, radX, radZ);
-            SetRotation(newRot);
+            SetRotationEuler(DirectX::SimpleMath::Vector3(radX, radY, radZ));
         }
     }
 }
@@ -74,9 +74,16 @@ void HEIN::TransformComponent::DrawGizmo(
 
     if (ImGuizmo::IsUsing())
     {
+        DirectX::SimpleMath::Matrix parentInverse = DirectX::SimpleMath::Matrix::Identity;
+        if (std::abs(m_parentMatrix.Determinant()) > 1e-6f)
+        {
+            parentInverse = m_parentMatrix.Invert();
+        }
+        DirectX::SimpleMath::Matrix localMat = worldMat * parentInverse;
+
         DirectX::SimpleMath::Vector3 scale, pos;
         DirectX::SimpleMath::Quaternion rot;
-        if (worldMat.Decompose(scale, rot, pos))
+        if (localMat.Decompose(scale, rot, pos))
         {
             rot.Normalize();
             SetPosition(pos);
@@ -86,41 +93,31 @@ void HEIN::TransformComponent::DrawGizmo(
     }
 }
 
-void HEIN::TransformComponent::SetRotationEuler(const DirectX::SimpleMath::Vector3& eulerAngles)
+void HEIN::TransformComponent::SetRotation(const DirectX::SimpleMath::Quaternion& rot)
 {
-    m_rotation = DirectX::SimpleMath::Quaternion::CreateFromYawPitchRoll(eulerAngles.y, eulerAngles.x, eulerAngles.z);
+    m_rotation = rot;
     m_rotation.Normalize();
+
+    // 1. Extract Pitch (X-axis) with clamp to prevent NaN
+    float sinp = std::clamp(2.0f * (m_rotation.w * m_rotation.x + m_rotation.y * m_rotation.z), -1.0f, 1.0f);
+    m_rotationEuler.x = std::asin(sinp);
+
+    // 2. Extract Yaw (Y-axis) for DirectX Y-X-Z order
+    float siny = 2.0f * (m_rotation.w * m_rotation.y - m_rotation.z * m_rotation.x);
+    float cosy = 1.0f - 2.0f * (m_rotation.x * m_rotation.x + m_rotation.y * m_rotation.y);
+    m_rotationEuler.y = std::atan2(siny, cosy);
+
+    // 3. Extract Roll (Z-axis) for DirectX Y-X-Z order
+    float sinr = 2.0f * (m_rotation.w * m_rotation.z - m_rotation.x * m_rotation.y);
+    float cosr = 1.0f - 2.0f * (m_rotation.x * m_rotation.x + m_rotation.z * m_rotation.z);
+    m_rotationEuler.z = std::atan2(sinr, cosr);
 }
 
-DirectX::SimpleMath::Vector3 HEIN::TransformComponent::GetRotationEuler() const
+void HEIN::TransformComponent::SetRotationEuler(const DirectX::SimpleMath::Vector3& eulerAngles)
 {
-   DirectX::SimpleMath::Vector3 euler;
-
-   // Extract pitch(x-axis)
-   //x=arcsin(2(𝑤⋅𝑦−𝑧⋅𝑥) 
-   float sinp = 2.0f * (m_rotation.w * m_rotation.x - m_rotation.y * m_rotation.z);
-   if (std::abs(sinp) >= 1.0f)
-   {
-       euler.x = std::copysign(DirectX::XM_PIDIV2, sinp);
-   }
-   else
-   {
-       euler.x = std::asin(sinp);
-   }
-
-   // Extract yaw(y-axis)
-   //y=atan2(2(w*x+y*z),1-2(x*x+y*y)
-   float siny_cosp = 2.0f * (m_rotation.w * m_rotation.y + m_rotation.z * m_rotation.x);
-   float cosy_cosp = 1.0f - 2.0f * (m_rotation.x * m_rotation.x + m_rotation.y * m_rotation.y);
-   euler.y = std::atan2(siny_cosp, cosy_cosp);
-
-   // Extract Roll(z-axis)
-   //z=atan2(2(w*z+x*y),1-2(y*y+z*z))
-   float sinr_cosp = 2.0f * (m_rotation.w * m_rotation.z + m_rotation.x * m_rotation.y);
-   float cosr_cosp = 1.0f - 2.0f * (m_rotation.y * m_rotation.y + m_rotation.z * m_rotation.z);
-   euler.z = std::atan2(sinr_cosp, cosr_cosp);
-
-   return euler;
+    m_rotationEuler = eulerAngles;
+    m_rotation = DirectX::SimpleMath::Quaternion::CreateFromYawPitchRoll(eulerAngles.y, eulerAngles.x, eulerAngles.z);
+    m_rotation.Normalize();
 }
 
 nlohmann::json HEIN::TransformComponent::Serialize()

@@ -12,6 +12,7 @@ namespace HEIN
         DirectX::SimpleMath::Quaternion m_rotation;
         DirectX::SimpleMath::Vector3 m_scale;
         DirectX::SimpleMath::Matrix m_parentMatrix;
+        DirectX::SimpleMath::Vector3 m_rotationEuler;
     public:
         std::string GetComponentName() const override { return "TransformComponent"; }
         nlohmann::json Serialize() override;
@@ -33,7 +34,7 @@ namespace HEIN
         void SetPosition(const DirectX::SimpleMath::Vector3& pos) { m_position = pos; }
         const DirectX::SimpleMath::Vector3& GetPosition() const { return m_position; }
 
-        void SetRotation(const DirectX::SimpleMath::Quaternion& rot) { m_rotation = rot; }
+        void SetRotation(const DirectX::SimpleMath::Quaternion& rot);
         const DirectX::SimpleMath::Quaternion& GetRotation() const { return m_rotation; }
 
         void SetScale(const DirectX::SimpleMath::Vector3& scale) { m_scale = scale; }
@@ -45,7 +46,7 @@ namespace HEIN
         }
    
         void SetRotationEuler(const DirectX::SimpleMath::Vector3& eulerAngles);
-        DirectX::SimpleMath::Vector3 GetRotationEuler() const;
+        DirectX::SimpleMath::Vector3 GetRotationEuler() const { return m_rotationEuler; }
 
         void SetParentMatrix(const DirectX::SimpleMath::Matrix& parent) { m_parentMatrix = parent; }
 

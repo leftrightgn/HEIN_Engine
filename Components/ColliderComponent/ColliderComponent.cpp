@@ -209,25 +209,22 @@ void HEIN::ColliderComponent::DrawGizmo(
             localRot.Normalize();
             SetOffset(localPos);
 
-            // Extract Euler angles similar to GetRotationEuler
+            // Extract Euler angles for DirectX Y-X-Z order
             DirectX::SimpleMath::Vector3 euler;
             
-            // Extract pitch(x-axis)
-            float sinp = 2.0f * (localRot.w * localRot.x - localRot.y * localRot.z);
-            if (std::abs(sinp) >= 1.0f)
-                euler.x = std::copysign(DirectX::XM_PIDIV2, sinp);
-            else
-                euler.x = std::asin(sinp);
+            // 1. Extract pitch(x-axis)
+            float sinp = std::clamp(2.0f * (localRot.w * localRot.x + localRot.y * localRot.z), -1.0f, 1.0f);
+            euler.x = std::asin(sinp);
 
-            // Extract yaw(y-axis)
-            float siny_cosp = 2.0f * (localRot.w * localRot.y + localRot.z * localRot.x);
-            float cosy_cosp = 1.0f - 2.0f * (localRot.x * localRot.x + localRot.y * localRot.y);
-            euler.y = std::atan2(siny_cosp, cosy_cosp);
+            // 2. Extract yaw(y-axis)
+            float siny = 2.0f * (localRot.w * localRot.y - localRot.z * localRot.x);
+            float cosy = 1.0f - 2.0f * (localRot.x * localRot.x + localRot.y * localRot.y);
+            euler.y = std::atan2(siny, cosy);
 
-            // Extract Roll(z-axis)
-            float sinr_cosp = 2.0f * (localRot.w * localRot.z + localRot.x * localRot.y);
-            float cosr_cosp = 1.0f - 2.0f * (localRot.y * localRot.y + localRot.z * localRot.z);
-            euler.z = std::atan2(sinr_cosp, cosr_cosp);
+            // 3. Extract roll(z-axis)
+            float sinr = 2.0f * (localRot.w * localRot.z - localRot.x * localRot.y);
+            float cosr = 1.0f - 2.0f * (localRot.x * localRot.x + localRot.z * localRot.z);
+            euler.z = std::atan2(sinr, cosr);
 
             SetRotationOffset(euler);
         }

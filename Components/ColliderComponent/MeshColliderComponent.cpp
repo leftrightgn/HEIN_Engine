@@ -58,6 +58,12 @@ void HEIN::MeshColliderComponent::LoadFromObj(const wchar_t* filePath)
 	m_worldTriangles.resize(m_localTriangles.size());
 }
 
+void HEIN::MeshColliderComponent::Start()
+{
+	ColliderComponent::Start();
+	SyncColliderState();
+}
+
 void HEIN::MeshColliderComponent::SyncColliderState()
 {
 	DirectX::SimpleMath::Matrix worldMatrix = GetCalculateWorldMatrix();

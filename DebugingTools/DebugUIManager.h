@@ -52,8 +52,16 @@ namespace HEIN
 		DirectX::SimpleMath::Vector2 GetViewportSize() const { return m_viewportSize; }
 		bool IsViewportVisibleInUI() const { return m_isViewportVisibleInUI; }
 
-		void SetSelectedActor(HEIN::Actor* actor) { m_selectedActor = actor; }
+		void SetSelectedActor(HEIN::Actor* actor) { SelectActor(actor); }
 		HEIN::Actor* GetSelectedActor() const { return m_selectedActor; }
+
+		void SelectActor(HEIN::Actor* actor);
+		void DrawActorTreeNode(
+			HEIN::Actor* actor,
+			HEIN::ActorManager& manager,
+			GameContext& gameContext,
+			HEIN::ActorID& actorToDelete
+		);
 
 		void DrawViewportWindow(GameContext& gameContext, bool isMagnified);
 

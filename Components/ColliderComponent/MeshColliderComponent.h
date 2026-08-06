@@ -28,6 +28,7 @@ namespace HEIN
 
 		void LoadFromObj(const wchar_t* filePath);
 
+		void Start() override;
 		void Update(float /*deltaTime*/) override {}
 
 		void SyncColliderState() override;

@@ -217,6 +217,149 @@ namespace HEIN
 			}
 		}
 	}
+	void DebugUIManager::SelectActor(HEIN::Actor* actor)
+	{
+		m_selectedActor = actor;
+		if (actor == nullptr)
+		{
+			g_ActiveGizmoTarget = nullptr;
+			return;
+		}
+		if (auto* cam = actor->GetComponent<HEIN::CameraController>())
+		{
+			g_ActiveGizmoTarget = cam;
+		}
+		else if (auto* btn = actor->GetComponent<HEIN::UIButtonComponent>())
+		{
+			g_ActiveGizmoTarget = btn;
+		}
+		else if (auto* trans = actor->GetComponent<HEIN::TransformComponent>())
+		{
+			g_ActiveGizmoTarget = trans;
+		}
+		else
+		{
+			g_ActiveGizmoTarget = nullptr;
+		}
+	}
+
+	void DebugUIManager::DrawActorTreeNode(
+		HEIN::Actor* actor,
+		HEIN::ActorManager& manager,
+		GameContext& gameContext,
+		HEIN::ActorID& actorToDelete
+	)
+	{
+		if (actor == nullptr) return;
+
+		const std::vector<ActorID>& children = actor->GetChildren();
+		bool hasChildren = !children.empty();
+
+		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+		if (m_selectedActor == actor)
+		{
+			nodeFlags |= ImGuiTreeNodeFlags_Selected;
+		}
+
+		if (!hasChildren)
+		{
+			nodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+		}
+
+		std::wstring tag = actor->GetTag();
+		std::string narrowTag(tag.begin(), tag.end());
+
+		ImGui::PushID(static_cast<int>(actor->GetID()));
+
+		bool nodeOpen = ImGui::TreeNodeEx((void*)(intptr_t)actor->GetID(), nodeFlags, "%s", narrowTag.c_str());
+
+		// Left-click to select
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
+		{
+			SelectActor(actor);
+		}
+
+		// Drag and Drop Source (drag this actor)
+		if (ImGui::BeginDragDropSource())
+		{
+			ActorID draggedID = actor->GetID();
+			ImGui::SetDragDropPayload("HIERARCHY_ACTOR_NODE", &draggedID, sizeof(ActorID));
+			ImGui::Text("Move %s", narrowTag.c_str());
+			ImGui::EndDragDropSource();
+		}
+
+		// Drag and Drop Target (drop another actor onto this actor to parent it)
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ACTOR_NODE"))
+			{
+				ActorID draggedID = *(const ActorID*)payload->Data;
+				if (draggedID != actor->GetID())
+				{
+					manager.SetParent(draggedID, actor->GetID(), true);
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		// Right-click context menu on the actor item
+		if (ImGui::BeginPopupContextItem())
+		{
+			SelectActor(actor);
+
+			if (ImGui::MenuItem("Create Child Empty"))
+			{
+				HEIN::Actor* childActor = manager.CreateActor(L"GameObject");
+				childActor->AddComponent<HEIN::TransformComponent>();
+				manager.SetParent(childActor->GetID(), actor->GetID(), false);
+				childActor->Start();
+				SelectActor(childActor);
+			}
+
+			if (actor->GetParentID() != INVALID_ACTOR_ID)
+			{
+				if (ImGui::MenuItem("Unparent (Set as Root)"))
+				{
+					manager.SetParent(actor->GetID(), INVALID_ACTOR_ID, true);
+				}
+			}
+
+			ImGui::Separator();
+
+			if (ImGui::MenuItem("Duplicate Actor", "Ctrl+D"))
+			{
+				HEIN::Actor* copy = manager.DuplicateActor(actor, gameContext);
+				if (copy != nullptr)
+				{
+					SelectActor(copy);
+				}
+			}
+
+			if (ImGui::MenuItem("Delete Actor"))
+			{
+				actorToDelete = actor->GetID();
+			}
+
+			ImGui::EndPopup();
+		}
+
+		// Recursively render children if open
+		if (hasChildren && nodeOpen)
+		{
+			for (ActorID childID : children)
+			{
+				Actor* child = manager.GetActor(childID);
+				if (child != nullptr)
+				{
+					DrawActorTreeNode(child, manager, gameContext, actorToDelete);
+				}
+			}
+			ImGui::TreePop();
+		}
+
+		ImGui::PopID();
+	}
+
 	EditorAction DebugUIManager::Draw(
 		GameContext& gameContext,
 		HEIN::ActorManager& manager,
@@ -245,32 +388,6 @@ namespace HEIN
 		
 		ImVec2 inspectorPos = ImGui::GetWindowPos();
 		ImVec2 inspectorSize = ImGui::GetWindowSize();
-
-		auto SelectActor = [&](HEIN::Actor* actor)
-		{
-			m_selectedActor = actor;
-			if (actor == nullptr)
-			{
-				g_ActiveGizmoTarget = nullptr;
-				return;
-			}
-			if (auto* cam = actor->GetComponent<HEIN::CameraController>())
-			{
-				g_ActiveGizmoTarget = cam;
-			}
-			else if (auto* btn = actor->GetComponent<HEIN::UIButtonComponent>())
-			{
-				g_ActiveGizmoTarget = btn;
-			}
-			else if (auto* trans = actor->GetComponent<HEIN::TransformComponent>())
-			{
-				g_ActiveGizmoTarget = trans;
-			}
-			else
-			{
-				g_ActiveGizmoTarget = nullptr;
-			}
-		};
 
 		// Ctrl+D shortcut to duplicate selected actor
 		if (!ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false))
@@ -361,7 +478,11 @@ namespace HEIN
 				{
 					if (ImGui::Selectable(compName.c_str()))
 					{
-						HEIN::ComponentFactory::CreateComponent(compName, m_selectedActor, &manager);
+						HEIN::IComponent* newComp = HEIN::ComponentFactory::CreateComponent(compName, m_selectedActor, &manager);
+						if (newComp)
+						{
+							newComp->Start();
+						}
 					}
 				}
 				ImGui::EndCombo();
@@ -378,7 +499,7 @@ namespace HEIN
 		ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
 
 		
-		float hierarchyWidth = screenW * 0.10f;
+		float hierarchyWidth = screenW * 0.12f;
 		float toolbarWidth = inspectorPos.x - hierarchyWidth;
 		if (toolbarWidth < 10.0f) toolbarWidth = 10.0f; // Ensure a minimum width
 
@@ -429,7 +550,9 @@ namespace HEIN
 		ImGui::Separator();
 		if (ImGui::Button("Create Empty Actor"))
 		{
-			HEIN::Actor* newActor = manager.CreateActor(L"NewActor");
+			HEIN::Actor* newActor = manager.CreateActor(L"GameObject");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			newActor->Start();
 			SelectActor(newActor);
 		}
 		ImGui::SameLine();
@@ -495,55 +618,53 @@ namespace HEIN
 		// DRAW THE HIERARCHY WINDOW
 		ImGuiWindowFlags staticFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
 		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(screenW * 0.10f, screenH), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(hierarchyWidth, screenH), ImGuiCond_Always);
 		ImGui::Begin("Hierarchy", nullptr, staticFlags);
+
+		// Context menu on empty window area
+		if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+		{
+			if (ImGui::MenuItem("Create Empty Actor"))
+			{
+				HEIN::Actor* newActor = manager.CreateActor(L"GameObject");
+				newActor->AddComponent<HEIN::TransformComponent>();
+				newActor->Start();
+				SelectActor(newActor);
+			}
+			ImGui::EndPopup();
+		}
+
 		ActorID actorToDelete = INVALID_ACTOR_ID;
+
+		// Collect and draw only root actors (parent == INVALID_ACTOR_ID)
+		std::vector<HEIN::Actor*> rootActors;
 		for (const auto& pair : manager.GetAllActors())
 		{
-			HEIN::Actor* actor = pair.second.get();
-			std::wstring tag = actor->GetTag();
-			std::string narrowTag(tag.begin(), tag.end());
-			
-			std::string label = narrowTag + "##" + std::to_string(actor->GetID());
-			
-			ImGui::PushID(actor->GetID());
-
-			bool isSelected = (m_selectedActor == actor);
-			if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(screenW * 0.10f - 35.0f, 0)))
+			if (pair.second->GetParentID() == HEIN::INVALID_ACTOR_ID)
 			{
-				SelectActor(actor);
+				rootActors.push_back(pair.second.get());
 			}
+		}
 
-			// Right-click context menu
-			if (ImGui::BeginPopupContextItem())
+		for (HEIN::Actor* rootActor : rootActors)
+		{
+			DrawActorTreeNode(rootActor, manager, gameContext, actorToDelete);
+		}
+
+		// Drag and drop target onto empty space in hierarchy window to unparent to root level
+		ImVec2 avail = ImGui::GetContentRegionAvail();
+		if (avail.y > 10.0f)
+		{
+			ImGui::Dummy(avail);
+			if (ImGui::BeginDragDropTarget())
 			{
-				SelectActor(actor);
-				if (ImGui::MenuItem("Duplicate Actor", "Ctrl+D"))
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ACTOR_NODE"))
 				{
-					HEIN::Actor* copy = manager.DuplicateActor(actor, gameContext);
-					if (copy != nullptr)
-					{
-						SelectActor(copy);
-					}
+					ActorID draggedID = *(const ActorID*)payload->Data;
+					manager.SetParent(draggedID, HEIN::INVALID_ACTOR_ID, true);
 				}
-				if (ImGui::MenuItem("Delete Actor"))
-				{
-					actorToDelete = actor->GetID();
-				}
-				ImGui::EndPopup();
+				ImGui::EndDragDropTarget();
 			}
-
-			ImGui::SameLine();
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.15f, 0.15f, 0.7f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
-			if (ImGui::SmallButton("X"))
-			{
-				actorToDelete = actor->GetID();
-			}
-			ImGui::PopStyleColor(3);
-
-			ImGui::PopID();
 		}
 
 		if (actorToDelete != INVALID_ACTOR_ID)

@@ -24,8 +24,10 @@ namespace HEIN
 		void Initialize(const float radius);
 		void InitializeFromModel(StaticModelComponent* staticModel);
 
+		void Start() override;
 		void Update(float deltaTime) override {}
 
+		void OnInspectorGUI(GameContext& gameContext) override;
 		void SyncColliderState() override;
 		void Draw(
 			GameContext& gameContext,
