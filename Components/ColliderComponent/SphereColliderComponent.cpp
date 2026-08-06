@@ -1,11 +1,13 @@
 #include "pch.h"
 #include "SphereColliderComponent.h"
 #include "Components/StaticModelComponent.h"
+#include "Entities/Actor.h"
 #include <DirectXColors.h>
+#include <ImGui/imgui.h>
 
 HEIN::SphereColliderComponent::SphereColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::Sphere)
-	, m_radius(0.0f)
+	, m_radius(1.0f)
 {
 }
 
@@ -24,6 +26,31 @@ void HEIN::SphereColliderComponent::InitializeFromModel(StaticModelComponent* st
     }
 }
 
+void HEIN::SphereColliderComponent::Start()
+{
+    ColliderComponent::Start();
+    if (m_radius <= 0.0001f)
+    {
+        if (GetOwner() != nullptr)
+        {
+            auto* model = GetOwner()->GetComponent<StaticModelComponent>();
+            if (model != nullptr)
+            {
+                InitializeFromModel(model);
+            }
+            else
+            {
+                m_radius = 1.0f;
+            }
+        }
+        else
+        {
+            m_radius = 1.0f;
+        }
+    }
+    SyncColliderState();
+}
+
 void HEIN::SphereColliderComponent::SyncColliderState()
 {
     DirectX::SimpleMath::Matrix worldMatrix = CalculateWorldMatrix();
@@ -37,6 +64,7 @@ void HEIN::SphereColliderComponent::Draw(GameContext& gameContext, const DirectX
 {
     if (gameContext.debugCollisionRenderer == nullptr) return;
 
+    SyncColliderState();
 
     DirectX::SimpleMath::Color debugColor = DirectX::SimpleMath::Color(DirectX::Colors::Red);
     if (m_isTrigger)
@@ -47,13 +75,24 @@ void HEIN::SphereColliderComponent::Draw(GameContext& gameContext, const DirectX
     gameContext.debugCollisionRenderer->QueueSphere(m_worldSphere, debugColor);
 }
 
+void HEIN::SphereColliderComponent::OnInspectorGUI(GameContext& gameContext)
+{
+    ColliderComponent::OnInspectorGUI(gameContext);
+    if (ImGui::CollapsingHeader("Sphere Properties", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::DragFloat("Radius", &m_radius, 0.05f, 0.01f, 100.0f);
+    }
+}
+
 nlohmann::json HEIN::SphereColliderComponent::Serialize()
 {
-    nlohmann::json data = IComponent::Serialize();
+    nlohmann::json data = ColliderComponent::Serialize();
+    data["Radius"] = m_radius;
     return data;
 }
 
 void HEIN::SphereColliderComponent::Deserialize(const nlohmann::json& data)
 {
-    IComponent::Deserialize(data);
+    ColliderComponent::Deserialize(data);
+    if (data.contains("Radius")) m_radius = data["Radius"];
 }

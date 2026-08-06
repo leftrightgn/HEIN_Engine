@@ -6,6 +6,7 @@
 #include "DebugingTools/DebugUIManager.h"
 #include "DebugingTools/EditorUtils.h"
 #include <ImGui/imgui_stdlib.h>
+#include <cstdio>
 
 HEIN::TerrainComponent::TerrainComponent(Actor* owner)
 	: IComponent(owner)
@@ -40,10 +41,25 @@ bool HEIN::TerrainComponent::Initialize(
 	{
 		return false;
 	}
-	// Read the Bmp File and populate the HeightMap
-	if (!LoadHeightMap(heightMapFilename))
+	// Detect File extension(.bmp vs .raw)
+	std::wstring ext = m_heightMapFilename;
+	size_t exPos = ext.find_last_of(L".");
+	bool isRaw = false;
+
+	if (exPos != std::wstring::npos)
 	{
-		OutputDebugStringA("FailedToLoadTheBmpFile!");
+		std::wstring extension = ext.substr(exPos + 1);
+
+		std::transform(extension.begin(), extension.end(), extension.begin(), towlower);
+		if (extension == L"r16") isRaw = true;
+	}
+	bool success = false;
+	if (isRaw) success = LoadRawHeightMap(heightMapFilename);
+	else success = LoadHeightMap(heightMapFilename);
+
+	if (!success)
+	{
+		OutputDebugStringA("FailedToLoadHeightMapFile");
 		return false;
 	}
 
@@ -464,7 +480,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 		ImGui::SameLine();
 		if (ImGui::Button("Browse..."))
 		{
-			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"Bitmap Files\0*.bmp\0All Files\0*.*\0", windowHandle);
+			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"Bitmap Files\0*.bmp;*.r16\0All Files\0*.*\0", windowHandle);
 			if (!selectedFile.empty())
 			{
 				m_heightMapFilename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
@@ -636,6 +652,59 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 
 	bitmapImage = 0;
 
+	return true;
+}
+
+bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
+{
+	FILE* filePtr;
+
+	// Open the 16bit raw file in binary mode
+	int error = _wfopen_s(&filePtr, filename, L"rb");
+	if (error != 0) return false;
+
+	// Automatically Calculate the grid Dimmensions by the checking the file size
+	fseek(filePtr, 0, SEEK_END);
+	long fileSize = ftell(filePtr);
+	rewind(filePtr);
+
+	// 16bit rawfile use exactly by 2bytes per pixel
+	int numPixels = fileSize / 2;
+	m_terrainWidth = static_cast<int>(sqrt(numPixels));
+	m_terrainHeight = m_terrainWidth;
+
+	// Safte Check ensure the file is perfectly squared
+	if (m_terrainWidth * m_terrainHeight != numPixels)
+	{
+		OutputDebugStringA("Raw File is not a perfect square!");
+		fclose(filePtr);
+		return false;
+	}
+
+	// Read the 16_bit data
+	unsigned short* rawImage = new unsigned short[numPixels];
+	fread(rawImage, sizeof(unsigned short), numPixels, filePtr);
+	fclose(filePtr);
+
+	m_heightMap.resize(numPixels);
+
+	for (int j = 0; j < m_terrainHeight; j++)
+	{
+		for (int i = 0; i < m_terrainWidth; i++)
+		{
+			// Read the raw Array
+			int rawIndex = (j * m_terrainWidth) + i;
+
+			int index = (m_terrainHeight - 1 - j) * m_terrainWidth + i;
+			m_heightMap[index].x = (float)i;
+			// Normalize by dividing by 65535 instead of 255!
+			m_heightMap[index].y = (float)rawImage[rawIndex] / 65535.0f;
+			m_heightMap[index].z = (float)j;
+
+
+		}
+	}
+	delete[] rawImage;
 	return true;
 }
 

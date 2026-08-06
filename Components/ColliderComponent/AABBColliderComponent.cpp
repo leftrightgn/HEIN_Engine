@@ -45,7 +45,12 @@ void HEIN::AABBColliderComponent::Start()
                 m_extents = DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f);
             }
         }
+        else
+        {
+            m_extents = DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f);
+        }
     }
+    SyncColliderState();
 }
 
 void HEIN::AABBColliderComponent::SyncColliderState()
@@ -66,6 +71,7 @@ void HEIN::AABBColliderComponent::Draw(
 {
     if (gameContext.debugCollisionRenderer == nullptr) return;
 
+    SyncColliderState();
 
     DirectX::SimpleMath::Color debugColor = DirectX::SimpleMath::Color(DirectX::Colors::Red);
     if (m_isTrigger)
