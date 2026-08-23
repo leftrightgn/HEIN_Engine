@@ -1,9 +1,7 @@
 #pragma once
 #include "IComponent.h"
-#include <VertexTypes.h>
-#include <Effects.h>
 #include <string>
-#include <d3dcompiler.h>
+#include "Common/TerrainCell.h"
 
 namespace HEIN
 {
@@ -38,17 +36,6 @@ namespace HEIN
 			float r, g, b;
 		};
 
-		// Custom Vertex Sturcture
-		struct TerrainVertexType
-		{
-			DirectX::SimpleMath::Vector3 position;
-			DirectX::SimpleMath::Vector2 texture;
-			DirectX::SimpleMath::Vector3 normal;
-			DirectX::SimpleMath::Vector3 tangent;
-			DirectX::SimpleMath::Vector3 binormal;
-			DirectX::SimpleMath::Vector4 color;
-		};
-
 		int m_terrainWidth;
 		int m_terrainHeight;
 		float m_heightScale;
@@ -56,6 +43,8 @@ namespace HEIN
 		std::wstring m_heightMapFilename;
 
 		std::vector<HeightMapType> m_heightMap;
+
+		std::vector<std::unique_ptr<TerrainCell>> m_cells;
 		
 		// Custom Shader Objects;
 		Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
@@ -65,12 +54,7 @@ namespace HEIN
 		Microsoft::WRL::ComPtr<ID3D11Buffer> m_matrixBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> m_lightBuffer;
 
-		// DirectX 11 Buffers
-		Microsoft::WRL::ComPtr<ID3D11Buffer> m_vertexBuffer;
-		Microsoft::WRL::ComPtr<ID3D11Buffer> m_indexBuffer;
-
 		int m_vertexCount;
-		int m_indexCount;
 
 		std::wstring m_textureFilename;
 
@@ -88,8 +72,17 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 m_diffuseColor = DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f);
 
 		bool m_isVisible = true;
-		bool m_isWireFrame = true;
+		bool m_isWireFrame = false;
 		bool m_needsReload = false;
+
+		// Cell Visualization & Culling Controls
+		bool m_showCellBounds = false;
+		bool m_enableFrustumCulling = true;
+		bool m_freezeFrustum = false;
+		DirectX::BoundingFrustum m_frozenFrustum;
+		int  m_debugSingleCell = -1; // -1 = All cells, >= 0 = isolate a specific cell
+		bool m_debugCellColors = false;
+		int  m_renderedCellCount = 0;
 
 	public:
 

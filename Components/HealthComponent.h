@@ -3,12 +3,16 @@
 
 namespace HEIN
 {
+	// Manages combat life cycle: tracks hit points (HP), processes incoming damage, 
+	// and queues the actor for safe end-of-frame destruction upon death.
 	class HealthComponent : public IComponent
 	{
 	private:
-
 		float m_maxHealth;
 		float m_currentHealth;
+
+		// Invincibility Frames (i-frames) to prevent staggering or instant death 
+		// from multi-hit overlap within a single attack sweep.
 		float m_invincibilityTimer;
 		bool m_isInvincible;
 		bool m_isGameplayInvincible;

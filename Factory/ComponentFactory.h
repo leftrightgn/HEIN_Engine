@@ -27,11 +27,26 @@
 
 namespace HEIN
 {
+	/**
+	 * @class ComponentFactory
+	 * @brief Reflection and dynamic loading registry for the component system.
+	 * 
+	 * The ComponentFactory enables data-driven architecture by providing a string-to-component 
+	 * mapping mechanism. Since C++ lacks native reflection, this factory acts as a central registry 
+	 * where each component type registers a lambda creator function (CreatorFunc).
+	 * 
+	 * This design is the backbone of the Serialization and Level Editor Pipeline. When a scene graph
+	 * is saved to AutoSave.json via nlohmann::json, component types are serialized as string identifiers.
+	 * During deserialization, CreateComponent() evaluates the JSON string and dynamically instantiates 
+	 * the corresponding IComponent derived class. This allows levels, actors, and their behaviours 
+	 * to be completely data-defined and hot-loaded at runtime.
+	 */
 	class ComponentFactory
 	{
 	private:
 
-		// for the map to link the sting
+		// Maps component string identifiers (e.g., "TransformComponent") to instantiation lambdas.
+		// Ensures components can be dynamically attached to an Actor during JSON deserialization.
 		using CreatorFunc = std::function<HEIN::IComponent*(HEIN::Actor*, HEIN::ActorManager*)>;
 		
 		inline static std::unordered_map<std::string, CreatorFunc> m_creators;

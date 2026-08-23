@@ -121,7 +121,7 @@ void DeviceResources::CreateDeviceResources()
         }
     }
 
-    // Disable HDR if we are on an OS that can't support FLIP swap effects
+    // Disable HDR if running on an OS that can't support FLIP swap effects
     if (m_options & c_EnableHDR)
     {
         ComPtr<IDXGIFactory5> factory5;
@@ -464,7 +464,7 @@ void DeviceResources::Present()
     else
     {
         // The first argument instructs DXGI to block until VSync, putting the application
-        // to sleep until the next VSync. This ensures we don't waste any cycles rendering
+        // to sleep until the next VSync. This ensures no waste of any cycles rendering
         // frames that will never be displayed to the screen.
         hr = m_swapChain->Present(1, 0);
     }
@@ -621,7 +621,7 @@ void DeviceResources::UpdateColorSpace()
 
     if (m_swapChain)
     {
-        // To detect HDR support, we will need to check the color space in the primary
+        // To detect HDR support, it is necessary to check the color space in the primary
         // DXGI output associated with the app at this point in time
         // (using window/display intersection).
 

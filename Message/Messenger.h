@@ -15,6 +15,11 @@ namespace HEIN
 
 	};
 
+	/// <summary>
+	/// Singleton Publish-Subscribe message bus.
+	/// Decouples systems (e.g. input handling from game logic) by allowing 
+	/// observers to register for and receive events (messages) without tight coupling.
+	/// </summary>
 	class Messenger
 	{
 	private:
@@ -40,10 +45,19 @@ namespace HEIN
 
 		static void DestroyInstance();
 
+		/// <summary>
+		/// Subscribes an observer to receive messages destined for a specific actor.
+		/// </summary>
 		void Register(int actorID, IObserver* observer);
 
+		/// <summary>
+		/// Removes all subscribed observers for a specific actor.
+		/// </summary>
 		void UnRegister(int actorID);
 
+		/// <summary>
+		/// Immediately broadcasts a message to all observers subscribed to the given actorID.
+		/// </summary>
 		void Notify(int actorID, Message::MessageID messageID);
 
 		void NotifyAfterDelay(int actorID, Message::MessageID messageID, float delaySeconds);

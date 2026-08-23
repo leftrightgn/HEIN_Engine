@@ -1,7 +1,7 @@
 //--------------------------------------------------------------------------------------
 // File: GameContext.h
 //
-// シーンへ渡すゲームコンテキストクラス
+// Game context class passed to scenes
 //
 // Date: 2026.3.3
 // Author: Hideyasu Imase
@@ -20,38 +20,49 @@ namespace HEIN {
 	class SceneManager;
 }
 
-// 各シーンに渡す共通リソースを記述してください
+/**
+ * @brief Common resources passed to each scene.
+ * Describe common resources passed to each scene here.
+ */
 struct GameContext
 {
-	// ステップタイマー
+	/// @brief Step timer
 	DX::StepTimer& timer;
 
-	// デバイスリソース
+	/// @brief Device resources
 	DX::DeviceResources& deviceResources;
 
-	// キーボードステートトラッカー
+	/// @brief Keyboard state tracker
 	DirectX::Keyboard::KeyboardStateTracker& keyboardTracker;
 
-	// マウスステートトラッカー
+	/// @brief Mouse state tracker
 	DirectX::Mouse::ButtonStateTracker& mouseButtonTracker;
 
-	// コモンステート
+	/// @brief Common states
 	DirectX::CommonStates& commonStates;
 
 
+	/// @brief Current mouse state
 	DirectX::Mouse::State mouseState;
 
+	/// @brief Current keyboard state
 	DirectX::Keyboard::State keyboardState;
 	
+	/// @brief Debug renderer
 	HEIN::DebugRenderer* debugRenderer = nullptr;
 
+	/// @brief Input manager
 	HEIN::InputManager* inputManager = nullptr;
 
+	/// @brief Debug collision renderer
 	HEIN::DebugCollisionRenderer* debugCollisionRenderer = nullptr;
 
+	/// @brief Event manager
 	HEIN::EventManager* eventManager = nullptr;
 
+	/// @brief Main camera controller
 	HEIN::CameraController* mainCamera = nullptr;
 
+	/// @brief Scene manager
 	HEIN::SceneManager* sceneManager = nullptr;
 };

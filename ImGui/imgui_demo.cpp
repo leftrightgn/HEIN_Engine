@@ -37,7 +37,7 @@
 // In this demo code, we frequently use 'static' variables inside functions.
 // A static variable persists across calls. It is essentially a global variable but declared inside the scope of the function.
 // Think of "static int n = 0;" as "global int n = 0;" !
-// We do this IN THE DEMO because we want:
+// We do this IN THE DEMO because it is intended:
 // - to gather code and data in the same place.
 // - to make the demo source code faster to read, faster to change, smaller in size.
 // - it is also a convenient way of storing simple UI related information as long as your function
@@ -425,7 +425,7 @@ void ImGui::ShowDemoWindow(bool* p_open)
     // - Positive value for absolute size, negative value for right-alignment.
     // - The default value is about GetWindowWidth() * 0.65f.
     // - See 'Demo->Layout->Widgets Width' for details.
-    // Here we change the frame width based on how much width we want to give to the label.
+    // Here we change the frame width based on how much width it is intended to give to the label.
     const float label_width_base = ImGui::GetFontSize() * 12;               // Some amount of width for label, based on font size.
     const float label_width_max = ImGui::GetContentRegionAvail().x * 0.40f; // ...but always leave some room for framed widgets.
     const float label_width = IM_MIN(label_width_base, label_width_max);
@@ -1891,7 +1891,7 @@ static void DemoWindowWidgetsImages()
         // Grab the current texture identifier used by the font atlas.
         ImFontAtlas* atlas = io.Fonts;
         ImTextureRef my_tex_id = atlas->TexRef;
-        float my_tex_w = (float)atlas->TexData->Width; // Regular user code should never have to care about TexData-> fields, but since we want to display the entire texture here, we pull Width/Height from it.
+        float my_tex_w = (float)atlas->TexData->Width; // Regular user code should never have to care about TexData-> fields, but since it is intended to display the entire texture here, we pull Width/Height from it.
         float my_tex_h = (float)atlas->TexData->Height;
         ImGui::Text("%.0fx%.0f", my_tex_w, my_tex_h);
 
@@ -1922,7 +1922,7 @@ static void DemoWindowWidgetsImages()
             ImGui::PushID(i);
             if (i > 0)
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(i - 1.0f, i - 1.0f));
-            ImVec2 size = ImVec2(32.0f, 32.0f);                         // Size of the image we want to make visible
+            ImVec2 size = ImVec2(32.0f, 32.0f);                         // Size of the image it is intended to make visible
             ImVec2 uv0 = ImVec2(0.0f, 0.0f);                            // UV coordinates for lower-left
             ImVec2 uv1 = ImVec2(32.0f / my_tex_w, 32.0f / my_tex_h);    // UV coordinates for (32,32) in our texture
             ImVec4 bg_col = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);             // Black background
@@ -3127,7 +3127,7 @@ static void DemoWindowWidgetsSelectionAndMultiSelect(ImGuiDemoWindowData* demo_d
         // - We don't use linear indices for selection user data, but our ExampleTreeNode* pointer directly!
         //   This showcase how SetNextItemSelectionUserData() never assume indices!
         // - The difficulty here is to "interpolate" from RangeSrcItem to RangeDstItem in the SetAll/SetRange request.
-        //   We want this interpolation to match what the user sees: in visible order, skipping closed nodes.
+        //   it is intended this interpolation to match what the user sees: in visible order, skipping closed nodes.
         //   This is implemented by our TreeGetNextNodeInVisibleOrder() user-space helper.
         // - Important: In a real codebase aiming to implement full-featured selectable tree with custom filtering, you
         //   are more likely to build an array mapping sequential indices to visible tree nodes, since your
@@ -3762,7 +3762,7 @@ static void DemoWindowWidgetsText()
             // - From C++11 you can use the u8"my text" syntax to encode literal strings as UTF-8
             // - For earlier compiler, you may be able to encode your sources as UTF-8 (e.g. in Visual Studio, you
             //   can save your source files as 'UTF-8 without signature').
-            // - FOR THIS DEMO FILE ONLY, BECAUSE WE WANT TO SUPPORT OLD COMPILERS, WE ARE *NOT* INCLUDING RAW UTF-8
+            // - FOR THIS DEMO FILE ONLY, BECAUSE it is intended TO SUPPORT OLD COMPILERS, WE ARE *NOT* INCLUDING RAW UTF-8
             //   CHARACTERS IN THIS SOURCE FILE. Instead we are encoding a few strings with hexadecimal constants.
             //   Don't do this in your application! Please use u8"text in any language" in your application!
             // Note that characters values are preserved even by InputText() if the font cannot be displayed,
@@ -4921,7 +4921,7 @@ static void DemoWindowLayout()
             // Otherwise you can use SmallButton() (smaller fit).
             ImGui::AlignTextToFramePadding();
 
-            // Common mistake to avoid: if we want to SameLine after TreeNode we need to do it before we add
+            // Common mistake to avoid: if it is intended to SameLine after TreeNode we need to do it before we add
             // other contents "inside" the node.
             bool node_open = ImGui::TreeNode("Node##3");
             ImGui::SameLine(0.0f, spacing); ImGui::Button("Button##3");
@@ -6510,7 +6510,7 @@ static void DemoWindowTables()
     if (ImGui::TreeNode("Columns flags"))
     {
         IMGUI_DEMO_MARKER("Tables/Columns flags");
-        // Create a first table just to show all the options/flags we want to make visible in our example!
+        // Create a first table just to show all the options/flags it is intended to make visible in our example!
         const int column_count = 3;
         const char* column_names[column_count] = { "One", "Two", "Three" };
         static ImGuiTableColumnFlags column_flags[column_count] = { ImGuiTableColumnFlags_DefaultSort, ImGuiTableColumnFlags_None, ImGuiTableColumnFlags_DefaultHide };

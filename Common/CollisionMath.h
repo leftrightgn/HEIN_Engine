@@ -21,6 +21,10 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 v0, v1, v2;
 	};
 
+	// Core mathematical geometry subsystem responsible for collision detection and intersection tests.
+	// Utilizes the Separating Axis Theorem (SAT) evaluating up to 15 axes (3 face normals from A, 
+	// 3 face normals from B, and 9 cross products) for OBB-OBB tests. Calculates the Minimum 
+	// Translation Vector (MTV) to resolve penetration for solid pushboxes.
 	class CollisionMath
 	{
 	public:

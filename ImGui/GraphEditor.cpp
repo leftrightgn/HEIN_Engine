@@ -589,7 +589,7 @@ static bool DrawNode(ImDrawList* drawList,
     float maxHeight = ImMin(viewPort.Max.y, nodeRectangleMin.y + nodeSize.y) - nodeRectangleMin.y;
     float maxWidth = ImMin(viewPort.Max.x, nodeRectangleMin.x + nodeSize.x) - nodeRectangleMin.x;
     ImGui::InvisibleButton("node", ImVec2(maxWidth, maxHeight));
-    // must be called right after creating the control we want to be able to move
+    // must be called right after creating the control it is intended to be able to move
     bool nodeMovingActive = ImGui::IsItemActive();
 
     // Save the size of what we have emitted and whether any of the widgets are being used

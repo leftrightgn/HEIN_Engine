@@ -8,6 +8,12 @@ namespace HEIN
 	class SocketComponent;
 	class ActorManager;
 
+	/// <summary>
+	/// Locks an actor's transform (like a weapon) to a specific socket attachment point on a skeletal mesh.
+	/// Ensures weapons perfectly track hand sockets by cascading matrices:
+	/// M_weapon_world = M_socket_offset * M_hand_bone * M_character_world
+	/// Updated in Phase C (LateUpdate) to guarantee frame-accurate sync with animation updates.
+	/// </summary>
 	class SocketAttachmentComponent : public IComponent
 	{
 	private:

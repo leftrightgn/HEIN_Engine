@@ -103,7 +103,7 @@ void HEIN::SocketComponent::DrawGizmo(
 
     DirectX::SimpleMath::Matrix ownerWorld = m_transform->GetWorldMatrix();
 
-    // Since a character can have multiple sockets, we loop through all of them
+    // Since a character can have multiple sockets, the system loops through all of them
     int gizmoId = 0;
     for (auto& pair : m_sockets)
     {

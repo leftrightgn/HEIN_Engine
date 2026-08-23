@@ -11,6 +11,7 @@
 #include <Components/ColliderComponent/MeshColliderComponent.h>
 #include <Factory/ComponentFactory.h>
 #include <Components/UIButtonComponent.h>
+#include <Components/AnimationEditorComponent.h>
 #include <Windows.h>
 #include <vector>
 #include <Components/TransformComponent.h>
@@ -384,6 +385,10 @@ namespace HEIN
 		// The last parameter ImVec2(1.0f, 0.0f) is the Pivot (1.0 = Right edge, 0.0 = Top edge)
 		ImGui::SetNextWindowPos(ImVec2(screenW, 0.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
 
+		// Render the Property Inspector Window
+		// This window dynamically exposes the properties of the currently selected Actor 
+		// and its attached Components. Modifications here instantly affect the live scene
+		// and are serializable out to AutoSave.json.
 		ImGui::Begin("Inspector");
 		
 		ImVec2 inspectorPos = ImGui::GetWindowPos();
@@ -488,6 +493,10 @@ namespace HEIN
 				ImGui::EndCombo();
 			}
 
+			// ImGuizmo 3D Viewport Controls Integration
+			// If a valid editable target is selected (e.g., TransformComponent, CameraController),
+			// this overlays interactive translation, rotation, or scaling handles directly onto 
+			// the D3D11 scene view. Interactions modify the component's underlying coordinate matrices.
 			if (g_ActiveGizmoTarget != nullptr)
 			{
 				g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
@@ -519,7 +528,11 @@ namespace HEIN
 		ImGui::SameLine();
 		if (ImGui::Button("NEW SCENE")) currentAction = HEIN::EditorAction::NewScenePressed;
 		ImGui::SameLine();
+		if (ImGui::Button("ANIMATOR")) m_showAnimatorWindow = !m_showAnimatorWindow;
+		ImGui::SameLine();
 		ImGui::Checkbox("Show Viewport", &m_showViewportPreview);
+		ImGui::SameLine();
+		ImGui::Checkbox("Show Colliders", &m_showColliders);
 
 		if (m_selectedActor != nullptr)
 		{
@@ -616,6 +629,9 @@ namespace HEIN
 		ImGui::End();
 
 		// DRAW THE HIERARCHY WINDOW
+		// The Scene Hierarchy provides a visual tree-view of the Actor parent-child graph.
+		// It supports drag-and-drop parenting, context menu spawning, and selection tracking.
+		// Reorganising the hierarchy here directly alters the execution order of CascadeTransforms.
 		ImGuiWindowFlags staticFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
 		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
 		ImGui::SetNextWindowSize(ImVec2(hierarchyWidth, screenH), ImGuiCond_Always);
@@ -680,6 +696,36 @@ namespace HEIN
 
 		// Draw the floating, movable and resizable Camera Viewport window
 		DrawViewportWindow(gameContext, true);
+
+		// Draw Animator Window
+		if (m_showAnimatorWindow)
+		{
+			ImGui::SetNextWindowSize(ImVec2(800.0f, 500.0f), ImGuiCond_FirstUseEver);
+			ImGui::Begin("Animator", &m_showAnimatorWindow);
+
+			if (m_selectedActor != nullptr)
+			{
+				auto* animEditor = m_selectedActor->GetComponent<HEIN::AnimationEditorComponent>();
+				if (animEditor)
+				{
+					animEditor->DrawAnimatorWindow(gameContext);
+				}
+				else
+				{
+					ImGui::Text("Selected actor does not have an AnimationEditorComponent.");
+					if (ImGui::Button("Add Animation Editor"))
+					{
+						auto* newComp = m_selectedActor->AddComponent<HEIN::AnimationEditorComponent>();
+						newComp->Start();
+					}
+				}
+			}
+			else
+			{
+				ImGui::Text("Please select an actor to edit its animations.");
+			}
+			ImGui::End();
+		}
 
 		return currentAction;
 	}

@@ -54,6 +54,7 @@ float4 main(PixelInputType input) : SV_Target
     
     // Force the alpha channel to 1.0f so it is fully opaque
     color = color * textureColor * input.color;
+    color.a = 1.0f;
     
     return color;
 }

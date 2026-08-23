@@ -7,6 +7,8 @@
 #include "DebugingTools/EditorUtils.h"
 #include <ImGui/imgui_stdlib.h>
 #include <cstdio>
+#include <d3dcompiler.h>
+#include "Camera/CameraController.h"
 
 HEIN::TerrainComponent::TerrainComponent(Actor* owner)
 	: IComponent(owner)
@@ -14,7 +16,6 @@ HEIN::TerrainComponent::TerrainComponent(Actor* owner)
 	, m_terrainHeight(0)
 	, m_heightScale(10.0f)
 	, m_vertexCount(0)
-	, m_indexCount(0)
 {
 }
 
@@ -270,11 +271,11 @@ void HEIN::TerrainComponent::Draw(
 		m_needsReload = false;
 	}
 
-	if (!m_isVisible || !m_vertexBuffer || !m_indexBuffer) return;
+	if (!m_isVisible || m_cells.empty()) return;
 
 	ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
 
-	// Apply the world Tranform form Tranformcomponent
+	// Apply the world Transform from TransformComponent
 	DirectX::SimpleMath::Matrix finalworld = world;
 
 	TransformComponent* transform = m_owner->GetComponent<HEIN::TransformComponent>();
@@ -283,24 +284,19 @@ void HEIN::TerrainComponent::Draw(
 		finalworld = transform->GetWorldMatrix();
 	}
 	context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
-	// If the frameWire mode is enabled , switch to rasterizer state 
+	// If the wireFrame mode is enabled , switch to rasterizer state 
 	if (m_isWireFrame) context->RSSetState(gameContext.commonStates.Wireframe());
-	else context->RSSetState(gameContext.commonStates.CullClockwise());
+	else context->RSSetState(gameContext.commonStates.CullCounterClockwise());
 
-	// Set Vertex/Index Buffer and Input LayOut
-
-	UINT stride = sizeof(TerrainVertexType);
-	UINT offset = 0;
-	context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
-	context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	// Set primitive topology and input layout
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context->IASetInputLayout(m_inputLayout.Get());
 
-	// Update Matix Constant Buffer
-	D3D11_MAPPED_SUBRESOURCE mappdedResource;
-	if (SUCCEEDED(context->Map(m_matrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappdedResource)))
+	// Update Matrix Constant Buffer
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	if (SUCCEEDED(context->Map(m_matrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource)))
 	{
-		MatrixBufferType* dataPtr = (MatrixBufferType*)mappdedResource.pData;
+		MatrixBufferType* dataPtr = (MatrixBufferType*)mappedResource.pData;
 		// HLSL requires matrices to be transposed 
 		dataPtr->world = finalworld.Transpose();
 		dataPtr->view = view.Transpose();
@@ -309,9 +305,9 @@ void HEIN::TerrainComponent::Draw(
 	}
 	context->VSSetConstantBuffers(0, 1, m_matrixBuffer.GetAddressOf());
 
-	if (SUCCEEDED(context->Map(m_lightBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappdedResource)))
+	if (SUCCEEDED(context->Map(m_lightBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource)))
 	{
-		LightBufferType* dataPtr = (LightBufferType*)mappdedResource.pData;
+		LightBufferType* dataPtr = (LightBufferType*)mappedResource.pData;
 
 		DirectX::SimpleMath::Vector3 safeLightDir = m_lightDirection;
 		safeLightDir.Normalize();
@@ -336,11 +332,100 @@ void HEIN::TerrainComponent::Draw(
 	context->PSSetShaderResources(0, 2, textures);
 	context->PSSetSamplers(0, 1, m_sampleState.GetAddressOf());
 
-	// DRAW THE TERRAIN!
-	context->DrawIndexed(m_indexCount, 0, 0);
-	// Reset the rasterizer state to Default
-	if (m_isWireFrame) context->RSSetState(gameContext.commonStates.CullClockwise());
+	// Build World-Space Camera Frustum
+	DirectX::BoundingFrustum worldFrustum;
+	if (m_freezeFrustum)
+	{
+		worldFrustum = m_frozenFrustum;
+	}
+	else
+	{
+		DirectX::SimpleMath::Matrix cullingView = view;
+		DirectX::SimpleMath::Matrix cullingProj = proj;
 
+		// Use Main Game Camera's View and Proj for culling
+		if (gameContext.mainCamera != nullptr)
+		{
+			cullingView = gameContext.mainCamera->GetView();
+
+			D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
+			float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
+			float fov = gameContext.mainCamera->GetFov();
+			if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
+
+			cullingProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
+				fov,
+				aspect,
+				0.1f,
+				1000.0f
+			);
+		}
+
+		// DirectXTK SimpleMath produces Right-Handed matrices (rhcoords = true)
+		DirectX::BoundingFrustum localFrustum(cullingProj, true);
+
+		DirectX::SimpleMath::Matrix camWorld;
+		if (std::abs(cullingView.Determinant()) < 1e-6f)
+		{
+			camWorld = DirectX::SimpleMath::Matrix::Identity;
+		}
+		else
+		{
+			camWorld = cullingView.Invert();
+		}
+
+		localFrustum.Transform(worldFrustum, camWorld);
+
+		// Normalize orientation quaternion to guarantee numerical stability
+		DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&worldFrustum.Orientation);
+		q = DirectX::XMQuaternionNormalize(q);
+		DirectX::XMStoreFloat4(&worldFrustum.Orientation, q);
+
+		m_frozenFrustum = worldFrustum;
+	}
+
+	m_renderedCellCount = 0;
+	int cellIndex = 0;
+
+	// DRAW CELLS (with World-Space Frustum Culling & OBB Visualizer)
+	for (const auto& cell : m_cells)
+	{
+		// If single cell debugging is enabled, only draw that cell
+		if (m_debugSingleCell >= 0 && cellIndex != m_debugSingleCell)
+		{
+			cellIndex++;
+			continue;
+		}
+
+		DirectX::BoundingOrientedBox localOBB;
+		DirectX::BoundingOrientedBox::CreateFromBoundingBox(localOBB, cell->GetBoundingBox());
+
+		DirectX::BoundingOrientedBox worldOBB;
+		localOBB.Transform(worldOBB, finalworld);
+
+		// Queue Cell Bounding Box for debug rendering if enabled
+		if (m_showCellBounds && gameContext.debugCollisionRenderer)
+		{
+			gameContext.debugCollisionRenderer->QueueOBB(worldOBB, DirectX::Colors::LimeGreen);
+		}
+
+		// World-Space Frustum Culling check
+		if (m_enableFrustumCulling)
+		{
+			if (!worldFrustum.Intersects(worldOBB))
+			{
+				cellIndex++;
+				continue;
+			}
+		}
+
+		cell->Draw(context);
+		m_renderedCellCount++;
+		cellIndex++;
+	}
+
+	// Reset rasterizer state to default
+	context->RSSetState(gameContext.commonStates.CullCounterClockwise());
 }
 nlohmann::json HEIN::TerrainComponent::Serialize()
 {
@@ -443,6 +528,25 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 		ImGui::Checkbox("Visible", &m_isVisible);
 		ImGui::Checkbox("WireFrame Mode", &m_isWireFrame);
 
+		ImGui::Separator();
+		ImGui::Text("Cell Management & Debugging");
+		ImGui::Text("Total Cells: %d  |  Rendered Cells: %d", (int)m_cells.size(), m_renderedCellCount);
+		ImGui::Checkbox("Show Cell Bounding Boxes", &m_showCellBounds);
+		ImGui::Checkbox("Enable Frustum Culling", &m_enableFrustumCulling);
+		ImGui::Checkbox("Freeze Culling Frustum", &m_freezeFrustum);
+		
+		int maxCellIndex = (int)m_cells.size() - 1;
+		if (ImGui::SliderInt("Isolate Single Cell", &m_debugSingleCell, -1, maxCellIndex, m_debugSingleCell < 0 ? "All Cells (-1)" : "Cell %d"))
+		{
+			// Live isolate
+		}
+
+		if (ImGui::Checkbox("Debug Cell Grid Colors", &m_debugCellColors))
+		{
+			InitializeBuffer(gameContext.deviceResources.GetD3DDevice());
+		}
+
+		ImGui::Separator();
 		if (ImGui::DragFloat("HeightScale", &m_heightScale, 0.5f, 1.0f, 100.0f))
 		{
 			CalculateNormals();
@@ -633,14 +737,14 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 	{
 		for (i = 0; i < m_terrainWidth; i++)
 		{
-			// BMP images are stored upside down, so read from bottom to top
-			int pixelOffset = j * rowPitch + i * bytesPerPixel;
+			// BMP images are stored bottom-to-top in file
+			int pixelOffset = (m_terrainHeight - 1 - j) * rowPitch + i * bytesPerPixel;
 			
 			// For 24/32 bit, we just read the first channel (B) since heightmaps are usually grayscale.
 			// For 8-bit, it's the raw grayscale/palette index.
 			height = bitmapImage[pixelOffset];
 			
-			index = (m_terrainHeight - 1 - j) * m_terrainWidth + i;
+			index = j * m_terrainWidth + i;
 
 			m_heightMap[index].x = (float)i;
 			m_heightMap[index].y = (float)height / 255.0f; // Normalize 0 to 1
@@ -649,8 +753,7 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 	}
 
 	delete[] bitmapImage;
-
-	bitmapImage = 0;
+	bitmapImage = nullptr;
 
 	return true;
 }
@@ -663,17 +766,17 @@ bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 	int error = _wfopen_s(&filePtr, filename, L"rb");
 	if (error != 0) return false;
 
-	// Automatically Calculate the grid Dimmensions by the checking the file size
+	// Automatically Calculate the grid Dimensions by checking the file size
 	fseek(filePtr, 0, SEEK_END);
 	long fileSize = ftell(filePtr);
 	rewind(filePtr);
 
-	// 16bit rawfile use exactly by 2bytes per pixel
+	// 16bit rawfile uses exactly 2 bytes per pixel
 	int numPixels = fileSize / 2;
 	m_terrainWidth = static_cast<int>(sqrt(numPixels));
 	m_terrainHeight = m_terrainWidth;
 
-	// Safte Check ensure the file is perfectly squared
+	// Safety Check to ensure the file is a perfect square
 	if (m_terrainWidth * m_terrainHeight != numPixels)
 	{
 		OutputDebugStringA("Raw File is not a perfect square!");
@@ -681,7 +784,7 @@ bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 		return false;
 	}
 
-	// Read the 16_bit data
+	// Read the 16-bit data
 	unsigned short* rawImage = new unsigned short[numPixels];
 	fread(rawImage, sizeof(unsigned short), numPixels, filePtr);
 	fclose(filePtr);
@@ -692,16 +795,12 @@ bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 	{
 		for (int i = 0; i < m_terrainWidth; i++)
 		{
-			// Read the raw Array
 			int rawIndex = (j * m_terrainWidth) + i;
-
-			int index = (m_terrainHeight - 1 - j) * m_terrainWidth + i;
+			int index = j * m_terrainWidth + i;
 			m_heightMap[index].x = (float)i;
 			// Normalize by dividing by 65535 instead of 255!
 			m_heightMap[index].y = (float)rawImage[rawIndex] / 65535.0f;
 			m_heightMap[index].z = (float)j;
-
-
 		}
 	}
 	delete[] rawImage;
@@ -710,96 +809,61 @@ bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 
 bool HEIN::TerrainComponent::CalculateNormals()
 {
-	// Initialize all normals, tangents, and binormals to Zero
-	for (int i = 0; i < m_vertexCount; i++)
+	if (m_terrainWidth <= 0 || m_terrainHeight <= 0 || m_heightMap.empty())
 	{
-		m_heightMap[i].nx = 0.0f;
-		m_heightMap[i].ny = 0.0f;
-		m_heightMap[i].nz = 0.0f;
-		m_heightMap[i].tx = 0.0f;
-		m_heightMap[i].ty = 0.0f;
-		m_heightMap[i].tz = 0.0f;
-		m_heightMap[i].bx = 0.0f;
-		m_heightMap[i].by = 0.0f;
-		m_heightMap[i].bz = 0.0f;
+		return false;
 	}
 
-	// Go through every quad in the grid and calculate face normals, tangents, and binormals
-	for (int j = 0; j < (m_terrainHeight - 1); j++)
+	// Calculate smooth, high-precision surface normals, tangents, and binormals
+	// using central differences across the heightfield.
+	for (int j = 0; j < m_terrainHeight; j++)
 	{
-		for (int i = 0; i < (m_terrainWidth - 1); i++)
+		for (int i = 0; i < m_terrainWidth; i++)
 		{
-			int index1 = (m_terrainHeight - 1 - j) * m_terrainWidth + i;         // Bottom Left
-			int index2 = (m_terrainHeight - 1 - j) * m_terrainWidth + (i + 1);   // Bottom Right
-			int index3 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + i;   // Up Left
-			int index4 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + (i + 1); // Up Right
+			int index = j * m_terrainWidth + i;
 
-			// Triangle 1 (index3, index4, index1)
-			DirectX::SimpleMath::Vector3 v1(m_heightMap[index3].x, m_heightMap[index3].y * m_heightScale, m_heightMap[index3].z);
-			DirectX::SimpleMath::Vector3 v2(m_heightMap[index4].x, m_heightMap[index4].y * m_heightScale, m_heightMap[index4].z);
-			DirectX::SimpleMath::Vector3 v3(m_heightMap[index1].x, m_heightMap[index1].y * m_heightScale, m_heightMap[index1].z);
+			int leftX = (i > 0) ? i - 1 : 0;
+			int rightX = (i < m_terrainWidth - 1) ? i + 1 : m_terrainWidth - 1;
+			int downY = (j > 0) ? j - 1 : 0;
+			int upY = (j < m_terrainHeight - 1) ? j + 1 : m_terrainHeight - 1;
 
-			DirectX::SimpleMath::Vector3 edge1 = v2 - v1;
-			DirectX::SimpleMath::Vector3 edge2 = v3 - v1;
-			DirectX::SimpleMath::Vector3 normal1 = edge1.Cross(edge2);
+			float hL = m_heightMap[j * m_terrainWidth + leftX].y * m_heightScale;
+			float hR = m_heightMap[j * m_terrainWidth + rightX].y * m_heightScale;
+			float hD = m_heightMap[downY * m_terrainWidth + i].y * m_heightScale;
+			float hU = m_heightMap[upY * m_terrainWidth + i].y * m_heightScale;
 
-			m_heightMap[index3].nx += normal1.x; m_heightMap[index3].ny += normal1.y; m_heightMap[index3].nz += normal1.z;
-			m_heightMap[index4].nx += normal1.x; m_heightMap[index4].ny += normal1.y; m_heightMap[index4].nz += normal1.z;
-			m_heightMap[index1].nx += normal1.x; m_heightMap[index1].ny += normal1.y; m_heightMap[index1].nz += normal1.z;
+			float dx = (float)(rightX - leftX);
+			float dz = (float)(upY - downY);
+			if (dx <= 0.0001f) dx = 1.0f;
+			if (dz <= 0.0001f) dz = 1.0f;
 
-			m_heightMap[index3].tx += edge1.x; m_heightMap[index3].ty += edge1.y; m_heightMap[index3].tz += edge1.z;
-			m_heightMap[index4].tx += edge1.x; m_heightMap[index4].ty += edge1.y; m_heightMap[index4].tz += edge1.z;
-			m_heightMap[index1].tx += edge1.x; m_heightMap[index1].ty += edge1.y; m_heightMap[index1].tz += edge1.z;
+			float dHdX = (hR - hL) / dx;
+			float dHdZ = (hU - hD) / dz;
 
-			m_heightMap[index3].bx += edge2.x; m_heightMap[index3].by += edge2.y; m_heightMap[index3].bz += edge2.z;
-			m_heightMap[index4].bx += edge2.x; m_heightMap[index4].by += edge2.y; m_heightMap[index4].bz += edge2.z;
-			m_heightMap[index1].bx += edge2.x; m_heightMap[index1].by += edge2.y; m_heightMap[index1].bz += edge2.z;
+			// Normal vector pointing UP towards sky (+Y)
+			DirectX::SimpleMath::Vector3 normal(-dHdX, 1.0f, -dHdZ);
+			normal.Normalize();
 
-			// Triangle 2 (index1, index4, index2)
-			v1 = DirectX::SimpleMath::Vector3(m_heightMap[index1].x, m_heightMap[index1].y * m_heightScale, m_heightMap[index1].z);
-			v2 = DirectX::SimpleMath::Vector3(m_heightMap[index4].x, m_heightMap[index4].y * m_heightScale, m_heightMap[index4].z);
-			v3 = DirectX::SimpleMath::Vector3(m_heightMap[index2].x, m_heightMap[index2].y * m_heightScale, m_heightMap[index2].z);
+			// Tangent vector along +X
+			DirectX::SimpleMath::Vector3 tangent(1.0f, dHdX, 0.0f);
+			tangent.Normalize();
 
-			edge1 = v2 - v1;
-			edge2 = v3 - v1;
-			normal1 = edge1.Cross(edge2);
+			// Binormal vector along +Z
+			DirectX::SimpleMath::Vector3 binormal(0.0f, dHdZ, 1.0f);
+			binormal.Normalize();
 
-			m_heightMap[index1].nx += normal1.x; m_heightMap[index1].ny += normal1.y; m_heightMap[index1].nz += normal1.z;
-			m_heightMap[index4].nx += normal1.x; m_heightMap[index4].ny += normal1.y; m_heightMap[index4].nz += normal1.z;
-			m_heightMap[index2].nx += normal1.x; m_heightMap[index2].ny += normal1.y; m_heightMap[index2].nz += normal1.z;
+			m_heightMap[index].nx = normal.x;
+			m_heightMap[index].ny = normal.y;
+			m_heightMap[index].nz = normal.z;
 
-			m_heightMap[index1].tx += edge2.x; m_heightMap[index1].ty += edge2.y; m_heightMap[index1].tz += edge2.z;
-			m_heightMap[index4].tx += edge2.x; m_heightMap[index4].ty += edge2.y; m_heightMap[index4].tz += edge2.z;
-			m_heightMap[index2].tx += edge2.x; m_heightMap[index2].ty += edge2.y; m_heightMap[index2].tz += edge2.z;
+			m_heightMap[index].tx = tangent.x;
+			m_heightMap[index].ty = tangent.y;
+			m_heightMap[index].tz = tangent.z;
 
-			m_heightMap[index1].bx += edge1.x; m_heightMap[index1].by += edge1.y; m_heightMap[index1].bz += edge1.z;
-			m_heightMap[index4].bx += edge1.x; m_heightMap[index4].by += edge1.y; m_heightMap[index4].bz += edge1.z;
-			m_heightMap[index2].bx += edge1.x; m_heightMap[index2].by += edge1.y; m_heightMap[index2].bz += edge1.z;
+			m_heightMap[index].bx = binormal.x;
+			m_heightMap[index].by = binormal.y;
+			m_heightMap[index].bz = binormal.z;
 		}
-	}
-
-	for (int i = 0; i < m_vertexCount; i++)
-	{
-		DirectX::SimpleMath::Vector3 n(m_heightMap[i].nx, m_heightMap[i].ny, m_heightMap[i].nz);
-		if (n.LengthSquared() > 0.0001f) n.Normalize();
-		else n = DirectX::SimpleMath::Vector3(0.0f, 1.0f, 0.0f);
-		m_heightMap[i].nx = n.x;
-		m_heightMap[i].ny = n.y;
-		m_heightMap[i].nz = n.z;
-
-		DirectX::SimpleMath::Vector3 t(m_heightMap[i].tx, m_heightMap[i].ty, m_heightMap[i].tz);
-		if (t.LengthSquared() > 0.0001f) t.Normalize();
-		else t = DirectX::SimpleMath::Vector3(1.0f, 0.0f, 0.0f);
-		m_heightMap[i].tx = t.x;
-		m_heightMap[i].ty = t.y;
-		m_heightMap[i].tz = t.z;
-
-		DirectX::SimpleMath::Vector3 b(m_heightMap[i].bx, m_heightMap[i].by, m_heightMap[i].bz);
-		if (b.LengthSquared() > 0.0001f) b.Normalize();
-		else b = DirectX::SimpleMath::Vector3(0.0f, 0.0f, 1.0f);
-		m_heightMap[i].bx = b.x;
-		m_heightMap[i].by = b.y;
-		m_heightMap[i].bz = b.z;
 	}
 
 	return true;
@@ -807,96 +871,117 @@ bool HEIN::TerrainComponent::CalculateNormals()
 
 bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 {
-	// Indices (6 indices per quad (2 triangles) to connect the vertices)
-	m_indexCount = (m_terrainWidth - 1) * (m_terrainHeight - 1) * 6;
+	m_cells.clear();
 
-	std::vector<TerrainVertexType> vertices(m_vertexCount);
-	std::vector<uint32_t> indices(m_indexCount);
+	if (m_terrainWidth <= 1 || m_terrainHeight <= 1 || m_heightMap.empty())
+	{
+		return false;
+	}
+
+	const int quadsPerCell = 32;
+
+	int cellRowCount = (m_terrainWidth - 1 + quadsPerCell - 1) / quadsPerCell;
+	int cellColumnCount = (m_terrainHeight - 1 + quadsPerCell - 1) / quadsPerCell;
 
 	float halfWidth = (float)m_terrainWidth / 2.0f;
 	float halfDepth = (float)m_terrainHeight / 2.0f;
 
-	// Create the Unique Vertices
-	for (int i = 0; i < m_vertexCount; i++)
+	// Loop through every cell in the grid
+	for (int j = 0; j < cellColumnCount; j++)
 	{
-		vertices[i].position.x = m_heightMap[i].x - halfWidth;
-		vertices[i].position.y = m_heightMap[i].y * m_heightScale;
-		vertices[i].position.z = m_heightMap[i].z - halfDepth;
-
-		vertices[i].normal.x = m_heightMap[i].nx;
-		vertices[i].normal.y = m_heightMap[i].ny;
-		vertices[i].normal.z = m_heightMap[i].nz;
-
-		vertices[i].tangent.x = m_heightMap[i].tx;
-		vertices[i].tangent.y = m_heightMap[i].ty;
-		vertices[i].tangent.z = m_heightMap[i].tz;
-
-		vertices[i].binormal.x = m_heightMap[i].bx;
-		vertices[i].binormal.y = m_heightMap[i].by;
-		vertices[i].binormal.z = m_heightMap[i].bz;
-
-		int gridX = i % m_terrainWidth;
-		int gridY = i / m_terrainWidth;
-
-		float u = ((float)gridX / (float)(m_terrainWidth - 1));
-		float v = ((float)gridY / (float)(m_terrainHeight - 1));
-
-		// To flip Vertically(Upside Down)
-		v = 1.0f - v;
-
-		vertices[i].texture.x = u;
-		vertices[i].texture.y = v;
-
-		// Pass the exact painted color to the GPU
-		vertices[i].color.x = m_heightMap[i].r;
-		vertices[i].color.y = m_heightMap[i].g;
-		vertices[i].color.z = m_heightMap[i].b;
-		vertices[i].color.w = 1.0f; // Alpha
-	}
-
-	// Create the Indices
-	int index = 0;
-	for (int j = 0; j < (m_terrainHeight - 1); j++)
-	{
-		for (int i = 0; i < (m_terrainWidth - 1); i++)
+		for (int i = 0; i < cellRowCount; i++)
 		{
-			int index1 = (m_terrainHeight - 1 - j) * m_terrainWidth + i; // Bottom Left
-			int index2 = (m_terrainHeight - 1 - j) * m_terrainWidth + (i + 1); // Bottom Right
-			int index3 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + i; // Up Left
-			int index4 = (m_terrainHeight - 1 - (j + 1)) * m_terrainWidth + (i + 1); // Up Right
+			int cellStartX = i * quadsPerCell;
+			int cellStartY = j * quadsPerCell;
 
-			indices[index++] = index3;
-			indices[index++] = index4;
-			indices[index++] = index1;
+			int cellQuadsX = std::min(quadsPerCell, (m_terrainWidth - 1) - cellStartX);
+			int cellQuadsY = std::min(quadsPerCell, (m_terrainHeight - 1) - cellStartY);
 
-			indices[index++] = index1;
-			indices[index++] = index4;
-			indices[index++] = index2;
+			int cellVertsX = cellQuadsX + 1;
+			int cellVertsY = cellQuadsY + 1;
+
+			std::vector<TerrainVertexType> vertices(cellVertsX * cellVertsY);
+			std::vector<uint32_t> indices(cellQuadsX * cellQuadsY * 6);
+
+			int vertexIndex = 0;
+
+			for (int localY = 0; localY < cellVertsY; localY++)
+			{
+				for (int localX = 0; localX < cellVertsX; localX++)
+				{
+					int globalX = cellStartX + localX;
+					int globalY = cellStartY + localY;
+
+					int globalIndex = (globalY * m_terrainWidth) + globalX;
+
+					vertices[vertexIndex].position.x = m_heightMap[globalIndex].x - halfWidth;
+					vertices[vertexIndex].position.y = m_heightMap[globalIndex].y * m_heightScale;
+					vertices[vertexIndex].position.z = m_heightMap[globalIndex].z - halfDepth;
+
+					vertices[vertexIndex].normal.x = m_heightMap[globalIndex].nx;
+					vertices[vertexIndex].normal.y = m_heightMap[globalIndex].ny;
+					vertices[vertexIndex].normal.z = m_heightMap[globalIndex].nz;
+
+					vertices[vertexIndex].tangent.x = m_heightMap[globalIndex].tx;
+					vertices[vertexIndex].tangent.y = m_heightMap[globalIndex].ty;
+					vertices[vertexIndex].tangent.z = m_heightMap[globalIndex].tz;
+
+					vertices[vertexIndex].binormal.x = m_heightMap[globalIndex].bx;
+					vertices[vertexIndex].binormal.y = m_heightMap[globalIndex].by;
+					vertices[vertexIndex].binormal.z = m_heightMap[globalIndex].bz;
+
+					float u = ((float)globalX / (float)(m_terrainWidth - 1));
+					float v = ((float)globalY / (float)(m_terrainHeight - 1));
+
+					vertices[vertexIndex].texture.x = u;
+					vertices[vertexIndex].texture.y = 1.0f - v; // Flip V
+
+					DirectX::SimpleMath::Vector3 cellTint(1.0f, 1.0f, 1.0f);
+					if (m_debugCellColors)
+					{
+						// Distinct checkerboard / palette pattern per cell
+						float cr = ((i % 3) == 0) ? 1.0f : ((i % 3) == 1 ? 0.35f : 0.7f);
+						float cg = ((j % 3) == 0) ? 0.35f : ((j % 3) == 1 ? 1.0f : 0.7f);
+						float cb = (((i + j) % 3) == 0) ? 0.35f : 1.0f;
+						cellTint = DirectX::SimpleMath::Vector3(cr, cg, cb);
+					}
+
+					vertices[vertexIndex].color.x = m_heightMap[globalIndex].r * cellTint.x;
+					vertices[vertexIndex].color.y = m_heightMap[globalIndex].g * cellTint.y;
+					vertices[vertexIndex].color.z = m_heightMap[globalIndex].b * cellTint.z;
+					vertices[vertexIndex].color.w = 1.0f;
+
+					vertexIndex++;
+				}
+			}
+
+			// Generate the indices to stitch this specific chunk together
+			int index = 0;
+			for (int localY = 0; localY < cellQuadsY; localY++)
+			{
+				for (int localX = 0; localX < cellQuadsX; localX++)
+				{
+					int index1 = (localY * cellVertsX) + localX;
+					int index2 = (localY * cellVertsX) + (localX + 1);
+					int index3 = ((localY + 1) * cellVertsX) + localX;
+					int index4 = ((localY + 1) * cellVertsX) + (localX + 1);
+
+					indices[index++] = index1;
+					indices[index++] = index2;
+					indices[index++] = index3;
+
+					indices[index++] = index2;
+					indices[index++] = index4;
+					indices[index++] = index3;
+				}
+			}
+
+			// Hand the memory over to the new cell and save it!
+			auto cell = std::make_unique<TerrainCell>();
+			cell->Initialize(device, vertices.data(), (int)vertices.size(), indices.data(), (int)indices.size());
+			m_cells.push_back(std::move(cell));
 		}
 	}
-
-	// Create the DirectX Buffer
-	D3D11_BUFFER_DESC vertexBufferDesc = {};
-	vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	vertexBufferDesc.ByteWidth = sizeof(TerrainVertexType) * m_vertexCount;
-	vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-
-	D3D11_SUBRESOURCE_DATA vertexData = {};
-	vertexData.pSysMem = vertices.data();
-	DX::ThrowIfFailed(
-		device->CreateBuffer(&vertexBufferDesc, &vertexData, m_vertexBuffer.ReleaseAndGetAddressOf())
-	);
-
-	D3D11_BUFFER_DESC indexBufferDesc = {};
-	indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	indexBufferDesc.ByteWidth = sizeof(uint32_t) * m_indexCount;
-	indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-
-	D3D11_SUBRESOURCE_DATA indexData = {};
-	indexData.pSysMem = indices.data();
-	DX::ThrowIfFailed(
-		device->CreateBuffer(&indexBufferDesc, &indexData, m_indexBuffer.ReleaseAndGetAddressOf())
-	);
 
 	return true;
 }
@@ -926,11 +1011,6 @@ bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
 	int bytesPerPixel = bitmapInfoHeader.biBitCount / 8;
 	if (bytesPerPixel < 3) bytesPerPixel = 3;
 
-	// Calculate the "Row Pitch" (the actual length of a row in bytes).
-	// RULE: The BMP file format requires every row of pixels to be padded with 
-	// empty bytes so that its total length is always a multiple of 4.
-	// The math `(x + 3) & ~3` is a fast bitwise trick that rounds the byte count 
-	// UP to the nearest multiple of 4.
 	int rowPitch = (m_terrainWidth * bytesPerPixel + 3) & ~3;
 	imageSize = rowPitch * m_terrainHeight;
 
@@ -944,8 +1024,8 @@ bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
 	{
 		for (i = 0; i < m_terrainWidth; i++)
 		{
-			int pixelOffset = j * rowPitch + i * bytesPerPixel;
-			index = (m_terrainHeight - 1 - j) * m_terrainWidth + i;
+			int pixelOffset = (m_terrainHeight - 1 - j) * rowPitch + i * bytesPerPixel;
+			index = j * m_terrainWidth + i;
 
 			// Windows BMP files store pixels in BGR (Blue, Green, Red) format!
 			m_heightMap[index].b = (float)bitmapImage[pixelOffset] / 255.0f;

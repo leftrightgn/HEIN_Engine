@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "PhysicsSystem.h"
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
@@ -83,6 +83,9 @@ void HEIN::PhysicsSystem::UpdateCollisions(GameContext& gameContext, HEIN::Actor
                 colA->SetCollidingThisFrame(true);
                 colB->SetCollidingThisFrame(true);
 
+                // Separation of Solid Pushboxes from Trigger Hitboxes.
+                // Solid pushboxes block movement and resolve penetration via MTV.
+                // Trigger hitboxes pass through and dispatch damage events.
                 if (isATrigger == false && isBTrigger == false)
                 {
                     ResolvePhysicalOverlap(colA, colB, mainfold);

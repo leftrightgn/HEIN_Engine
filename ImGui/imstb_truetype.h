@@ -1281,7 +1281,7 @@ static stbtt__buf stbtt__cff_index_get(stbtt__buf b, int i)
 // accessors to parse data from file
 //
 
-// on platforms that don't allow misaligned reads, if we want to allow
+// on platforms that don't allow misaligned reads, if it is intended to allow
 // truetype fonts that aren't padded to alignment, define ALLOW_UNALIGNED_TRUETYPE
 
 #define ttBYTE(p)     (* (stbtt_uint8 *) (p))
@@ -4148,7 +4148,7 @@ static float stbtt__oversample_shift(int oversample)
 
    // The prefilter is a box filter of width "oversample",
    // which shifts phase by (oversample - 1)/2 pixels in
-   // oversampled space. We want to shift in the opposite
+   // oversampled space. it is intended to shift in the opposite
    // direction to counter this.
    return (float)-(oversample - 1) / (2.0f * (float)oversample);
 }

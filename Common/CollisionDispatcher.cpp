@@ -7,6 +7,9 @@
 #include "Components/ColliderComponent/AABBColliderComponent.h"
 #include <Components/ColliderComponent/MeshColliderComponent.h>
 
+// Dispatches appropriate SAT geometry tests based on collider shapes.
+// Ensures consistent Minimum Translation Vector (MTV) direction by inverting the normal 
+// if the argument order is swapped (e.g., AABB vs Capsule -> Capsule vs AABB).
 HEIN::CollisionManifold HEIN::CollisionDispatcher::CheckCollision(HEIN::ColliderComponent* colA, HEIN::ColliderComponent* colB)
 {
     HEIN::CollisionManifold resultManifold;
