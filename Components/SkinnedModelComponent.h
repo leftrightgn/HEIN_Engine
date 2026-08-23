@@ -4,6 +4,11 @@
 
 namespace HEIN
 {
+	/// <summary>
+	/// Manages skeletal animations, bone matrix palette calculations, and Mixamo SDKMesh rendering.
+	/// Executes during Phase C (Transform Cascading & Skeletal Animation) to sync bone transformations
+	/// for accurate physics and combat rendering without 1-frame delays.
+	/// </summary>
 	class SkinnedModelComponent : public IComponent
 	{
 	private:
@@ -94,6 +99,49 @@ namespace HEIN
 		void SetVisible(bool visible) { m_isVisible = visible; }
 		bool IsVisible() const { return m_isVisible; }
 
+		size_t GetBoneCount() const { return m_model ? m_model->bones.size() : 0; }
+
+		std::string GetBoneName(int index) const
+		{
+			if (!m_model || index < 0 || index >= m_model->bones.size()) return "Unknown";
+			return std::string(m_model->bones[index].name.begin(), m_model->bones[index].name.end());
+		}
+
+		int GetParentBoneIndex(int index) const
+		{
+			if (!m_model || index < 0 || index >= m_model->bones.size()) return -1;
+			return m_model->bones[index].parentIndex;
+		}
+
+		DirectX::SimpleMath::Matrix GetBindPoseLocalMatrix(int index) const
+		{
+			if (!m_model || index < 0 || index >= m_model->bones.size()) return DirectX::SimpleMath::Matrix::Identity;
+			return m_model->boneMatrices[index];
+		}
+
+		// This function hijacks the rendering pipeline to draw custom Editor poses
+		void OverrideBones(const DirectX::SimpleMath::Matrix* localBones)
+		{
+			if (!m_model) return;
+
+			// Safely cast the SimpleMath matrix array to the raw XMMATRIX array DirectXTK expects
+			const DirectX::XMMATRIX* rawLocalBones = reinterpret_cast<const DirectX::XMMATRIX*>(localBones);
+
+			// Converts local matrices down the hierarchy into absolute world-space bone matrices
+			m_model->CopyAbsoluteBoneTransforms(m_model->bones.size(), rawLocalBones, m_drawBones.get());
+
+			// Copy the draw bones to the skin bones array
+			for (size_t i = 0; i < m_model->bones.size(); i++)
+			{
+				m_skinBones[i] = m_drawBones[i];
+			}
+
+			// Apply the Inverse Bind Pose securely using your existing AnimationSDKMESH setup
+			if (m_currentAnimation != nullptr)
+			{
+				m_currentAnimation->ApplySkinMatrix(*m_model, m_model->bones.size(), m_skinBones.get());
+			}
+		}
 
 	};
 }

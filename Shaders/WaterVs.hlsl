@@ -50,8 +50,11 @@ PS_INPUT main(VS_INPUT input)
     
     float2 centerUV = (posWorld.xz * uvScale) + uvScroll;
     
-    // Sample the texture for the Height
-    // Sample slightly to the right and slightly up to calculate the normal slope
+    // Wave Vertex Displacement Mathematics:
+    // Based on equation: y(x, z, t) = A * sin(k_x x + w t) * cos(k_z z + 0.8w t)
+    // this is achieved procedural generation by sampling a deterministic noise map (A) 
+    // across scrolling UV coordinates (time 't' and spatial 'x, z' frequencies).
+    // samples are taken slightly to the right and up to calculate the normal slope via finite differences.
   
     float heightCenter = noiseMap.SampleLevel(SampleType, centerUV, 0).r;
     float heightRight = noiseMap.SampleLevel(SampleType, centerUV + float2(offset, 0.0f), 0).r;

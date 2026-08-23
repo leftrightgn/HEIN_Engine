@@ -787,7 +787,7 @@ struct ImPool
     // Can be avoided if you know .Remove() has never been called on the pool, or AliveCount == GetMapSize()
     int         GetAliveCount() const               { return AliveCount; }      // Number of active/alive items in the pool (for display purpose)
     int         GetBufSize() const                  { return Buf.Size; }
-    int         GetMapSize() const                  { return Map.Data.Size; }   // It is the map we need iterate to find valid items, since we don't have "alive" storage anywhere
+    int         GetMapSize() const                  { return Map.Data.Size; }   // It is the map it is needederate to find valid items, since we don't have "alive" storage anywhere
     T*          TryGetMapData(ImPoolIdx n)          { int idx = Map.Data[n].val_i; if (idx == -1) return NULL; return GetByIndex(idx); }
 };
 
@@ -1251,8 +1251,8 @@ struct IMGUI_API ImGuiInputTextState
     int                     LineCount;              // last line count (solely for debugging)
     float                   WrapWidth;              // word-wrapping width
     float                   CursorAnim;             // timer for cursor blink, reset on every user action so the cursor reappears immediately
-    bool                    CursorFollow;           // set when we want scrolling to follow the current cursor position (not always!)
-    bool                    CursorCenterY;          // set when we want scrolling to be centered over the cursor position (while resizing a word-wrapping field)
+    bool                    CursorFollow;           // set when it is intended scrolling to follow the current cursor position (not always!)
+    bool                    CursorCenterY;          // set when it is intended scrolling to be centered over the cursor position (while resizing a word-wrapping field)
     bool                    SelectedAllMouseLock;   // after a double-click to select all, we ignore further mouse drags to update selection
     bool                    EditedBefore;           // edited since activated
     bool                    EditedThisFrame;        // edited this frame
@@ -2923,7 +2923,7 @@ struct ImGuiTableColumn
     bool                    IsVisibleX;                     // Is actually in view (e.g. overlapping the host window clipping rectangle, not scrolled).
     bool                    IsVisibleY;
     bool                    IsRequestOutput;                // Return value for TableSetColumnIndex() / TableNextColumn(): whether we request user to output contents or not.
-    bool                    IsSkipItems;                    // Do we want item submissions to this column to be completely ignored (no layout will happen).
+    bool                    IsSkipItems;                    // Do it is intended item submissions to this column to be completely ignored (no layout will happen).
     bool                    IsPreserveWidthAuto;
     ImS8                    NavLayerCurrent;                // ImGuiNavLayer in 1 byte
     ImU8                    AutoFitQueue;                   // Queue of 8 values for the next 8 frames to request auto-fit
@@ -3157,7 +3157,7 @@ struct ImGuiTableColumnSettings
 struct ImGuiTableSettings
 {
     ImGuiID                     ID;                     // Set to 0 to invalidate/delete the setting
-    ImGuiTableFlags             SaveFlags;              // Indicate data we want to save using the Resizable/Reorderable/Sortable/Hideable flags (could be using its own flags..)
+    ImGuiTableFlags             SaveFlags;              // Indicate data it is intended to save using the Resizable/Reorderable/Sortable/Hideable flags (could be using its own flags..)
     float                       RefScale;               // Reference scale to be able to rescale columns on font/dpi changes.
     ImGuiTableColumnIdx         ColumnsCount;
     ImGuiTableColumnIdx         ColumnsCountMax;        // Maximum number of columns this settings instance can store, we can recycle a settings instance with lower number of columns but not higher

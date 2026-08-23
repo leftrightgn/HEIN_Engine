@@ -5,6 +5,8 @@ namespace HEIN
 {
 	class TransformComponent;
 
+	// Handles physical forces, integrating acceleration and velocity.
+	// Essential for the kinematic separation of Solid Pushboxes.
 	class RigidBodyComponent : public IComponent
 	{
 	private:
@@ -26,7 +28,11 @@ namespace HEIN
 		void OnInspectorGUI(GameContext& gameContext) override;
 
 
-		static constexpr float GRAVITY_FORCE = -45.0f;
+		// PURPOSE: Uses an exaggerated gravity scale (architected as -98.0 m/s^2 conceptually) 
+		// to enforce snappy, fast-paced action combat without floaty jump physics.
+		// INTENT: Ensures that when actors become airborne, they return to the ground rapidly,
+		// maintaining the high-intensity tempo of the game's combat mechanics.
+		static constexpr float GRAVITY_FORCE = -98.0f;
 
 		friend class PhysicsSystem;
 	public:

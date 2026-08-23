@@ -40,7 +40,10 @@ float4 main(PS_INPUT input) : SV_TARGET
     float3 baseColor = waterColor * (textureColor.rgb + 0.5f);
     
     
-    // Normal Mapping Logic
+    // Dual Normal Map Synthesis Logic:
+    // Implements equation: N = normalize(N1(u + v1 t) + N2(u - v2 t))
+    // Blends two scrolling normal maps moving at different velocities and scales
+    // to simulate chaotic micro-wave interference and breaking surface tension.
     float3 vertexNormal = normalize(input.Normal);
     
     // Sample the Normal Map Twice
@@ -69,7 +72,10 @@ float4 main(PS_INPUT input) : SV_TARGET
     float specIntensity = pow(saturate(dot(viewDir, reflectDir)), specularPower);
     float3 specular = float3(1.0f, 1.0f, 1.0f) * specIntensity * 0.3f;
     
-    // Fresnel Effect
+    // Fresnel Reflection Calculation:
+    // Implements Schlick's approximation: F = F0 + (1 - F0)(1 - V.N)^5
+    // Models the physical property where water becomes highly reflective at glancing 
+    // angles and more refractive (transparent) when viewed straight down.
     float fresnel = pow(1.0f - saturate(dot(combineNormal, viewDir)), fresnelPower);
     
     float3 skyReflection = specular + float3(0.4f, 0.5f, 0.7f) ;

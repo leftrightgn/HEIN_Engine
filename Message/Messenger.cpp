@@ -48,10 +48,12 @@ void HEIN::Messenger::UnRegister(int actorID)
 
 void HEIN::Messenger::Notify(int actorID, Message::MessageID messageID)
 {
+    // Locate the observer list for the given ActorID.
     std::unordered_map<int, std::vector<IObserver*>>::iterator it = m_objects.find(actorID);
 
     if (it != m_objects.end())
     {
+        // Broadcast the message to all subscribed observers for this actor.
         for (size_t i = 0; i < it->second.size(); i++)
         {
             it->second[i]->OnMessageAccepted(messageID);

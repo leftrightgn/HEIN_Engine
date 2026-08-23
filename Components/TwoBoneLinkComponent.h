@@ -9,6 +9,12 @@ namespace HEIN
 	class StaticModelComponent;
 	class CapsuleColliderComponent;
 
+	/// <summary>
+	/// Dynamically computes and spans a 3D capsule collider between two skeletal joints.
+	/// Interpolates capsule midpoint, length, and rotation to prevent loose approximations in combat hitboxes.
+	/// Mathematically derives orientation via FromToRotation and midpoint between the two bone positions.
+	/// Executes during Phase C (LateUpdate) ensuring 0-frame latency with animation state.
+	/// </summary>
 	class TwoBoneLinkComponent : public IComponent
 	{
 		SkinnedModelComponent* m_targetModel;

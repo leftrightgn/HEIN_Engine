@@ -16,6 +16,7 @@ HEIN::Actor::Actor(ActorID id, const std::wstring& tag)
 
 void HEIN::Actor::Update(float deltaTime)
 {
+	// Route update tick to all attached components sequentially
 	for (auto& comp : m_components)
 	{
 		comp->Update(deltaTime);
@@ -77,7 +78,7 @@ void HEIN::Actor::DrawInspector(GameContext& gameContext)
 		ImGui::PushID(comp.get());
 		comp->OnInspectorGUI(gameContext);
 		
-		// ponytail: We don't want them removing TransformComponent since the engine relies heavily on it being there!
+		// it is important to prevent removing TransformComponent since the engine relies heavily on it being there!
 		if (comp->GetComponentName() != "TransformComponent")
 		{
 			if (ImGui::Button("Remove Component", ImVec2(ImGui::GetContentRegionAvail().x, 0)))

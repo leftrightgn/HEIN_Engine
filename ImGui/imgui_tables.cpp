@@ -1144,7 +1144,7 @@ void ImGui::TableUpdateLayout(ImGuiTable* table)
         // - ClipRect.Min.x: Because merging draw commands doesn't compare min boundaries, we make ClipRect.Min.x match left bounds to be consistent regardless of merging.
         // - ClipRect.Max.x: using WorkMaxX instead of MaxX (aka including padding) makes things more consistent when resizing down, tho slightly detrimental to visibility in very-small column.
         // - ClipRect.Max.x: using MaxX makes it easier for header to receive hover highlight with no discontinuity and display sorting arrow.
-        // - FIXME-TABLE: We want equal width columns to have equal (ClipRect.Max.x - WorkMinX) width, which means ClipRect.max.x cannot stray off host_clip_rect.Max.x else right-most column may appear shorter.
+        // - FIXME-TABLE: it is intended equal width columns to have equal (ClipRect.Max.x - WorkMinX) width, which means ClipRect.max.x cannot stray off host_clip_rect.Max.x else right-most column may appear shorter.
         const float previous_instance_work_min_x = column->WorkMinX;
         column->WorkMinX = column->MinX + table->CellPaddingX + table->CellSpacingX1;
         column->WorkMaxX = column->MaxX - table->CellPaddingX - table->CellSpacingX2; // Expected max
@@ -2600,7 +2600,7 @@ void ImGui::TableSetupDrawChannels(ImGuiTable* table)
 // actual merging is done by table->DrawSplitter.Merge() which is called right after TableMergeDrawChannels().
 //
 // Columns where the contents didn't stray off their local clip rectangle can be merged. To achieve
-// this we merge their clip rect and make them contiguous in the channel list, so they can be merged
+// this the system merges their clip rect and make them contiguous in the channel list, so they can be merged
 // by the call to DrawSplitter.Merge() following to the call to this function.
 // We reorder draw commands by arranging them into a maximum of 4 distinct groups:
 //
@@ -2843,7 +2843,7 @@ void ImGui::TableDrawBorders(ImGuiTable* table)
             if (column->NextEnabledColumn == -1 && !is_resizable)
                 if ((table->Flags & ImGuiTableFlags_SizingMask_) != ImGuiTableFlags_SizingFixedSame || (table->Flags & ImGuiTableFlags_NoHostExtendX))
                     continue;
-            if (column->MaxX <= column->ClipRect.Min.x) // FIXME-TABLE FIXME-STYLE: Assume BorderSize==1, this is problematic if we want to increase the border size..
+            if (column->MaxX <= column->ClipRect.Min.x) // FIXME-TABLE FIXME-STYLE: Assume BorderSize==1, this is problematic if it is intended to increase the border size..
                 continue;
 
             // Draw in outer window so right-most column won't be clipped
@@ -3236,7 +3236,7 @@ void ImGui::TableHeader(const char* label)
     //GetForegroundDrawList()->AddRect(cell_r.Min, cell_r.Max, IM_COL32(255, 0, 0, 255)); // [DEBUG]
     //GetForegroundDrawList()->AddRect(bb.Min, bb.Max, IM_COL32(255, 0, 0, 255)); // [DEBUG]
 
-    // Using AllowOverlap mode because we cover the whole cell, and we want user to be able to submit subsequent items.
+    // Using AllowOverlap mode because we cover the whole cell, and it is intended user to be able to submit subsequent items.
     const bool highlight = (table->HighlightColumnHeader == column_n);
     bool hovered, held;
     bool pressed = ButtonBehavior(bb, id, &hovered, &held, ImGuiButtonFlags_AllowOverlap);
@@ -3311,7 +3311,7 @@ void ImGui::TableHeader(const char* label)
     if (text_clipped && hovered && g.ActiveId == 0)
         SetItemTooltip("%.*s", (int)(label_end - label), label);
 
-    // We don't use BeginPopupContextItem() because we want the popup to stay up even after the column is hidden
+    // We don't use BeginPopupContextItem() because it is intended the popup to stay up even after the column is hidden
     if (IsPopupOpenRequestForItem(ImGuiPopupFlags_None, id))
         TableOpenContextMenu(column_n);
 
@@ -3429,7 +3429,7 @@ void ImGui::TableAngledHeadersRowEx(ImGuiID row_id, float angle, float max_label
 
                 // Draw label
                 // - First draw at an offset where RenderTextXXX() function won't meddle with applying current ClipRect, then transform to final offset.
-                // - Handle multiple lines manually, as we want each lines to follow on the horizontal border, rather than see a whole block rotated.
+                // - Handle multiple lines manually, as it is intended each lines to follow on the horizontal border, rather than see a whole block rotated.
                 const char* label_name = TableGetColumnName(table, column_n);
                 const char* label_name_end = FindRenderedTextEnd(label_name);
                 const float line_off_step_x = (g.FontSize / -sin_a);

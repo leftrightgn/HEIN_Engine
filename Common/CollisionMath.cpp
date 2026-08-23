@@ -340,7 +340,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsMesh(HEIN::CapsuleCol
     DirectX::SimpleMath::Vector3 rayDir(0.0f, -1.0f, 0.0f); // Pointing straight down
     float maxCheckDistance = capsuleHeight + 0.5f;
 
-    // Variables to accumulate our smooth ring data
+    // Variables to accumulate the smooth ring data
     int validHits = 0;
     DirectX::SimpleMath::Vector3 accumulatedNormal = DirectX::SimpleMath::Vector3::Zero;
     float highestHitY = -FLT_MAX;
@@ -371,7 +371,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsMesh(HEIN::CapsuleCol
             }
         }
 
-        // If this specific ray hit the floor, add its data to our averages!
+        // If this specific ray hit the floor, add its data to the averages!
         if (hitSomethingForThisRay)
         {
             validHits++;
@@ -380,7 +380,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsMesh(HEIN::CapsuleCol
             // Calculate the exact Y position of this hit
             float hitY = rayOrigins[i].y - closestHitDistance;
 
-            // We want the HIGHEST hit point to prevent the player's toes from clipping into slopes
+            // it is intended the HIGHEST hit point to prevent the player's toes from clipping into slopes
             if (hitY > highestHitY)
             {
                 highestHitY = hitY;

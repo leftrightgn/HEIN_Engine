@@ -205,7 +205,10 @@ namespace HEIN
 
             if (gameContext.debugCollisionRenderer != nullptr)
             {
-                gameContext.debugCollisionRenderer->RenderAndFlush(context, gameContext.commonStates, view, m_projMatrix);
+                if (m_debugUI.IsShowCollidersEnabled())
+                    gameContext.debugCollisionRenderer->RenderAndFlush(context, gameContext.commonStates, view, m_projMatrix);
+                else
+                    gameContext.debugCollisionRenderer->Clear();
             }
 
             // Draw Editor UI & Movable Camera Viewport Window
@@ -285,7 +288,10 @@ namespace HEIN
 
                 if (gameContext.debugCollisionRenderer != nullptr)
                 {
-                    gameContext.debugCollisionRenderer->RenderAndFlush(context, gameContext.commonStates, view, m_projMatrix);
+                    if (m_debugUI.IsShowCollidersEnabled())
+                        gameContext.debugCollisionRenderer->RenderAndFlush(context, gameContext.commonStates, view, m_projMatrix);
+                    else
+                        gameContext.debugCollisionRenderer->Clear();
                 }
             }
 

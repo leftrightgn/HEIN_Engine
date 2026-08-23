@@ -24,11 +24,29 @@ namespace HEIN
 	class IGizmoEditable;
 
 	extern IGizmoEditable* g_ActiveGizmoTarget;
+
+	/**
+	 * @class DebugUIManager
+	 * @brief Central coordinator for the Level Editor interface and debugging overlays.
+	 * 
+	 * DebugUIManager bridges the engine's internal actor/component data with the Dear ImGui 
+	 * immediate-mode UI framework. It manages the full level editor pipeline state, including:
+	 * - Scene Hierarchy: Tree-view traversal of the Actor parent-child scene graph.
+	 * - Property Inspector: Dynamic reflection of selected actor and component properties.
+	 * - 3D Viewport Controls: Integration with ImGuizmo to provide interactive translation, 
+	 *   rotation, and scaling handles directly within the 3D scene view.
+	 * 
+	 * By decoupling the editor UI from the core engine runtime, this manager allows developers 
+	 * to author, inspect, and modify the game world in real-time before saving the state 
+	 * out to the JSON serialization pipeline.
+	 */
 	class DebugUIManager
 	{
 	private:
 		bool m_isVisible = true;
 		bool m_showViewportPreview = true;
+		bool m_showAnimatorWindow = false;
+		bool m_showColliders = true;
 
 		double m_lastleftClickTime = -1;
 		const double DOUBLE_CLICK_THRESHOLD = 0.3;
@@ -47,6 +65,9 @@ namespace HEIN
 
 		bool IsViewportPreviewEnabled() const { return m_showViewportPreview; }
 		void SetViewportPreviewEnabled(bool enabled) { m_showViewportPreview = enabled; }
+
+		bool IsShowCollidersEnabled() const { return m_showColliders; }
+		void SetShowCollidersEnabled(bool enabled) { m_showColliders = enabled; }
 
 		DirectX::SimpleMath::Vector2 GetViewportPos() const { return m_viewportPos; }
 		DirectX::SimpleMath::Vector2 GetViewportSize() const { return m_viewportSize; }

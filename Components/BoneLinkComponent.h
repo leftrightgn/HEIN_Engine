@@ -9,6 +9,12 @@ namespace HEIN
 	class StaticModelComponent;
 	class ColliderComponent;
 
+	/// <summary>
+	/// Anchors hitboxes directly to specific skeletal bone world coordinates (e.g., binding a Head hitbox to a head bone).
+	/// Ensures exact hitbox precision without loose approximations by evaluating:
+	/// P_bone = M_bone * P_local
+	/// Executes during Phase C (LateUpdate) to guarantee sync with SkinnedModelComponent's computed matrices.
+	/// </summary>
 	class BoneLinkComponent : public IComponent
 	{
 		SkinnedModelComponent* m_targetModel;

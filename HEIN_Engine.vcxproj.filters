@@ -25,8 +25,18 @@
     <ClCompile Include="DebugingTools\EditorUtils.cpp">
       <Filter>DebugingTools</Filter>
     </ClCompile>
-    <ClCompile Include="Components\UIButtonComponent.cpp" />
-    <ClCompile Include="Camera\ManualCameraMode.cpp" />
+    <ClCompile Include="Common\TerrainCell.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\ManualCameraMode.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\UIButtonComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\AnimationEditorComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -60,10 +70,22 @@
     <ClInclude Include="DebugingTools\EditorUtils.h">
       <Filter>DebugingTools</Filter>
     </ClInclude>
-    <ClInclude Include="Components\UIButtonComponent.h" />
-    <ClInclude Include="Camera\ManualCameraMode.h" />
-    <ClInclude Include="Camera\CameraCollisionHelper.h" />
     <ClInclude Include="Common\json.hpp" />
+    <ClInclude Include="Common\TerrainCell.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\ManualCameraMode.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\UIButtonComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera\CameraCollisionHelper.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\AnimationEditorComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -80,11 +102,11 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-  </ItemGroup>
-  <ItemGroup>
     <Filter Include="Common">
       <UniqueIdentifier>{a355142e-3d25-4fca-922d-aeadbfedb2ae}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
     <Filter Include="DirectXTK_Utilities">
       <UniqueIdentifier>{c86a2feb-a710-4e0f-8e6f-fabd949787bc}</UniqueIdentifier>
     </Filter>

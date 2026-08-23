@@ -3,6 +3,9 @@
 
 namespace HEIN
 {
+	// Primary storage container and lifecycle manager for all entities in the scene.
+	// Uses a handle-based memory layout (ActorID map) to ensure memory stability.
+	// Systems pass ActorID (uint32_t) integers instead of raw pointers to prevent dangling references.
 	class ActorManager
 	{
 	private:
@@ -20,6 +23,8 @@ namespace HEIN
 
 		Actor* CreateActor(const std::wstring& tag);
 
+		// Queues an actor for destruction at the end of the frame (Phase D).
+		// Ensures no dangling pointers during the current frame's iteration.
 		void DestroyID(ActorID id);
 		void DeleteActor(ActorID id);
 
@@ -31,6 +36,8 @@ namespace HEIN
 
 		void LateUpdateAll(float deltaTime);
 
+		// Traverses the parent-child scene graph and recalculates world matrices.
+		// Formula: M_world = M_local * M_parent_world (if parent exists)
 		void UpdateAllHierarchies();
 
 		void DrawAll(
@@ -39,6 +46,7 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& proj
 		);
 
+		// Called at the end of the frame (Phase D) to safely delete all queued actors.
 		void CleanUpDestroyedActors();
 
 		const std::unordered_map<ActorID, std::unique_ptr<Actor>>& GetAllActors() const { return m_actors; }
@@ -55,7 +63,7 @@ namespace HEIN
 		void ClearAllActors();
 	private:
 
-		// internal helper for scene graph map
+		// internal helper for scene graph map: recursively applies parent transform to children
 		void CascadeTransforms(ActorID parentID);
 	};
 }

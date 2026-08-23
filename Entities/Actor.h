@@ -27,6 +27,11 @@ namespace HEIN
 	class IComponent;
 	class ActorManager;
 
+	/// <summary>
+	/// Represents an entity in the game world using a handle-based architecture.
+	/// Actors are organized in a parent-child scene graph and do not hold direct pointers to each other.
+	/// Relying on ActorIDs prevents dangling references and provides memory stability.
+	/// </summary>
 	class Actor
 	{
 	private:
@@ -80,6 +85,11 @@ namespace HEIN
 		void SetActorType(ActorType type) { m_type = type; }
 		ActorType GetActorType() const { return m_type; }
 
+		/// <summary>
+		/// Adds a child to this actor's scene graph hierarchy.
+		/// Used during CascadeTransforms to recursively calculate the world matrix:
+		/// M_world = M_local * M_parent_world.
+		/// </summary>
 		void AddChild(ActorID id) { m_childrensID.push_back(id); }
 		void RemoveChild(ActorID id)
 		{

@@ -285,7 +285,7 @@ void ImGui_ImplDX11_RenderDrawData(ImDrawData* draw_data)
     platform_io.Renderer_RenderState = bd->RenderState = &render_state;
 
     // Render command lists
-    // (Because we merged all buffers into a single one, we maintain our own offset into them)
+    // (Because the system mergesd all buffers into a single one, we maintain our own offset into them)
     int global_idx_offset = 0;
     int global_vtx_offset = 0;
     ImVec2 clip_off = draw_data->DisplayPos;
