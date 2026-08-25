@@ -26,6 +26,7 @@ namespace HEIN
 			DirectX::SimpleMath::Vector2 padding;
 		};
 
+	public:
 		// Data
 		struct HeightMapType
 		{
@@ -36,6 +37,7 @@ namespace HEIN
 			float r, g, b;
 		};
 
+	private:
 		int m_terrainWidth;
 		int m_terrainHeight;
 		float m_heightScale;
@@ -112,6 +114,11 @@ namespace HEIN
 		void Deserialize(const nlohmann::json& data) override;
 		void InitializeAfterDeserialize(GameContext& gameContext) override;
 		void OnInspectorGUI(GameContext& gameContext) override;
+
+		int GetTerrainWidth() const { return m_terrainWidth; }
+		int GetTerrainHeight() const { return m_terrainHeight; }
+		float GetHeightScale() const { return m_heightScale; }
+		const std::vector<HeightMapType>& GetHeightMap() const { return m_heightMap; }
 
 	private:
 

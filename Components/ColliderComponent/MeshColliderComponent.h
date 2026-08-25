@@ -18,12 +18,7 @@ namespace HEIN
 		std::vector<uint16_t> m_debugIndices;
 
 	public:
-		std::string GetComponentName() const override { return "MeshColliderComponent"; }
-		nlohmann::json Serialize() override;
-		void Deserialize(const nlohmann::json& data) override;
-		void OnInspectorGUI(GameContext& gameContext) override;
-
-
+	
 		MeshColliderComponent(Actor* owner);
 
 		void LoadFromObj(const wchar_t* filePath);
@@ -39,6 +34,12 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj
 		) override;
+
+		std::string GetComponentName() const override { return "MeshColliderComponent"; }
+		nlohmann::json Serialize() override;
+		void Deserialize(const nlohmann::json& data) override;
+		void OnInspectorGUI(GameContext& gameContext) override;
+
 
 		const std::vector<Triangle>& GetWorldTriangles() const{ return m_worldTriangles; }
 	};

@@ -6,6 +6,8 @@ HEIN::DebugCameraMode::DebugCameraMode(
 	DirectX::SimpleMath::Vector3 target
 )
     : m_target(target)
+    , m_desiredTarget(target)
+    , m_isFlying(false)
     , m_yaw(YAW)
     , m_pitch(PITCH)
     , m_roll(ROLL)
@@ -92,11 +94,23 @@ void HEIN::DebugCameraMode::ProcessInput(const CameraInputState& input)
         float panSpeed = 0.5f;
 
         m_target += worldMovement * panSpeed;
+        m_isFlying = false;
+        m_desiredTarget = m_target;
     }
 }
 
-void HEIN::DebugCameraMode::Update(CameraData& outData, float /*deltaTime*/, ICameraController& /*controller*/)
+void HEIN::DebugCameraMode::Update(CameraData& outData, float deltaTime, ICameraController& /*controller*/)
 {
+    if (m_isFlying)
+    {
+        m_target = DirectX::SimpleMath::Vector3::Lerp(m_target, m_desiredTarget, 10.0f * deltaTime);
+        if ((m_target - m_desiredTarget).LengthSquared() < 0.01f)
+        {
+            m_target = m_desiredTarget;
+            m_isFlying = false;
+        }
+    }
+
     DirectX::SimpleMath::Quaternion rotation = 
         DirectX::SimpleMath::Quaternion::CreateFromYawPitchRoll(m_yaw, m_pitch, m_roll);
 

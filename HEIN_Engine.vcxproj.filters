@@ -37,6 +37,9 @@
     <ClCompile Include="Components\AnimationEditorComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
+    <ClCompile Include="Components\ColliderComponent\TerrainColliderComponent.cpp">
+      <Filter>Components\ColliderComponent</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -85,6 +88,9 @@
     </ClInclude>
     <ClInclude Include="Components\AnimationEditorComponent.h">
       <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\ColliderComponent\TerrainColliderComponent.h">
+      <Filter>Components\ColliderComponent</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

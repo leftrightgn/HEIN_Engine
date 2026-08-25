@@ -5,6 +5,7 @@
 #include <Components/ColliderComponent/CapsuleColliderComponent.h>
 #include <Components/ColliderComponent/OBBColliderComponent.h>
 #include <Components/ColliderComponent/MeshColliderComponent.h>
+#include <Components/ColliderComponent/TerrainColliderComponent.h>
 
 HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColliderComponent* capsule, HEIN::OBBColliderComponent* obb)
 {
@@ -404,6 +405,42 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsMesh(HEIN::CapsuleCol
             manifold.isColliding = true;
             manifold.normal = accumulatedNormal; // Smooth blended normal!
             manifold.penetrationDepth = highestHitY - playerFeetY;
+        }
+    }
+
+    return manifold;
+}
+
+HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsTerrain(HEIN::CapsuleColliderComponent* capsule, HEIN::TerrainColliderComponent* terrain)
+{
+    HEIN::CollisionManifold manifold;
+    manifold.isColliding = false;
+
+    if (!capsule || !terrain) return manifold;
+
+    // Get the bottom center of the capsule (the player's feet position)
+    DirectX::SimpleMath::Vector3 bottom = capsule->GetWorldBottomCenter();
+    float radius = capsule->GetRadius();
+    float playerFeetY = bottom.y - radius;
+
+    // We can sample the terrain height at the center of the capsule
+    // For more advanced collision, we could sample 5 points in a ring (like CheckCapsuleVsMesh),
+    // but a single sample is usually sufficient and extremely fast for a heightmap.
+    float terrainHeight = 0.0f;
+    DirectX::SimpleMath::Vector3 terrainNormal;
+
+    if (terrain->GetHeightAtPosition(bottom.x, bottom.z, terrainHeight, terrainNormal))
+    {
+        // If the terrain is higher than the player's feet, we have a collision!
+        // We add a tiny epsilon (0.01f) so we don't jitter when standing perfectly still.
+        if (playerFeetY < terrainHeight + 0.01f)
+        {
+            manifold.isColliding = true;
+            manifold.normal = terrainNormal;
+            manifold.penetrationDepth = terrainHeight - playerFeetY;
+            
+            // Optional: The contact point is roughly the feet position projected onto the terrain
+            manifold.contactPoint = DirectX::SimpleMath::Vector3(bottom.x, terrainHeight, bottom.z);
         }
     }
 

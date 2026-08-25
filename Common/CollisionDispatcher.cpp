@@ -6,6 +6,7 @@
 #include "Components/ColliderComponent/CapsuleColliderComponent.h"
 #include "Components/ColliderComponent/AABBColliderComponent.h"
 #include <Components/ColliderComponent/MeshColliderComponent.h>
+#include <Components/ColliderComponent/TerrainColliderComponent.h>
 
 // Dispatches appropriate SAT geometry tests based on collider shapes.
 // Ensures consistent Minimum Translation Vector (MTV) direction by inverting the normal 
@@ -76,6 +77,21 @@ HEIN::CollisionManifold HEIN::CollisionDispatcher::CheckCollision(HEIN::Collider
         HEIN::MeshColliderComponent* meshB = dynamic_cast<HEIN::MeshColliderComponent*>(colB);
 
         return HEIN::CollisionMath::CheckCapsuleVsMesh(capsuleA, meshB);
+    }
+
+    else if (shapeA == HEIN::ColliderShape::Capsule && shapeB == HEIN::ColliderShape::Terrain)
+    {
+        HEIN::CapsuleColliderComponent* capsuleA = dynamic_cast<HEIN::CapsuleColliderComponent*>(colA);
+        HEIN::TerrainColliderComponent* terrainB = dynamic_cast<HEIN::TerrainColliderComponent*>(colB);
+        return HEIN::CollisionMath::CheckCapsuleVsTerrain(capsuleA, terrainB);
+    }
+    else if (shapeA == HEIN::ColliderShape::Terrain && shapeB == HEIN::ColliderShape::Capsule)
+    {
+        HEIN::CapsuleColliderComponent* capsuleB = dynamic_cast<HEIN::CapsuleColliderComponent*>(colB);
+        HEIN::TerrainColliderComponent* terrainA = dynamic_cast<HEIN::TerrainColliderComponent*>(colA);
+        resultManifold = HEIN::CollisionMath::CheckCapsuleVsTerrain(capsuleB, terrainA);
+        resultManifold.normal = resultManifold.normal * -1.0f;
+        return resultManifold;
     }
 
     return resultManifold;

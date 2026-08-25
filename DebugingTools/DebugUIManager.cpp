@@ -25,7 +25,8 @@ namespace HEIN
 		const GameContext& gameContext,
 		HEIN::ActorManager& actorManager,
 		const DirectX::SimpleMath::Matrix& view,
-		const DirectX::SimpleMath::Matrix& proj
+		const DirectX::SimpleMath::Matrix& proj,
+		HEIN::CameraController* debugCameraController
 	)
 	{
 		if (gameContext.keyboardTracker.pressed.F1)
@@ -55,6 +56,22 @@ namespace HEIN
 		}
 
 		bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift;
+
+		if (gameContext.keyboardTracker.pressed.F && m_selectedActor != nullptr && !ImGui::GetIO().WantCaptureKeyboard)
+		{
+			HEIN::TransformComponent* transform = m_selectedActor->GetComponent<HEIN::TransformComponent>();
+			if (transform && debugCameraController)
+			{
+				DirectX::SimpleMath::Matrix worldMat = transform->GetWorldMatrix();
+				DirectX::SimpleMath::Vector3 worldPos = worldMat.Translation();
+
+				ICameraMode* currentMode = debugCameraController->GetCurrentCameraMode();
+				if (currentMode && currentMode->GetType() == CameraType::Debug)
+				{
+					currentMode->SetTarget(worldPos);
+				}
+			}
+		}
 
 		if (isShiftHeld)
 		{
