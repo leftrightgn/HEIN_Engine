@@ -60,6 +60,7 @@ namespace HEIN
 		virtual void ProcessInput(const CameraInputState& input) = 0;
         virtual bool RequiresRelativeMouse() const { return false; }
 		virtual bool LocksPlayerRotation() const { return false; }
+		virtual void SetTarget(const DirectX::SimpleMath::Vector3& target) {}
 
 		virtual void OnEnter(CameraData& /*data*/) {};
 		virtual void OnExit(CameraData& /*data*/) {};

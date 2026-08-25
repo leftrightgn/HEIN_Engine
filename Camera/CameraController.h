@@ -94,6 +94,12 @@ namespace HEIN
 			return m_cameraStack.back()->GetType();
 		}
 
+		ICameraMode* GetCurrentCameraMode() const
+		{
+			if (m_cameraStack.empty()) return nullptr;
+			return m_cameraStack.back().get();
+		}
+
 	private:
 
 		void ApplyRequest();

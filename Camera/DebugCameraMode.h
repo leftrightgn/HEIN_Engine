@@ -25,6 +25,8 @@ namespace HEIN
     private:
 
         DirectX::SimpleMath::Vector3 m_target;
+        DirectX::SimpleMath::Vector3 m_desiredTarget;
+        bool m_isFlying;
         float m_yaw;
         float m_pitch;
         float m_roll;
@@ -53,6 +55,6 @@ namespace HEIN
         void Update(CameraData& outData, float deltaTime, ICameraController& controller) override;
 
         CameraType GetType() const override { return CameraType::Debug; }
-     
+        void SetTarget(const DirectX::SimpleMath::Vector3& target) override { m_desiredTarget = target; m_isFlying = true; }
     };
 }

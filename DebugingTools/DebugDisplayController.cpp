@@ -48,16 +48,16 @@ namespace HEIN
 
         if (gameContext.keyboardTracker.pressed.F2) m_isMagnified = !m_isMagnified;
 
-        m_debugUI.Update(gameContext, mainActorManager, GetViewMatrix(), m_projMatrix);
-
-        const float deltaTime = static_cast<float>(gameContext.timer.GetElapsedSeconds());
-
         HEIN::Actor* cameraActor = m_actorManager.GetActor(m_debugCameraID);
         HEIN::CameraController* cameraComp = nullptr;
         if (cameraActor != nullptr)
         {
             cameraComp = cameraActor->GetComponent<HEIN::CameraController>();
         }
+
+        m_debugUI.Update(gameContext, mainActorManager, GetViewMatrix(), m_projMatrix, cameraComp);
+
+        const float deltaTime = static_cast<float>(gameContext.timer.GetElapsedSeconds());
 
         if (m_isMagnified && cameraComp != nullptr)
         {

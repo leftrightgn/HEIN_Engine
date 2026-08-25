@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DirectXCollision.h>
 
 namespace HEIN
 {
@@ -7,6 +8,7 @@ namespace HEIN
 	class OBBColliderComponent;
 	class AABBColliderComponent;
 	class MeshColliderComponent;
+	class TerrainColliderComponent;
 
 	struct CollisionManifold
 	{
@@ -38,6 +40,8 @@ namespace HEIN
 		static HEIN::CollisionManifold CheckCapsuleVsCapsule(HEIN::CapsuleColliderComponent* capsuleA, HEIN::CapsuleColliderComponent* capsuleB);
 
 		static HEIN::CollisionManifold CheckCapsuleVsMesh(HEIN::CapsuleColliderComponent* capsule, HEIN::MeshColliderComponent* mesh);
+
+		static HEIN::CollisionManifold CheckCapsuleVsTerrain(HEIN::CapsuleColliderComponent* capsule, HEIN::TerrainColliderComponent* terrain);
 
 		static bool IntersectRayTriangle(
 			const DirectX::SimpleMath::Vector3& rayOrigin,

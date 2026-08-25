@@ -90,7 +90,8 @@ namespace HEIN
 			const GameContext& gameContext,
 			HEIN::ActorManager& actorManager,
 			const DirectX::SimpleMath::Matrix& view,
-			const DirectX::SimpleMath::Matrix& proj
+			const DirectX::SimpleMath::Matrix& proj,
+			HEIN::CameraController* debugCameraController = nullptr
 		);
 
 		EditorAction Draw(

@@ -12,7 +12,8 @@ namespace HEIN
 		AABB,
 		OBB,
 		Capsule,
-		Mesh
+		Mesh,
+		Terrain
 	};
 
 	// Collision Filtering Layers(using BitWise Shifts)
