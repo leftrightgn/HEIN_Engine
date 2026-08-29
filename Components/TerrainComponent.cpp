@@ -23,6 +23,8 @@ bool HEIN::TerrainComponent::Initialize(
 	GameContext& gameContext,
 	const wchar_t* heightMapFilename, 
 	const wchar_t* textureFilename,
+	const wchar_t* texture2Filename,
+	const wchar_t* alphaMapFilename,
 	const wchar_t* colorMapFilename,
 	const wchar_t* normalMapFilename,
 	float heightScale,
@@ -31,6 +33,8 @@ bool HEIN::TerrainComponent::Initialize(
 {
 	m_heightMapFilename = heightMapFilename ? heightMapFilename : L"";
 	m_textureFilename = textureFilename ? textureFilename : L"";
+	m_texture2Filename = texture2Filename ? texture2Filename : L"";
+	m_alphaMapFilename = alphaMapFilename ? alphaMapFilename : L"";
 	m_colorMapFilename = colorMapFilename ? colorMapFilename : L"";
 	m_normalMapFilename = normalMapFilename ? normalMapFilename : L"";
 	m_heightScale = heightScale;
@@ -103,7 +107,17 @@ bool HEIN::TerrainComponent::Initialize(
 			}
 		}
 	}
+	m_texture2.Reset();
+	if (!m_texture2Filename.empty())
+	{
+		DirectX::CreateDDSTextureFromFile(device, m_texture2Filename.c_str(), nullptr, m_texture2.ReleaseAndGetAddressOf());
+	}
 
+	m_alphaTexture.Reset();
+	if (!m_alphaMapFilename.empty())
+	{
+		DirectX::CreateDDSTextureFromFile(device, m_alphaMapFilename.c_str(), nullptr, m_alphaTexture.ReleaseAndGetAddressOf());
+	}
 	m_normalTexture.Reset();
 	if (!m_normalMapFilename.empty())
 	{
@@ -263,6 +277,8 @@ void HEIN::TerrainComponent::Draw(
 			gameContext,
 			m_heightMapFilename.c_str(),
 			m_textureFilename.c_str(),
+			m_texture2Filename.c_str(),
+			m_alphaMapFilename.c_str(),
 			m_colorMapFilename.c_str(),
 			m_normalMapFilename.c_str(),
 			m_heightScale,
@@ -317,7 +333,8 @@ void HEIN::TerrainComponent::Draw(
 		dataPtr->hasTexture = m_texture ? 1.0f : 0.0f;
 		dataPtr->textureTiling = m_texutreTiling;
 		dataPtr->hasNormalMap = m_normalTexture ? 1.0f : 0.0f;
-		dataPtr->padding = DirectX::SimpleMath::Vector2(0.0f, 0.0f);
+		dataPtr->hasAlphaMap = m_alphaTexture ? 1.0f : 0.0f;
+		dataPtr->hasTexture2 = m_texture2 ? 1.0f : 0.0f;
 		context->Unmap(m_lightBuffer.Get(), 0);
 	}
 	context->PSSetConstantBuffers(1, 1, m_lightBuffer.GetAddressOf());
@@ -325,10 +342,14 @@ void HEIN::TerrainComponent::Draw(
 	context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 	context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 
-	ID3D11ShaderResourceView* textures[2] = {
-		m_texture ? m_texture.Get() : nullptr,
-		m_normalTexture ? m_normalTexture.Get() : nullptr
+	// Bind ALL 4 Textures to perfectly match t0, t1, t2, and t3 in the Pixel Shader
+	ID3D11ShaderResourceView* textures[4] = {
+		m_texture ? m_texture.Get() : nullptr,       // t0: Base Texture (Grass)
+		m_normalTexture ? m_normalTexture.Get() : nullptr, // t1: Normal Map
+		m_alphaTexture ? m_alphaTexture.Get() : nullptr,   // t2: Alpha Splat Map
+		m_texture2 ? m_texture2.Get() : nullptr      // t3: Second Texture (Dirt)
 	};
+	context->PSSetShaderResources(0, 4, textures);
 	context->PSSetShaderResources(0, 2, textures);
 	context->PSSetSamplers(0, 1, m_sampleState.GetAddressOf());
 
@@ -512,6 +533,8 @@ void HEIN::TerrainComponent::InitializeAfterDeserialize(GameContext& gameContext
 			gameContext,
 			m_heightMapFilename.c_str(),
 			m_textureFilename.c_str(),
+			m_texture2Filename.c_str(),
+			m_alphaMapFilename.c_str(),
 			m_colorMapFilename.c_str(),
 			m_normalMapFilename.c_str(),
 			m_heightScale,
@@ -574,6 +597,8 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 				gameContext,
 				m_heightMapFilename.c_str(),
 				m_textureFilename.c_str(),
+				m_texture2Filename.c_str(),
+				m_alphaMapFilename.c_str(),
 				m_colorMapFilename.c_str(),
 				m_normalMapFilename.c_str(),
 				m_heightScale,
@@ -581,7 +606,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			);
 		}
 		
-		ImGui::SameLine();
+		ImGui::Separator();
 		if (ImGui::Button("Browse..."))
 		{
 			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"Bitmap Files\0*.bmp;*.r16\0All Files\0*.*\0", windowHandle);
@@ -592,6 +617,8 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 					gameContext,
 					m_heightMapFilename.c_str(), 
 					m_textureFilename.c_str(),
+					m_texture2Filename.c_str(),
+					m_alphaMapFilename.c_str(),
 					m_colorMapFilename.c_str(), 
 					m_normalMapFilename.c_str(), 
 					m_heightScale, 
@@ -600,8 +627,8 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			}
 		}
 
+		
 		ImGui::Separator();
-
 		std::string texPathStr = std::string(m_textureFilename.begin(), m_textureFilename.end());
 		if (ImGui::InputText("Texture File", &texPathStr, ImGuiInputTextFlags_EnterReturnsTrue))
 		{
@@ -616,7 +643,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			}
 		}
 		
-		ImGui::SameLine();
+		ImGui::Separator();
 		if (ImGui::Button("Browse Texture..."))
 		{
 			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"DDS Files\0*.dds\0All Files\0*.*\0", windowHandle);
@@ -635,6 +662,52 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 		}
 
 		ImGui::Separator();
+
+		std::string tex2PathStr = std::string(m_texture2Filename.begin(), m_texture2Filename.end());
+		if (ImGui::InputText("Texture 2 File (Dirt)", &tex2PathStr, ImGuiInputTextFlags_EnterReturnsTrue))
+		{
+			m_texture2Filename = std::wstring(tex2PathStr.begin(), tex2PathStr.end());
+			m_needsReload = true;
+		}
+		ImGui::Separator();
+		if (ImGui::Button("Browse Tex 2..."))
+		{
+			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"DDS Files\0*.dds\0All Files\0*.*\0", windowHandle);
+			if (!selectedFile.empty())
+			{
+				m_texture2Filename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
+				m_needsReload = true;
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Remove Texture2"))
+		{
+			m_texture2Filename.clear();
+			m_texture2.Reset();
+		}
+
+		ImGui::Separator();
+
+		std::string alphaPathStr = std::string(m_alphaMapFilename.begin(), m_alphaMapFilename.end());
+		if (ImGui::InputText("Alpha Map (Splat)", &alphaPathStr, ImGuiInputTextFlags_EnterReturnsTrue))
+		{
+			m_alphaMapFilename = std::wstring(alphaPathStr.begin(), alphaPathStr.end());
+			m_needsReload = true;
+		}
+		ImGui::Separator();
+		if (ImGui::Button("Browse Alpha..."))
+		{
+			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"DDS Files\0*.dds\0All Files\0*.*\0", windowHandle);
+			if (!selectedFile.empty())
+			{
+				m_alphaMapFilename = HEIN::EditorUtils::MakeRelativePath(selectedFile);
+				m_needsReload = true;
+			}
+		}
+
+
+		ImGui::Separator();
+
 		std::string normalPathStr = std::string(m_normalMapFilename.begin(), m_normalMapFilename.end());
 		if (ImGui::InputText("NormalMap File", &normalPathStr, ImGuiInputTextFlags_EnterReturnsTrue))
 		{
@@ -648,8 +721,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 				m_normalTexture.Reset();
 			}
 		}
-
-		ImGui::SameLine();
+		ImGui::Separator();
 		if (ImGui::Button("Browse NormalMap..."))
 		{
 			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"DDS Files\0*.dds\0All Files\0*.*\0", windowHandle);
@@ -675,7 +747,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 			m_needsReload = true;
 		}
 
-		ImGui::SameLine();
+		ImGui::Separator();
 		if (ImGui::Button("Browse ColorMap..."))
 		{
 			std::wstring selectedFile = HEIN::EditorUtils::OpenFileDialog(L"Bitmap Files\0*.bmp\0All Files\0*.*\0", windowHandle);
