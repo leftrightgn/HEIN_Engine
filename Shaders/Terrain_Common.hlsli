@@ -10,12 +10,15 @@ cbuffer MatrixBuffer : register(b0)
 
 cbuffer lightBuffer : register(b1)
 {
-    float4 diffuseColor;   // the color of the sunlight (RGBA)
-    float3 lightDirection;  // the angle sun is shining for the (xyz)
-    float  hasTexture;      // flag if diffuse texture is bound
-    float  textureTiling;
-    float  hasNormalMap;    // flag if normal map is bound
-    float2 padding;
+    float4 diffuseColor;   // the color of the sunlight (RGBA) 16bytes
+    float3 lightDirection;  // the angle sun is shining for the (xyz) 12bytes
+    float  hasTexture;      // flag if diffuse texture is bound 4 bytes
+    
+    
+    float  textureTiling;  // 4bytes
+    float  hasNormalMap;    // flag if normal map is bound 4bytes
+    float hasAlphaMap;   // 4bytes
+    float hasTexture2;   // 4bytes
 }
 
 //  Struct (Data format for moving vertices through pipeline)

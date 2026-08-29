@@ -23,7 +23,8 @@ namespace HEIN
 			float hasTexture;
 			float textureTiling;
 			float hasNormalMap;
-			DirectX::SimpleMath::Vector2 padding;
+			float hasAlphaMap;
+			float hasTexture2;
 		};
 
 	public:
@@ -64,9 +65,19 @@ namespace HEIN
 
 		std::wstring m_normalMapFilename;
 
+		std::wstring m_alphaMapFilename;
+
+		std::wstring m_texture2Filename;
+	
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_texture;
 
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_normalTexture;
+
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_alphaTexture;
+
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_texture2;
+
+
 		float m_texutreTiling = 1.0f;
 
 		// Light Controls
@@ -94,6 +105,8 @@ namespace HEIN
 			GameContext& gameContext,
 			const wchar_t* heightMapFilename,
 			const wchar_t* textureFilename = L"",
+			const wchar_t* texture2Filename = L"",
+			const wchar_t* alphaMapFilename = L"",
 			const wchar_t* colorMapFilename = L"",
 			const wchar_t* normalMapFilename = L"",
 			float heightScale = 10.0f,

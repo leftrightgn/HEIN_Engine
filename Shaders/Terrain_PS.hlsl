@@ -2,6 +2,8 @@
 
 Texture2D shaderTexture : register(t0);
 Texture2D normalTexture : register(t1);
+Texture2D alphaTexture  : register(t2);
+Texture2D texture2      : register(t3);
 SamplerState SampleType : register(s0);
 
 float4 main(PixelInputType input) : SV_Target
@@ -15,10 +17,24 @@ float4 main(PixelInputType input) : SV_Target
     
     if (hasTexture > 0.5f)
     {
+        // Sample Base Texture (Grass) using TILED UVs
         textureColor = shaderTexture.Sample(SampleType, input.tex * textureTiling);
+        
+        // TEXTURE SPLATTING
+        if (hasAlphaMap > 0.5f && hasTexture2 > 0.5f)
+        {
+            // Sample Alpha Map using RAW UVs (input.tex) so it stretches across the whole map!
+            float4 alphaMap = alphaTexture.Sample(SampleType, input.tex);
+            
+            // Sample Second Texture (Dirt) using TILED UVs (input.tex * textureTiling)
+            float4 tex2Color = texture2.Sample(SampleType, input.tex * textureTiling);
+            
+            // Blend them together using the Red channel of the Alpha Map
+            textureColor = lerp(textureColor, tex2Color, alphaMap.r);
+        }
     }
-    else     
-    {        
+    else
+    {
         textureColor = float4(1.0f, 1.0f, 1.0f, 1.0f); // Default white texture
     }
     
