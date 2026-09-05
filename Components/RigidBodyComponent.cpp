@@ -62,6 +62,7 @@ nlohmann::json HEIN::RigidBodyComponent::Serialize()
     data["Mass"] = m_mass;
     data["UseGravity"] = m_useGravity;
     data["IsKinematic"] = m_isKinematic;
+	data["NeedsInitialSnap"] = m_needsInitialSnap;
     return data;
 }
 
@@ -71,6 +72,7 @@ void HEIN::RigidBodyComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("Mass")) m_mass = data["Mass"];
     if (data.contains("UseGravity")) m_useGravity = data["UseGravity"];
     if (data.contains("IsKinematic")) m_isKinematic = data["IsKinematic"];
+	if (data.contains("NeedsInitialSnap")) m_needsInitialSnap = data["NeedsInitialSnap"];
 }
 
 void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& gameContext)
@@ -80,5 +82,12 @@ void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& gameContext)
 		ImGui::DragFloat("Mass", &m_mass, 0.1f, 0.0f, 1000.0f);
 		ImGui::Checkbox("Use Gravity", &m_useGravity);
 		ImGui::Checkbox("Is Kinematic", &m_isKinematic);
+		ImGui::Text("Terrain Tools");
+		ImGui::Checkbox("Snap To Ground on Play/Load", &m_needsInitialSnap);
+
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("If checked, this actor will instantly snap to the Terrain Height on the first frame of gameplay.");
+		}
 	}
 }

@@ -5,15 +5,41 @@
 #include "Components/RigidBodyComponent.h"
 #include "Components/TransformComponent.h"
 #include "Components/ColliderComponent/ColliderComponent.h"
+#include "Components/ColliderComponent/TerrainColliderComponent.h"
+#include "../../../Dual/BlackBoard/CombatBlackBoard.h"
 
 
 void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorManager& actorManager, float deltaTime)
 {
+    // 1. Find Terrain collider dynamically for Ground Snapping
+    HEIN::TerrainColliderComponent* activeTerrain = nullptr;
+    for (auto& pair : actorManager.GetAllActors())
+    {
+        activeTerrain = pair.second->GetComponent<HEIN::TerrainColliderComponent>();
+        if (activeTerrain) break;
+    }
+
+    // 2. Find Player Position for Hibernation 
+    DirectX::SimpleMath::Vector3 playerPos = DirectX::SimpleMath::Vector3::Zero;
+    HEIN::Actor* playerActor = actorManager.GetActorByName(L"Player");
+    if (playerActor != nullptr)
+    {
+        HEIN::TransformComponent* playerTrans = playerActor->GetComponent<HEIN::TransformComponent>();
+        if (playerTrans != nullptr)
+        {
+            playerPos = playerTrans->GetPosition();
+        }
+    }
+
+    const float SIMULATION_RADIUS_SQ = 200.0f * 200.0f;
+
     // Loop through the manager's map
     for (auto& pair : actorManager.GetAllActors())
     {
         HEIN::Actor* actor = pair.second.get();
         HEIN::RigidBodyComponent* rb = actor->GetComponent<HEIN::RigidBodyComponent>();
+        HEIN::TransformComponent* transform = actor->GetComponent<HEIN::TransformComponent>();
+
         if (rb) rb->m_isGrounded = false;
 
         std::vector<HEIN::ColliderComponent*> actorColliders = actor->GetComponents<HEIN::ColliderComponent>();
@@ -22,9 +48,65 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
             col->SetCollidingThisFrame(false);
         }
 
-        // Apply Gravity and Velocity
-        HEIN::TransformComponent* transform = actor->GetComponent<HEIN::TransformComponent>();
-        if (rb != nullptr && !rb->isKinematic() && transform != nullptr)
+        if (!rb || !transform) continue;
+
+        // -------------------------------------------------------------
+        // A. ECS GROUND SNAPPING & LEASHING MEMORY
+        // -------------------------------------------------------------
+        if (rb->NeedsInitialSnap() && activeTerrain != nullptr)
+        {
+            DirectX::SimpleMath::Vector3 pos = transform->GetPosition();
+            float terrainHeight = 0.0f;
+            DirectX::SimpleMath::Vector3 normal;
+
+            if (activeTerrain->GetHeightAtPosition(pos.x, pos.z, terrainHeight, normal))
+            {
+                // Snap them perfectly to the dirt
+                pos.y = terrainHeight + 0.5f;
+                transform->SetPosition(pos);
+            }
+
+            // Record this exact snapped location as their "Home" for Leashing!
+            HEIN::CombatBlackBoard* bb = actor->GetComponent<HEIN::CombatBlackBoard>();
+            if (bb)
+            {
+                bb->spawnPosition = pos;
+                bb->hasSetSpawnPosition = true;
+            }
+
+            // Turn off the flag so this only ever runs ONCE per actor
+            rb->SetNeedsInitialSnap(false);
+        }
+
+        // -------------------------------------------------------------
+         // B. HIBERNATION CHECK (Distance Slicing)
+         // -------------------------------------------------------------
+         // Never put the player or the stage to sleep!
+        if (actor->GetActorType() != HEIN::ActorType::Player && actor->GetTag() != L"StageRoot")
+        {
+            float distSq = DirectX::SimpleMath::Vector3::DistanceSquared(playerPos, transform->GetPosition());
+
+            if (distSq > SIMULATION_RADIUS_SQ)
+            {
+                // AAA OFF-SCREEN RESET
+                // If the player is > 200m away, instantly teleport the enemy back 
+                // to their spawn point so they don't get stuck in the woods!
+                HEIN::CombatBlackBoard* bb = actor->GetComponent<HEIN::CombatBlackBoard>();
+                if (bb && bb->hasSetSpawnPosition)
+                {
+                    transform->SetPosition(bb->spawnPosition);
+                    bb->moveIntent = DirectX::SimpleMath::Vector3::Zero;
+                }
+
+                // Skip physics calculations
+                continue;
+            }
+        }
+
+        // -------------------------------------------------------------
+        // C. APPLY GRAVITY & VELOCITY (Only runs if awake!)
+        // -------------------------------------------------------------
+        if (!rb->isKinematic())
         {
             if (rb->UsesGravity() && !rb->m_isGrounded)
             {
