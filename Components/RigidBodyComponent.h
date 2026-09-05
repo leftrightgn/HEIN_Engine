@@ -21,12 +21,18 @@ namespace HEIN
 		bool m_isKinematic;
 		bool m_isGrounded = false;
 
+		// Ground snapping flag
+		bool m_needsInitialSnap = true;
+
 	public:
 		std::string GetComponentName() const override { return "RigidBodyComponent"; }
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
 		void OnInspectorGUI(GameContext& gameContext) override;
 
+		// Getter and setter for the snapping 
+		bool NeedsInitialSnap() const { return m_needsInitialSnap; }
+		void SetNeedsInitialSnap(bool needsSnap) { m_needsInitialSnap = needsSnap; }
 
 		// PURPOSE: Uses an exaggerated gravity scale (architected as -98.0 m/s^2 conceptually) 
 		// to enforce snappy, fast-paced action combat without floaty jump physics.

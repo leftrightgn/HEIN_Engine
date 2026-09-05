@@ -1,5 +1,7 @@
 #pragma once
 #include <Components/IComponent.h>
+#include "../Message/IObserver.h"
+#include "../Message/Message.h"
 
 namespace HEIN
 {
@@ -11,7 +13,7 @@ namespace HEIN
 		Posion
 	};
 
-	class DamageDealerComponent : public IComponent
+	class DamageDealerComponent : public IComponent, public IObserver
 	{
 	private:
 
@@ -23,12 +25,13 @@ namespace HEIN
 		
 		DamageDealerComponent(Actor* owner);
 
-		void Initialize(float damageAmount, DamageType damageType = DamageType::Physical);
-
-		void Start() override{}
+		void Start() override;
 		void Update(float /*deltaTime*/) override{}
 
+		void Initialize(float damageAmount, DamageType damageType = DamageType::Physical);
+
 		std::string GetComponentName() const override { return "DamageDealerComponent"; }
+		void OnMessageAccepted(Message::MessageID messageID) override;
 		nlohmann::json Serialize() override;
 		void Deserialize(const nlohmann::json& data) override;
 		void OnInspectorGUI(GameContext& gameContext) override;
