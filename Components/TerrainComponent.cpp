@@ -335,6 +335,11 @@ void HEIN::TerrainComponent::Draw(
 		dataPtr->hasNormalMap = m_normalTexture ? 1.0f : 0.0f;
 		dataPtr->hasAlphaMap = m_alphaTexture ? 1.0f : 0.0f;
 		dataPtr->hasTexture2 = m_texture2 ? 1.0f : 0.0f;
+		dataPtr->fogStart = m_fogStart;
+		dataPtr->fogEnd = m_fogEnd;
+		dataPtr->padding1 = 0.0f;
+		dataPtr->padding2 = 0.0f;
+		dataPtr->fogColor = m_fogColor;
 		context->Unmap(m_lightBuffer.Get(), 0);
 	}
 	context->PSSetConstantBuffers(1, 1, m_lightBuffer.GetAddressOf());
@@ -378,7 +383,7 @@ void HEIN::TerrainComponent::Draw(
 				fov,
 				aspect,
 				0.1f,
-				1000.0f
+				5000.0f
 			);
 		}
 
@@ -455,6 +460,10 @@ nlohmann::json HEIN::TerrainComponent::Serialize()
 	data["HeightMapPath"] = narrowPath;
 	std::string texPath(m_textureFilename.begin(), m_textureFilename.end());
 	data["TexturePath"] = texPath;
+	std::string tex2Path(m_texture2Filename.begin(), m_texture2Filename.end());
+	data["Texture2Path"] = tex2Path;
+	std::string alphaPath(m_alphaMapFilename.begin(), m_alphaMapFilename.end());
+	data["AlphaMapPath"] = alphaPath;
 	std::string colorPath(m_colorMapFilename.begin(), m_colorMapFilename.end());
 	data["ColorMapPath"] = colorPath;
 	std::string normalPath(m_normalMapFilename.begin(), m_normalMapFilename.end());
@@ -467,6 +476,9 @@ nlohmann::json HEIN::TerrainComponent::Serialize()
 	data["IsVisible"] = m_isVisible;
 	data["LightDirection"] = nlohmann::json::array({ m_lightDirection.x, m_lightDirection.y, m_lightDirection.z });
 	data["DiffuseColor"] = nlohmann::json::array({ m_diffuseColor.x, m_diffuseColor.y, m_diffuseColor.z });
+	data["FogStart"] = m_fogStart;
+	data["FogEnd"] = m_fogEnd;
+	data["FogColor"] = nlohmann::json::array({ m_fogColor.x, m_fogColor.y, m_fogColor.z, m_fogColor.w });
 
 	return data;
 }
@@ -491,6 +503,24 @@ void HEIN::TerrainComponent::Deserialize(const nlohmann::json& data)
 	else
 	{
 		m_textureFilename = L"";
+	}
+	if (data.contains("Texture2Path"))
+	{
+		std::string tex2Path = data["Texture2Path"];
+		m_texture2Filename = std::wstring(tex2Path.begin(), tex2Path.end());
+	}
+	else
+	{
+		m_texture2Filename = L"";
+	}
+	if (data.contains("AlphaMapPath"))
+	{
+		std::string alphaPath = data["AlphaMapPath"];
+		m_alphaMapFilename = std::wstring(alphaPath.begin(), alphaPath.end());
+	}
+	else
+	{
+		m_alphaMapFilename = L"";
 	}
 	if (data.contains("ColorMapPath")) 
 	{
@@ -520,6 +550,12 @@ void HEIN::TerrainComponent::Deserialize(const nlohmann::json& data)
 	if (data.contains("DiffuseColor"))
 	{
 		m_diffuseColor = DirectX::SimpleMath::Vector3(data["DiffuseColor"][0], data["DiffuseColor"][1], data["DiffuseColor"][2]);
+	}
+	if (data.contains("FogStart")) m_fogStart = data["FogStart"];
+	if (data.contains("FogEnd")) m_fogEnd = data["FogEnd"];
+	if (data.contains("FogColor"))
+	{
+		m_fogColor = DirectX::SimpleMath::Vector4(data["FogColor"][0], data["FogColor"][1], data["FogColor"][2], data["FogColor"][3]);
 	}
 	
 	m_needsReload = true; 
@@ -583,9 +619,13 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 		}
 
 		ImGui::Separator();
-		ImGui::Text("Lighting");
+		ImGui::Text("Lighting & Fog");
 		ImGui::DragFloat3("Light Direction", &m_lightDirection.x, 0.05f, -1.0f, 1.0f);
 		ImGui::ColorEdit3("Diffuse Color", &m_diffuseColor.x);
+		
+		ImGui::DragFloat("Fog Start", &m_fogStart, 5.0f, 0.0f, 5000.0f);
+		ImGui::DragFloat("Fog End", &m_fogEnd, 5.0f, 0.0f, 5000.0f);
+		ImGui::ColorEdit4("Fog Color", &m_fogColor.x);
 		
 		ImGui::Separator();
 

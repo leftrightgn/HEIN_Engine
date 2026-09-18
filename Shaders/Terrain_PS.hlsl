@@ -70,6 +70,11 @@ float4 main(PixelInputType input) : SV_Target
     
     // Force the alpha channel to 1.0f so it is fully opaque
     color = color * textureColor * input.color;
+    
+    // FOG CALCULATION
+    float fogFactor = saturate((input.viewZ - fogStart) / (fogEnd - fogStart));
+    color = lerp(color, fogColor, fogFactor);
+    
     color.a = 1.0f;
     
     return color;

@@ -7,8 +7,13 @@ PixelInputType main(VertexInputType input)
     input.position.w = 1.0f;
     
     output.position = mul(input.position, worldMatrix);
-    output.position = mul(output.position, viewMatrix);
-    output.position = mul(output.position, projectionMatrix);
+    
+    float4 viewPos = mul(output.position, viewMatrix);
+    // In a right-handed system, objects in front of the camera have negative Z.
+    // We use abs() to get a positive distance for the fog calculation.
+    output.viewZ = abs(viewPos.z);
+    
+    output.position = mul(viewPos, projectionMatrix);
     
     output.tex = input.tex;
     output.color = input.color;

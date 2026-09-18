@@ -4,6 +4,7 @@
 #include <Components/ColliderComponent/MeshColliderComponent.h>
 #include <Components/ColliderComponent/AABBColliderComponent.h>
 #include <Components/ColliderComponent/OBBColliderComponent.h>
+#include <Components/ColliderComponent/TerrainColliderComponent.h>
 #include <Common/CollisionMath.h>
 #include <vector>
 #include <algorithm>
@@ -95,6 +96,35 @@ namespace HEIN
 								closestHit = safeDist;
 							}
 						}
+					}
+				}
+
+				// Terrain Colliders (Ray Marching approximation)
+				std::vector<TerrainColliderComponent*> terrains = actor->GetComponents<TerrainColliderComponent>();
+				for (auto* terrain : terrains)
+				{
+					if (terrain == nullptr) continue;
+					
+					float stepSize = 0.5f; // half meter steps
+					float t = 0.0f;
+					while (t <= maxDistance)
+					{
+						DirectX::SimpleMath::Vector3 p = rayOrigin + rayDir * t;
+						float terrainHeight = 0.0f;
+						DirectX::SimpleMath::Vector3 terrainNormal;
+						if (terrain->GetHeightAtPosition(p.x, p.z, terrainHeight, terrainNormal))
+						{
+							if (p.y - cameraRadius < terrainHeight)
+							{
+								float safeDist = std::max(minDistance, t);
+								if (safeDist < closestHit)
+								{
+									closestHit = safeDist;
+								}
+								break;
+							}
+						}
+						t += stepSize;
 					}
 				}
 			}

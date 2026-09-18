@@ -19,6 +19,11 @@ cbuffer lightBuffer : register(b1)
     float  hasNormalMap;    // flag if normal map is bound 4bytes
     float hasAlphaMap;   // 4bytes
     float hasTexture2;   // 4bytes
+    float fogStart;
+    float fogEnd;
+    float padding1;
+    float padding2;
+    float4 fogColor;
 }
 
 //  Struct (Data format for moving vertices through pipeline)
@@ -37,6 +42,7 @@ struct PixelInputType
 {
     float4 position : SV_POSITION;
     float2 tex      : TEXCOORD0;
+    float  viewZ    : TEXCOORD1;
     float3 normal   : NORMAL;
     float3 tangent  : TANGENT;
     float3 binormal : BINORMAL;
