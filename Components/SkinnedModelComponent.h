@@ -142,7 +142,6 @@ namespace HEIN
 				m_currentAnimation->ApplySkinMatrix(*m_model, m_model->bones.size(), m_skinBones.get());
 			}
 		}
-
 	};
 }
 
