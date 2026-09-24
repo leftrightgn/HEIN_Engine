@@ -79,6 +79,12 @@ namespace HEIN
 		m_shapShotBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
 		m_blendedLocalBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
 
+		// Ensure it never holds uninitialized memory from the start
+		for (size_t i = 0; i < m_model->bones.size(); ++i)
+		{
+			m_blendedLocalBones[i] = DirectX::SimpleMath::Matrix::Identity;
+		}
+
 
 		// bone name checker
 		/*OutputDebugStringW(L"--- BONE LIST START ---\n");
@@ -140,16 +146,25 @@ namespace HEIN
 					DirectX::XMVECTOR scaleA, rotA, transA;
 					DirectX::XMVECTOR scaleB, rotB, transB;
 
-					DirectX::XMMatrixDecompose(&scaleA, &rotA, &transA, sourceLocalBones[i]);
-					DirectX::XMMatrixDecompose(&scaleB, &rotB, &transB, targetLocalBones[i]);
+					bool decompA = DirectX::XMMatrixDecompose(&scaleA, &rotA, &transA, sourceLocalBones[i]);
+					bool decompB = DirectX::XMMatrixDecompose(&scaleB, &rotB, &transB, targetLocalBones[i]);
 
-					DirectX::XMVECTOR blendScale = DirectX::XMVectorLerp(scaleA, scaleB, blendFactor);
-					DirectX::XMVECTOR blendRot = DirectX::XMQuaternionSlerp(rotA, rotB, blendFactor);
-					DirectX::XMVECTOR blendTrans = DirectX::XMVectorLerp(transA, transB, blendFactor);
+					if (decompA && decompB)
+					{
+						DirectX::XMVECTOR blendScale = DirectX::XMVectorLerp(scaleA, scaleB, blendFactor);
+						DirectX::XMVECTOR blendRot = DirectX::XMQuaternionSlerp(rotA, rotB, blendFactor);
+						DirectX::XMVECTOR blendTrans = DirectX::XMVectorLerp(transA, transB, blendFactor);
 
-					m_blendedLocalBones[i] = DirectX::XMMatrixScalingFromVector(blendScale) *
-						                     DirectX::XMMatrixRotationQuaternion(blendRot) *
-						                     DirectX::XMMatrixTranslationFromVector(blendTrans);
+						m_blendedLocalBones[i] = DirectX::XMMatrixScalingFromVector(blendScale) *
+												 DirectX::XMMatrixRotationQuaternion(blendRot) *
+												 DirectX::XMMatrixTranslationFromVector(blendTrans);
+					}
+					else
+					{
+						// Fallback if decompose fails (e.g. mirrored bones with negative scale).
+						// Cannot easily blend quaternions of reflected matrices, so just snap to the source animation.
+						m_blendedLocalBones[i] = sourceLocalBones[i];
+					}
 				}
 				m_model->CopyAbsoluteBoneTransforms(m_model->bones.size(), m_blendedLocalBones.get(), m_drawBones.get());
 			}
@@ -367,6 +382,17 @@ namespace HEIN
 			for (size_t i = 0; i < m_model->bones.size(); ++i)
 			{
 				m_shapShotBones[i] = m_drawBones[i];
+			}
+
+			// PREVENT RACE CONDITION: If another component reads GetCurrentLocalBones() 
+			// before SkinnedModelComponent::Update() runs, m_blendedLocalBones would be uninitialized garbage.
+			const DirectX::SimpleMath::Matrix* currentLocal = GetCurrentLocalBones();
+			if (currentLocal)
+			{
+				for (size_t i = 0; i < m_model->bones.size(); ++i)
+				{
+					m_blendedLocalBones[i] = currentLocal[i];
+				}
 			}
 		}
 

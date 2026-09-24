@@ -187,6 +187,7 @@
     <ClInclude Include="Common\TerrainCell.h" />
     <ClInclude Include="Components\AnimationEditorComponent.h" />
     <ClInclude Include="Components\ColliderComponent\TerrainColliderComponent.h" />
+    <ClInclude Include="Components\ProceduralAnimationComponent.h" />
     <ClInclude Include="Components\TerrainComponent.h" />
     <ClInclude Include="Components\UIButtonComponent.h" />
     <ClInclude Include="DebugingTools\EditorUtils.h" />
@@ -198,6 +199,7 @@
     <ClCompile Include="Common\TerrainCell.cpp" />
     <ClCompile Include="Components\AnimationEditorComponent.cpp" />
     <ClCompile Include="Components\ColliderComponent\TerrainColliderComponent.cpp" />
+    <ClCompile Include="Components\ProceduralAnimationComponent.cpp" />
     <ClCompile Include="Components\TerrainComponent.cpp" />
     <ClCompile Include="Components\UIButtonComponent.cpp" />
     <ClCompile Include="DebugingTools\EditorUtils.cpp" />

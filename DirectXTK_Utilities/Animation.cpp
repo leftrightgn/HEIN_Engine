@@ -209,6 +209,10 @@ bool AnimationSDKMESH::Bind(const Model& model)
 
     // Allocate bone array
     m_animBones = ModelBone::MakeArray(model.bones.size());
+    for (size_t i = 0; i < model.bones.size(); ++i)
+    {
+        m_animBones[i] = DirectX::XMMatrixIdentity();
+    }
     return result;
 }
 
@@ -436,6 +440,10 @@ void AnimationCMO::Bind(const Model& model)
     assert(!m_keys.empty());
 
     m_animBones = ModelBone::MakeArray(model.bones.size());
+    for (size_t i = 0; i < model.bones.size(); ++i)
+    {
+        m_animBones[i] = DirectX::XMMatrixIdentity();
+    }
 }
 
 void AnimationCMO::Update(float delta)

@@ -99,6 +99,19 @@ namespace HEIN
 		void SetVisible(bool visible) { m_isVisible = visible; }
 		bool IsVisible() const { return m_isVisible; }
 
+		const DirectX::SimpleMath::Matrix* GetCurrentLocalBones() const
+		{
+			if (m_isBlending)
+			{
+				return reinterpret_cast<const DirectX::SimpleMath::Matrix*>(m_blendedLocalBones.get());
+			}
+			if (m_currentAnimation)
+			{
+				return reinterpret_cast<const DirectX::SimpleMath::Matrix*>(m_currentAnimation->GetLocalBones());
+			}
+			return nullptr;
+		}
+
 		size_t GetBoneCount() const { return m_model ? m_model->bones.size() : 0; }
 
 		std::string GetBoneName(int index) const

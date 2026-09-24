@@ -326,18 +326,20 @@ nlohmann::json HEIN::CameraController::Serialize()
 void HEIN::CameraController::Deserialize(const nlohmann::json& data)
 {
 	IComponent::Deserialize(data);
-	if (data.contains("Fov")) m_data.fov = data["Fov"];
-	if (data.contains("BlendDuration")) m_blendDuration = data["BlendDuration"];
-	if (data.contains("PosX")) m_data.position.x = data["PosX"];
-	if (data.contains("PosY")) m_data.position.y = data["PosY"];
-	if (data.contains("PosZ")) m_data.position.z = data["PosZ"];
+	if (data.contains("Fov")) m_data.fov = data["Fov"].is_number() ? data["Fov"].get<float>() : DirectX::XM_PI / 4.0f;
+	if (data.contains("BlendDuration")) m_blendDuration = data["BlendDuration"].is_number() ? data["BlendDuration"].get<float>() : 1.0f;
+	
+	if (data.contains("PosX")) m_data.position.x = data["PosX"].is_number() ? data["PosX"].get<float>() : 0.0f;
+	if (data.contains("PosY")) m_data.position.y = data["PosY"].is_number() ? data["PosY"].get<float>() : 0.0f;
+	if (data.contains("PosZ")) m_data.position.z = data["PosZ"].is_number() ? data["PosZ"].get<float>() : 0.0f;
+	
 	if (data.contains("RotX") && data.contains("RotY") && data.contains("RotZ") && data.contains("RotW"))
 	{
 		m_data.rotation = DirectX::SimpleMath::Quaternion(
-			static_cast<float>(data["RotX"]),
-			static_cast<float>(data["RotY"]),
-			static_cast<float>(data["RotZ"]),
-			static_cast<float>(data["RotW"])
+			data["RotX"].is_number() ? data["RotX"].get<float>() : 0.0f,
+			data["RotY"].is_number() ? data["RotY"].get<float>() : 0.0f,
+			data["RotZ"].is_number() ? data["RotZ"].get<float>() : 0.0f,
+			data["RotW"].is_number() ? data["RotW"].get<float>() : 1.0f
 		);
 		m_data.rotation.Normalize();
 	}

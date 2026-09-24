@@ -133,15 +133,35 @@ nlohmann::json HEIN::TransformComponent::Serialize()
 
 void HEIN::TransformComponent::Deserialize(const nlohmann::json& data)
 {
-    if (data.contains("Position"))
+    if (data.contains("Position") && data["Position"].is_array())
     {
-        SetPosition(DirectX::SimpleMath::Vector3(data["Position"][0], data["Position"][1], data["Position"][2]));
+        float x = data["Position"][0].is_number() ? data["Position"][0].get<float>() : 0.0f;
+        float y = data["Position"][1].is_number() ? data["Position"][1].get<float>() : 0.0f;
+        float z = data["Position"][2].is_number() ? data["Position"][2].get<float>() : 0.0f;
+        SetPosition(DirectX::SimpleMath::Vector3(x, y, z));
     }
-    if (data.contains("Scale"))
+    if (data.contains("Scale") && data["Scale"].is_array())
     {
-        SetScale(DirectX::SimpleMath::Vector3(data["Scale"][0], data["Scale"][1], data["Scale"][2]));
+        float x = data["Scale"][0].is_number() ? data["Scale"][0].get<float>() : 1.0f;
+        float y = data["Scale"][1].is_number() ? data["Scale"][1].get<float>() : 1.0f;
+        float z = data["Scale"][2].is_number() ? data["Scale"][2].get<float>() : 1.0f;
+        SetScale(DirectX::SimpleMath::Vector3(x, y, z));
     }
-    if (data.contains("Rotation")) { m_rotation.x = data["Rotation"][0]; m_rotation.y = data["Rotation"][1]; m_rotation.z = data["Rotation"][2]; m_rotation.w = data["Rotation"][3]; m_rotation.Normalize(); } else if (data.contains("RotationEuler")) { SetRotationEuler(DirectX::SimpleMath::Vector3(data["RotationEuler"][0], data["RotationEuler"][1], data["RotationEuler"][2])); }
+    if (data.contains("Rotation") && data["Rotation"].is_array())
+    {
+        m_rotation.x = data["Rotation"][0].is_number() ? data["Rotation"][0].get<float>() : 0.0f;
+        m_rotation.y = data["Rotation"][1].is_number() ? data["Rotation"][1].get<float>() : 0.0f;
+        m_rotation.z = data["Rotation"][2].is_number() ? data["Rotation"][2].get<float>() : 0.0f;
+        m_rotation.w = data["Rotation"][3].is_number() ? data["Rotation"][3].get<float>() : 1.0f;
+        m_rotation.Normalize();
+    }
+    else if (data.contains("RotationEuler") && data["RotationEuler"].is_array())
+    {
+        float x = data["RotationEuler"][0].is_number() ? data["RotationEuler"][0].get<float>() : 0.0f;
+        float y = data["RotationEuler"][1].is_number() ? data["RotationEuler"][1].get<float>() : 0.0f;
+        float z = data["RotationEuler"][2].is_number() ? data["RotationEuler"][2].get<float>() : 0.0f;
+        SetRotationEuler(DirectX::SimpleMath::Vector3(x, y, z));
+    }
 }
 
 DirectX::SimpleMath::Matrix HEIN::TransformComponent::GetWorldMatrix() const
