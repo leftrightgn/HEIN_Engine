@@ -284,12 +284,12 @@ void HEIN::SocketComponent::Deserialize(const nlohmann::json& data)
                 std::string bStr = sData["BoneName"];
                 s.boneName = std::wstring(bStr.begin(), bStr.end());
             }
-            if (sData.contains("PosX")) s.localPosition.x = sData["PosX"];
-            if (sData.contains("PosY")) s.localPosition.y = sData["PosY"];
-            if (sData.contains("PosZ")) s.localPosition.z = sData["PosZ"];
-            if (sData.contains("RotX")) s.localRotation.x = sData["RotX"];
-            if (sData.contains("RotY")) s.localRotation.y = sData["RotY"];
-            if (sData.contains("RotZ")) s.localRotation.z = sData["RotZ"];
+            if (sData.contains("PosX")) s.localPosition.x = sData["PosX"].is_number() ? sData["PosX"].get<float>() : 0.0f;
+            if (sData.contains("PosY")) s.localPosition.y = sData["PosY"].is_number() ? sData["PosY"].get<float>() : 0.0f;
+            if (sData.contains("PosZ")) s.localPosition.z = sData["PosZ"].is_number() ? sData["PosZ"].get<float>() : 0.0f;
+            if (sData.contains("RotX")) s.localRotation.x = sData["RotX"].is_number() ? sData["RotX"].get<float>() : 0.0f;
+            if (sData.contains("RotY")) s.localRotation.y = sData["RotY"].is_number() ? sData["RotY"].get<float>() : 0.0f;
+            if (sData.contains("RotZ")) s.localRotation.z = sData["RotZ"].is_number() ? sData["RotZ"].get<float>() : 0.0f;
             m_sockets[s.name] = s;
         }
     }

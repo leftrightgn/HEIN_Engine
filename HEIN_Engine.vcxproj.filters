@@ -40,6 +40,9 @@
     <ClCompile Include="Components\ColliderComponent\TerrainColliderComponent.cpp">
       <Filter>Components\ColliderComponent</Filter>
     </ClCompile>
+    <ClCompile Include="Components\FootIKComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -91,6 +94,9 @@
     </ClInclude>
     <ClInclude Include="Components\ColliderComponent\TerrainColliderComponent.h">
       <Filter>Components\ColliderComponent</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\FootIKComponent.h">
+      <Filter>Components</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

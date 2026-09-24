@@ -25,6 +25,7 @@
 #include <Components/UIButtonComponent.h>
 #include <Components/TerrainComponent.h>
 #include <Components/SlidingDoorComponent.h>
+#include <Components/ProceduralAnimationComponent.h>
 
 namespace HEIN
 {
@@ -114,6 +115,7 @@ namespace HEIN
 			RegisterComponent<TerrainComponent>("TerrainComponent");
 			RegisterComponent<TerrainColliderComponent>("TerrainColliderComponent");
 			RegisterComponent<SlidingDoorComponent>("SlidingDoorComponent");
+			RegisterComponent<ProceduralAnimationComponent>("ProceduralAnimationComponent");
 		}
 	};
 }
