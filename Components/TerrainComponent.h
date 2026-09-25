@@ -89,10 +89,7 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 m_lightDirection = DirectX::SimpleMath::Vector3(-0.5f, -1.0f, 0.5f);
 		DirectX::SimpleMath::Vector3 m_diffuseColor = DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f);
 
-		// Fog Controls
-		float m_fogStart = 100.0f;
-		float m_fogEnd = 800.0f;
-		DirectX::SimpleMath::Vector4 m_fogColor = DirectX::SimpleMath::Vector4(0.5f, 0.6f, 0.7f, 1.0f);
+		// Fog controls are now separated into FogComponent
 
 		bool m_isVisible = true;
 		bool m_isWireFrame = false;

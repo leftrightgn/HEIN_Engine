@@ -22,6 +22,9 @@
     <ClCompile Include="Components\TerrainComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
+    <ClCompile Include="Components\FogComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
     <ClCompile Include="DebugingTools\EditorUtils.cpp">
       <Filter>DebugingTools</Filter>
     </ClCompile>
@@ -40,7 +43,7 @@
     <ClCompile Include="Components\ColliderComponent\TerrainColliderComponent.cpp">
       <Filter>Components\ColliderComponent</Filter>
     </ClCompile>
-    <ClCompile Include="Components\FootIKComponent.cpp">
+    <ClCompile Include="Components\ProceduralAnimationComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
   </ItemGroup>
@@ -73,10 +76,12 @@
     <ClInclude Include="Components\TerrainComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
+    <ClInclude Include="Components\FogComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
     <ClInclude Include="DebugingTools\EditorUtils.h">
       <Filter>DebugingTools</Filter>
     </ClInclude>
-    <ClInclude Include="Common\json.hpp" />
     <ClInclude Include="Common\TerrainCell.h">
       <Filter>Common</Filter>
     </ClInclude>
@@ -95,8 +100,11 @@
     <ClInclude Include="Components\ColliderComponent\TerrainColliderComponent.h">
       <Filter>Components\ColliderComponent</Filter>
     </ClInclude>
-    <ClInclude Include="Components\FootIKComponent.h">
+    <ClInclude Include="Components\ProceduralAnimationComponent.h">
       <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\json.hpp">
+      <Filter>Common</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

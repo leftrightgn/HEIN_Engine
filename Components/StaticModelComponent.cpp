@@ -165,13 +165,28 @@ namespace HEIN
             ID3D11ShaderResourceView** textureView
         ) override
         {
-            try
+            std::wstring wname = name ? name : L"";
+            std::wstring cand1 = m_dir + wname;
+            std::wstring cand2 = wname;
+            
+            bool exists = false;
+            if (!wname.empty())
             {
-                DirectX::DGSLEffectFactory::CreateTexture(name, deviceContext, textureView);
-                if (textureView && *textureView) return;
+                if (std::filesystem::exists(cand1) || std::filesystem::exists(cand2) ||
+                    std::filesystem::exists(cand1 + L".dds") || std::filesystem::exists(cand2 + L".dds"))
+                {
+                    exists = true;
+                }
             }
-            catch (...)
+
+            if (exists)
             {
+                try
+                {
+                    DirectX::DGSLEffectFactory::CreateTexture(name, deviceContext, textureView);
+                    if (textureView && *textureView) return;
+                }
+                catch (...) {}
             }
 
             TryLoadTexture(m_pDevice, m_dir, name, textureView);
@@ -202,13 +217,28 @@ namespace HEIN
             ID3D11ShaderResourceView** textureView
         ) override
         {
-            try
+            std::wstring wname = name ? name : L"";
+            std::wstring cand1 = m_dir + wname;
+            std::wstring cand2 = wname;
+            
+            bool exists = false;
+            if (!wname.empty())
             {
-                DirectX::EffectFactory::CreateTexture(name, deviceContext, textureView);
-                if (textureView && *textureView) return;
+                if (std::filesystem::exists(cand1) || std::filesystem::exists(cand2) ||
+                    std::filesystem::exists(cand1 + L".dds") || std::filesystem::exists(cand2 + L".dds"))
+                {
+                    exists = true;
+                }
             }
-            catch (...)
+
+            if (exists)
             {
+                try
+                {
+                    DirectX::EffectFactory::CreateTexture(name, deviceContext, textureView);
+                    if (textureView && *textureView) return;
+                }
+                catch (...) {}
             }
 
             TryLoadTexture(m_pDevice, m_dir, name, textureView);
