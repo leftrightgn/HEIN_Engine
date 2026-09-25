@@ -15,10 +15,9 @@ using namespace DirectX::SimpleMath;
 
 namespace HEIN
 {
-    ProceduralAnimationComponent::ProceduralAnimationComponent(Actor* owner, ActorManager* manager) 
+    ProceduralAnimationComponent::ProceduralAnimationComponent(Actor* owner, ActorManager* manager)
         : IComponent(owner), m_actorManager(manager)
     {
-        // Default chains like Unity/Unreal Avatar
         m_ikChains.push_back({ L"mixamorig:LeftFoot", L"mixamorig:LeftLeg", L"mixamorig:LeftUpLeg", L"mixamorig:LeftToe_End", 1.0f, 0.0f, true });
         m_ikChains.push_back({ L"mixamorig:RightFoot", L"mixamorig:RightLeg", L"mixamorig:RightUpLeg", L"mixamorig:RightToe_End", 1.0f, 0.0f, true });
     }
@@ -80,12 +79,12 @@ namespace HEIN
 
             ImGui::Separator();
             ImGui::Text("IK Chains");
-            
+
             for (size_t i = 0; i < m_ikChains.size(); ++i)
             {
                 ImGui::PushID((int)i);
                 auto& chain = m_ikChains[i];
-                
+
                 auto drawStr = [](const char* label, std::wstring& ws) {
                     std::string s(ws.begin(), ws.end());
                     char buf[256];
@@ -94,7 +93,7 @@ namespace HEIN
                         std::string ns(buf);
                         ws = std::wstring(ns.begin(), ns.end());
                     }
-                };
+                    };
 
                 drawStr("Effector", chain.effectorBoneName);
                 drawStr("Mid", chain.midBoneName);
@@ -103,7 +102,7 @@ namespace HEIN
                 ImGui::SliderFloat("Weight", &chain.weight, 0.0f, 1.0f);
                 ImGui::DragFloat("Height Offset", &chain.heightOffset, 0.1f);
                 ImGui::Checkbox("Is Foot", &chain.isFoot);
-                
+
                 if (ImGui::Button("Remove Chain"))
                 {
                     m_ikChains.erase(m_ikChains.begin() + i);
@@ -116,7 +115,7 @@ namespace HEIN
 
             if (ImGui::Button("Add IK Chain"))
             {
-                m_ikChains.push_back({L"NewEffector", L"NewMid", L"NewRoot", L"NewToe", 1.0f, 0.0f, false});
+                m_ikChains.push_back({ L"NewEffector", L"NewMid", L"NewRoot", L"NewToe", 1.0f, 0.0f, false });
             }
 
             if (m_terrain || m_meshCollider)
@@ -137,14 +136,13 @@ namespace HEIN
     {
         m_debugLines.clear();
         if (!m_enabled || m_globalIKWeight <= 0.01f) return;
-        SolveWholeBodyIK();
+        SolveWholeBodyIK(deltaTime);
     }
 
     void ProceduralAnimationComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
     {
         if (gameContext.debugCollisionRenderer && !m_debugLines.empty())
         {
-            // debugCollisionRenderer internally honors the Show Colliders toggle before actually rendering.
             for (const auto& line : m_debugLines)
             {
                 gameContext.debugCollisionRenderer->QueueLine(line.start, line.end, line.color);
@@ -152,9 +150,8 @@ namespace HEIN
         }
     }
 
-    void ProceduralAnimationComponent::SolveWholeBodyIK()
+    void ProceduralAnimationComponent::SolveWholeBodyIK(float deltaTime)
     {
-        // Start() can run before SkinnedModelComponent exists, so look it up lazily too.
         if (!m_skinnedModel)
             m_skinnedModel = m_owner->GetComponent<SkinnedModelComponent>();
 
@@ -174,27 +171,20 @@ namespace HEIN
                         m_terrain = pair.second->GetComponent<TerrainColliderComponent>();
                     if (!m_meshCollider)
                         m_meshCollider = pair.second->GetComponent<MeshColliderComponent>();
-                    
+
                     if (m_terrain && m_meshCollider)
-                    {
-                        // Found both ground sources
                         break;
-                    }
                 }
             }
             else
             {
-                // Most likely reason IK "does nothing": nobody passed an ActorManager in.
                 OutputDebugStringA("[IK] m_actorManager is null -> terrain/mesh can never be found\n");
             }
         }
 
         const Matrix* currentLocalBones = m_skinnedModel->GetCurrentLocalBones();
         if (!currentLocalBones)
-        {
-            OutputDebugStringA("[IK] no local bones (no animation playing yet?)\n");
             return;
-        }
 
         const size_t boneCount = m_skinnedModel->GetBoneCount();
         if (boneCount == 0)
@@ -207,8 +197,7 @@ namespace HEIN
         std::vector<Matrix> modifiedBones(currentLocalBones, currentLocalBones + boneCount);
         const Matrix actorWorld = transform->GetWorldMatrix();
 
-
-        for (const auto& chain : m_ikChains)
+        for (auto& chain : m_ikChains)
         {
             const float weight = std::clamp(chain.weight * m_globalIKWeight, 0.0f, 1.0f);
             if (weight <= 0.001f)
@@ -221,12 +210,11 @@ namespace HEIN
 
             if (root < 0 || mid < 0 || effector < 0)
             {
-                // Bone names must match the model exactly (substring match), e.g. "mixamorig:LeftFoot".
                 OutputDebugStringW((L"[IK] bone not found in chain: " + chain.effectorBoneName + L"\n").c_str());
                 continue;
             }
 
-            SolveTwoBoneIK(modifiedBones.data(), root, mid, effector, toe, actorWorld, weight, chain.heightOffset, chain.isFoot);
+            SolveTwoBoneIK(modifiedBones.data(), root, mid, effector, toe, actorWorld, weight, chain.heightOffset, chain.isFoot, deltaTime, chain.currentOffset, chain.currentNormal);
         }
 
         m_skinnedModel->OverrideBones(modifiedBones.data());
@@ -241,13 +229,19 @@ namespace HEIN
         const Matrix& worldMatrix,
         float weight,
         float heightOffset,
-        bool alignToTerrain)
+        bool alignToTerrain,
+        float deltaTime,
+        float& currentOffset,
+        DirectX::SimpleMath::Vector3& currentNormal)
     {
+        // Returns early if data is missing or IK weight is negligible.
         if (!localBones || !m_skinnedModel || weight <= 0.001f)
             return;
 
         static bool s_hasPrintedNaN = false;
 
+        // Utility lambda functions for math validation. 
+        // Prevents corrupted matrices from crashing the physics or rendering pipelines.
         auto checkNaN = [](const Matrix& m, const char* name) {
             for (int i = 0; i < 4; ++i) {
                 for (int j = 0; j < 4; ++j) {
@@ -263,7 +257,7 @@ namespace HEIN
                 }
             }
             return false;
-        };
+            };
         auto checkVecNaN = [](const Vector3& v, const char* name) {
             if (std::isnan(v.x) || std::isinf(v.x) || std::isnan(v.y) || std::isinf(v.y) || std::isnan(v.z) || std::isinf(v.z)) {
                 if (!s_hasPrintedNaN) {
@@ -275,7 +269,7 @@ namespace HEIN
                 return true;
             }
             return false;
-        };
+            };
         auto checkF = [](float v, const char* name) {
             if (std::isnan(v) || std::isinf(v)) {
                 if (!s_hasPrintedNaN) {
@@ -287,13 +281,9 @@ namespace HEIN
                 return true;
             }
             return false;
-        };
-
+            };
         auto checkValidAffine = [](const Matrix& m, const char* name) {
-            // Uninitialized MSVC debug memory (0xcdcdcdcd) is -4.32e8.
-            // It bypasses NaN/Inf checks, but completely destroys the math.
-            // A valid affine bone matrix MUST have its 4th column close to (0, 0, 0, 1).
-            if (std::abs(m._14) > 1e-4f || std::abs(m._24) > 1e-4f || 
+            if (std::abs(m._14) > 1e-4f || std::abs(m._24) > 1e-4f ||
                 std::abs(m._34) > 1e-4f || std::abs(m._44 - 1.0f) > 1e-4f) {
                 if (!s_hasPrintedNaN) {
                     char buf[256];
@@ -304,10 +294,11 @@ namespace HEIN
                 return true;
             }
             return false;
-        };
+            };
 
         if (checkNaN(worldMatrix, "worldMatrix")) return;
 
+        // Validates bone indices against the model skeleton.
         const int boneCount = static_cast<int>(m_skinnedModel->GetBoneCount());
         if (rootIdx < 0 || midIdx < 0 || effectorIdx < 0 ||
             rootIdx >= boneCount || midIdx >= boneCount || effectorIdx >= boneCount)
@@ -316,19 +307,14 @@ namespace HEIN
             return;
         }
 
-        // The solver assumes root -> mid -> effector are direct parent/child links.
+        // Verifies the logical parent-child relationship required for a two-bone solver.
         if (m_skinnedModel->GetParentBoneIndex(midIdx) != rootIdx ||
             m_skinnedModel->GetParentBoneIndex(effectorIdx) != midIdx)
         {
-            char buf[512];
-            sprintf_s(buf, "[IK] Hierarchy mismatch! root=%d, mid=%d (parent=%d), eff=%d (parent=%d)\n", 
-                rootIdx, midIdx, m_skinnedModel->GetParentBoneIndex(midIdx), 
-                effectorIdx, m_skinnedModel->GetParentBoneIndex(effectorIdx));
-            OutputDebugStringA(buf);
             return;
         }
 
-        // Model-space matrix of any bone, built from the LOCAL pose (child * parent * grandparent ...).
+        // Calculates the model-space matrix of any bone by walking up the hierarchy.
         auto modelMatrix = [&](int idx) -> Matrix
             {
                 Matrix m = localBones[idx];
@@ -341,7 +327,7 @@ namespace HEIN
                 return m;
             };
 
-        // Rotate a matrix around its own translation by a world-space rotation.
+        // Rotates a matrix around its own translation vector by a world-space rotation matrix.
         auto rotateInPlace = [](const Matrix& m, const Matrix& rot) -> Matrix
             {
                 Matrix r = m;
@@ -353,9 +339,10 @@ namespace HEIN
             };
 
         // ---- 1. Current pose in world space ---------------------------------------------------
+        // Computes initial world positions and matrices based on the un-modified animation pose.
         const int rootParent = m_skinnedModel->GetParentBoneIndex(rootIdx);
         const Matrix rootParentModel = (rootParent >= 0) ? modelMatrix(rootParent) : Matrix::Identity;
-        const Matrix rootParentWorld = rootParentModel * worldMatrix;   // also correct when root has no parent
+        const Matrix rootParentWorld = rootParentModel * worldMatrix;
 
         const Matrix rootWorld = localBones[rootIdx] * rootParentWorld;
         const Matrix midWorld = localBones[midIdx] * rootWorld;
@@ -365,26 +352,7 @@ namespace HEIN
         if (checkValidAffine(localBones[rootIdx], "localBones[rootIdx] (INPUT)")) return;
         if (checkNaN(rootWorld, "rootWorld")) return;
         if (checkValidAffine(localBones[midIdx], "localBones[midIdx] (INPUT)")) return;
-
-        if (checkNaN(midWorld, "midWorld"))
-        {
-            char buf[1024];
-            sprintf_s(buf, "[IK-DEBUG] localBones[midIdx] = [%.2e, %.2e, %.2e, %.2e | %.2e, %.2e, %.2e, %.2e | %.2e, %.2e, %.2e, %.2e | %.2e, %.2e, %.2e, %.2e]\n",
-                localBones[midIdx]._11, localBones[midIdx]._12, localBones[midIdx]._13, localBones[midIdx]._14,
-                localBones[midIdx]._21, localBones[midIdx]._22, localBones[midIdx]._23, localBones[midIdx]._24,
-                localBones[midIdx]._31, localBones[midIdx]._32, localBones[midIdx]._33, localBones[midIdx]._34,
-                localBones[midIdx]._41, localBones[midIdx]._42, localBones[midIdx]._43, localBones[midIdx]._44);
-            OutputDebugStringA(buf);
-
-            sprintf_s(buf, "[IK-DEBUG] rootWorld = [%.2e, %.2e, %.2e, %.2e | %.2e, %.2e, %.2e, %.2e | %.2e, %.2e, %.2e, %.2e | %.2e, %.2e, %.2e, %.2e]\n",
-                rootWorld._11, rootWorld._12, rootWorld._13, rootWorld._14,
-                rootWorld._21, rootWorld._22, rootWorld._23, rootWorld._24,
-                rootWorld._31, rootWorld._32, rootWorld._33, rootWorld._34,
-                rootWorld._41, rootWorld._42, rootWorld._43, rootWorld._44);
-            OutputDebugStringA(buf);
-            return;
-        }
-
+        if (checkNaN(midWorld, "midWorld")) return;
         if (checkValidAffine(localBones[effectorIdx], "localBones[effectorIdx] (INPUT)")) return;
         if (checkNaN(effWorld, "effWorld")) return;
 
@@ -392,6 +360,7 @@ namespace HEIN
         const Vector3 midPos = midWorld.Translation();
         const Vector3 effPos = effWorld.Translation();
 
+        // Calculates the immutable lengths of the upper and lower leg segments.
         const float upperLen = Vector3::Distance(rootPos, midPos);
         const float lowerLen = Vector3::Distance(midPos, effPos);
         if (upperLen < 0.0001f || lowerLen < 0.0001f)
@@ -399,13 +368,26 @@ namespace HEIN
 
         // ---- 2. Target ------------------------------------------------------------------------
         Vector3 targetPos = effPos;
-        Vector3 m_footNormal = Vector3::Zero;
+        Vector3 m_footNormal = Vector3::Up;
+        float targetOffset = 0.0f;
+
+        Matrix effModel = modelMatrix(effectorIdx);
+        // SWING PHASE MASKING
+        float footHeightRelative = effPos.y - worldMatrix.Translation().y;
+        float swingMask = 1.0f;
+
+        if (footHeightRelative > 1.5f)
+        {
+            swingMask = std::clamp(1.0f - ((footHeightRelative - 1.20f) * 4.0f), 0.0f, 1.0f);
+        }
+        float activeWeight = weight * swingMask;
 
         if (alignToTerrain && (m_terrain || m_meshCollider))
         {
             const Vector3 actorPos = worldMatrix.Translation();
             float groundAtFoot = 0.0f, groundAtActor = 0.0f;
-            
+
+            // Helper lambda to query both terrain and mesh colliders for the highest floor point.
             auto getGroundHeight = [&](const Vector3& pos, float& outHeight, Vector3* outNormal = nullptr) -> bool {
                 bool hitAny = false;
                 float bestHeight = -FLT_MAX;
@@ -422,10 +404,10 @@ namespace HEIN
                         hitAny = true;
                     }
                 }
-                
+
                 if (m_meshCollider)
                 {
-                    Vector3 rayOrigin(pos.x, pos.y + 10000.0f, pos.z);
+                    Vector3 rayOrigin(pos.x, pos.y + 10.0f, pos.z);
                     Vector3 rayDir = Vector3::Down;
                     float closestDist = FLT_MAX;
                     bool hitMesh = false;
@@ -463,16 +445,17 @@ namespace HEIN
                     return true;
                 }
                 return false;
-            };
+                };
 
+            // Estimates horizontal footprint orientation based on the actor's forward vector.
             Vector3 footDir = worldMatrix.Forward();
             footDir.y = 0.0f;
             footDir.Normalize();
 
-            // Estimate toe and heel positions in world space
             Vector3 toePos = effPos + footDir * 0.15f;
             Vector3 heelPos = effPos - footDir * 0.05f;
 
+            // Refines footprint estimation using actual toe bone position if available.
             if (toeIdx >= 0 && toeIdx < boneCount)
             {
                 Matrix toeWorldMat = modelMatrix(toeIdx) * worldMatrix;
@@ -487,12 +470,13 @@ namespace HEIN
             }
 
             float toeHeight = 0.0f, heelHeight = 0.0f;
-            Vector3 terrainNormal = Vector3::Up; // Declare vector to catch the normal
+            Vector3 terrainNormal = Vector3::Up;
 
             bool hitActor = getGroundHeight(actorPos, groundAtActor);
-            bool hitToe = getGroundHeight(toePos, toeHeight, &terrainNormal); // Pass it to the toe raycast
+            bool hitToe = getGroundHeight(toePos, toeHeight, &terrainNormal);
             bool hitHeel = getGroundHeight(heelPos, heelHeight);
 
+            // Interpolates missing raycast data by falling back to actor ground height.
             if (hitActor || hitToe || hitHeel)
             {
                 if (!hitActor) groundAtActor = hitToe ? toeHeight : heelHeight;
@@ -500,40 +484,32 @@ namespace HEIN
                 if (!hitHeel) heelHeight = groundAtActor;
                 if (checkF(toeHeight, "toeHeight") || checkF(heelHeight, "heelHeight") || checkF(groundAtActor, "groundAtActor")) return;
 
-                // 1. Set the terrain normal directly from the raycast
                 if (hitToe) {
                     m_footNormal = terrainNormal;
                 }
-                else {
-                    m_footNormal = Vector3::Up;
-                }
                 m_footNormal.Normalize();
 
-                Vector3 toeWorld(toePos.x, toeHeight, toePos.z);
-                Vector3 heelWorld(heelPos.x, heelHeight, heelPos.z);
-
-                // 2. To prevent the toe or heel from clipping into the terrain, the ankle must be placed 
-                // exactly on the line connecting the heel and toe.
+                // Calculates ankle height requirement to prevent toe or heel clipping.
                 float optimalAnkleHeight = heelHeight + (toeHeight - heelHeight) * 0.25f;
-
-                const float maxStep = 5.0f; 
-                const float offset = std::clamp(optimalAnkleHeight - groundAtActor, -maxStep, maxStep);
-                targetPos.y += offset * weight;
-                targetPos.y += heightOffset; // Apply custom offset from Inspector
-
-                // Debug Visualizations (Visible when Show Colliders is on)
-                m_debugLines.push_back(DebugLine{ toePos + Vector3(0, 5.0f, 0), toeWorld, DirectX::SimpleMath::Color(DirectX::Colors::Yellow) });
-                m_debugLines.push_back(DebugLine{ heelPos + Vector3(0, 5.0f, 0), heelWorld, DirectX::SimpleMath::Color(DirectX::Colors::Yellow) });
-                m_debugLines.push_back(DebugLine{ toeWorld, heelWorld, DirectX::SimpleMath::Color(DirectX::Colors::Cyan) }); // The calculated slope
-                Vector3 midPoint = (toeWorld + heelWorld) * 0.5f;
-                m_debugLines.push_back(DebugLine{ midPoint, midPoint + m_footNormal * 1.0f, DirectX::SimpleMath::Color(DirectX::Colors::Magenta) }); // Upward normal
-            }
-            else
-            {
-                OutputDebugStringA("[IK] Ground raycast completely missed!\n");
+                const float maxStep = 5.0f;
+                targetOffset = std::clamp(optimalAnkleHeight - groundAtActor, -maxStep, maxStep);
             }
         }
 
+        // TEMPORAL SMOOTHING: Interpolates target offset and normal over time using deltaTime.
+        // Prevents violent, single-frame popping when stepping over sharp geometry edges.
+        float lerpSpeed = 15.0f * deltaTime;
+        lerpSpeed = std::clamp(lerpSpeed, 0.0f, 1.0f);
+
+        currentOffset = currentOffset + (targetOffset - currentOffset) * lerpSpeed;
+        currentNormal = Vector3::Lerp(currentNormal, m_footNormal, lerpSpeed);
+        currentNormal.Normalize();
+
+        // Modifies target elevation based on smoothed terrain calculation and user offset.
+        targetPos.y += currentOffset * activeWeight;
+        targetPos.y += heightOffset;
+
+        // Restricts the target position to the mathematical limits of the leg reach.
         Vector3 toTarget = targetPos - rootPos;
         float dist = toTarget.Length();
         if (checkF(dist, "initial dist")) return;
@@ -548,6 +524,7 @@ namespace HEIN
         targetPos = rootPos + toTarget * dist;
 
         // ---- 3. Bend the knee so |root -> effector| == dist -----------------------------------
+        // Determines the current orientation vectors of the upper and lower leg.
         Vector3 U = midPos - rootPos;  U.Normalize();
         Vector3 L = effPos - midPos;   L.Normalize();
         if (checkVecNaN(U, "U") || checkVecNaN(L, "L")) return;
@@ -555,84 +532,76 @@ namespace HEIN
         Vector3 axis = U.Cross(L);
         if (axis.LengthSquared() < 1e-8f)
         {
-            axis = worldMatrix.Right();
-        }
-        else
-        {
-            axis.Normalize();
-            // ANTI-CLAP POLE VECTOR BIAS:
-            // Idle animations often have slight knock-knees. When compressed by IK, this amplifies into clapping knees.
-            // We force the bend axis to stay primarily aligned with the character's left/right axis so knees bend forward.
-            Vector3 idealAxis = worldMatrix.Right();
-            if (axis.Dot(idealAxis) < 0)
-                idealAxis = -idealAxis;
-            
-            // Blend 90% towards the ideal forward-bending axis
-            axis = Vector3::Lerp(axis, idealAxis, 0.9f);
+            // Fallback to the thigh's local right vector only if the leg is perfectly straight
+            axis = rootWorld.Right();
         }
         axis.Normalize();
         if (checkVecNaN(axis, "axis")) return;
 
-        const float curBend = std::acos(std::clamp(U.Dot(L), -1.0f, 1.0f));   // 0 = straight
+        // Applies the Law of Cosines to calculate the interior angle required to reach the target distance.
+        const float curBend = std::acos(std::clamp(U.Dot(L), -1.0f, 1.0f));
         const float cosInterior = std::clamp(
             (upperLen * upperLen + lowerLen * lowerLen - dist * dist) / (2.0f * upperLen * lowerLen),
             -1.0f, 1.0f);
         const float wantedBend = DirectX::XM_PI - std::acos(cosInterior);
         if (checkF(curBend, "curBend") || checkF(wantedBend, "wantedBend")) return;
 
+        // Safe matrix inversion lambda. Aborts inversion if determinant approaches zero (scale corruption).
         auto safeInvert = [](const Matrix& m, bool& outSuccess) -> Matrix
-        {
-            float a11 = m._11, a12 = m._12, a13 = m._13;
-            float a21 = m._21, a22 = m._22, a23 = m._23;
-            float a31 = m._31, a32 = m._32, a33 = m._33;
-
-            float det = a11 * (a22 * a33 - a23 * a32) - 
-                        a12 * (a21 * a33 - a23 * a31) + 
-                        a13 * (a21 * a32 - a22 * a31);
-
-            if (std::abs(det) < 1e-10f)
             {
-                outSuccess = false;
-                return Matrix::Identity;
-            }
+                float a11 = m._11, a12 = m._12, a13 = m._13;
+                float a21 = m._21, a22 = m._22, a23 = m._23;
+                float a31 = m._31, a32 = m._32, a33 = m._33;
 
-            float invDet = 1.0f / det;
-            outSuccess = true;
+                float det = a11 * (a22 * a33 - a23 * a32) -
+                    a12 * (a21 * a33 - a23 * a31) +
+                    a13 * (a21 * a32 - a22 * a31);
 
-            Matrix invM = Matrix::Identity;
-            invM._11 =  (a22 * a33 - a23 * a32) * invDet;
-            invM._12 = -(a12 * a33 - a13 * a32) * invDet;
-            invM._13 =  (a12 * a23 - a13 * a22) * invDet;
+                if (std::abs(det) < 1e-10f)
+                {
+                    outSuccess = false;
+                    return Matrix::Identity;
+                }
 
-            invM._21 = -(a21 * a33 - a23 * a31) * invDet;
-            invM._22 =  (a11 * a33 - a13 * a31) * invDet;
-            invM._23 = -(a11 * a23 - a13 * a21) * invDet;
+                float invDet = 1.0f / det;
+                outSuccess = true;
 
-            invM._31 =  (a21 * a32 - a22 * a31) * invDet;
-            invM._32 = -(a11 * a32 - a12 * a31) * invDet;
-            invM._33 =  (a11 * a22 - a12 * a21) * invDet;
+                Matrix invM = Matrix::Identity;
+                invM._11 = (a22 * a33 - a23 * a32) * invDet;
+                invM._12 = -(a12 * a33 - a13 * a32) * invDet;
+                invM._13 = (a12 * a23 - a13 * a22) * invDet;
 
-            float tx = m._41, ty = m._42, tz = m._43;
-            invM._41 = -(tx * invM._11 + ty * invM._21 + tz * invM._31);
-            invM._42 = -(tx * invM._12 + ty * invM._22 + tz * invM._32);
-            invM._43 = -(tx * invM._13 + ty * invM._23 + tz * invM._33);
+                invM._21 = -(a21 * a33 - a23 * a31) * invDet;
+                invM._22 = (a11 * a33 - a13 * a31) * invDet;
+                invM._23 = -(a11 * a23 - a13 * a21) * invDet;
 
-            return invM;
-        };
+                invM._31 = (a21 * a32 - a22 * a31) * invDet;
+                invM._32 = -(a11 * a32 - a12 * a31) * invDet;
+                invM._33 = (a11 * a22 - a12 * a21) * invDet;
 
-        // Rotating about (U x L) by a positive angle increases the bend.
+                float tx = m._41, ty = m._42, tz = m._43;
+                invM._41 = -(tx * invM._11 + ty * invM._21 + tz * invM._31);
+                invM._42 = -(tx * invM._12 + ty * invM._22 + tz * invM._32);
+                invM._43 = -(tx * invM._13 + ty * invM._23 + tz * invM._33);
+
+                return invM;
+            };
+
+        // Rotates the mid-joint relative to the calculated axis and bend delta.
         const Matrix bendRot = Matrix::CreateFromAxisAngle(axis, wantedBend - curBend);
         if (checkNaN(bendRot, "bendRot")) return;
         const Matrix newMidWorld = rotateInPlace(midWorld, bendRot);
 
         bool invertSuccess = false;
         Matrix rootWorldInv = safeInvert(rootWorld, invertSuccess);
-        if (!invertSuccess) return; // Abort IK if root bone is completely scaled to 0
+        if (!invertSuccess) return;
 
+        // Overwrites local mid matrix based on the new world configuration.
         localBones[midIdx] = newMidWorld * rootWorldInv;
         if (checkNaN(localBones[midIdx], "localBones[midIdx]")) return;
 
         // ---- 4. Swing the whole leg so the effector direction points at the target ------------
+        // Computes the angular difference between the current effector direction and target direction.
         const Matrix newEffWorld = localBones[effectorIdx] * newMidWorld;
         Vector3 curDir = newEffWorld.Translation() - rootPos;
         curDir.Normalize();
@@ -648,6 +617,8 @@ namespace HEIN
             if (checkF(angle, "angle")) return;
             const Matrix swingRot = Matrix::CreateFromAxisAngle(swingAxis / swingSin, angle);
             if (checkNaN(swingRot, "swingRot")) return;
+
+            // Applies rotation to root bone to pivot the entire leg towards the target coordinate.
             const Matrix newRootWorld = rotateInPlace(rootWorld, swingRot);
             Matrix rootParentInv = safeInvert(rootParentWorld, invertSuccess);
             if (invertSuccess)
@@ -658,35 +629,37 @@ namespace HEIN
         }
 
         // ---- 5. Align the foot to the terrain normal ------------------------------------------
-        if (alignToTerrain && m_footNormal.y > 0.001f) // If we found a valid upward normal
+        // Recalculates mid bone world matrix reflecting the completed bend and swing operations.
+        Matrix finalMidWorld = localBones[midIdx] * (localBones[rootIdx] * rootParentWorld);
+
+        // Isolates original effector rotation while substituting the solved IK translation position.
+        // Prevents the foot geometry from pitching downwards automatically when the knee bends.
+        Matrix finalEffWorld = effWorld;
+        finalEffWorld.Translation((localBones[effectorIdx] * finalMidWorld).Translation());
+
+        // Aligns foot orientation by rotating the global upward vector towards the terrain normal.
+        if (alignToTerrain && currentNormal.y > 0.001f)
         {
-            // We want to rotate the foot so that the world UP vector matches the terrain normal.
-            // DirectXMath's CreateFromAxisAngle is Left-Handed, so A x B rotates A *away* from B.
-            // To rotate Up to m_footNormal, we must use m_footNormal x Up as the axis!
-            Vector3 alignAxis = Vector3::Up.Cross(m_footNormal);
+            Vector3 alignAxis = Vector3::Up.Cross(currentNormal);
             float alignSin = alignAxis.Length();
-            float alignCos = Vector3::Up.Dot(m_footNormal);
-            
+            float alignCos = Vector3::Up.Dot(currentNormal);
+
             if (alignSin > 1e-5f)
             {
                 alignAxis.Normalize();
                 float alignAngle = std::atan2(alignSin, alignCos);
-                Matrix alignRot = Matrix::CreateFromAxisAngle(alignAxis, alignAngle);
-                
-                // Calculate the final world matrix of the effector after the leg swung
-                // We must recalculate it because root and mid were modified!
-                Matrix finalMidWorld = localBones[midIdx] * (localBones[rootIdx] * rootParentWorld);
-                Matrix finalEffWorld = localBones[effectorIdx] * finalMidWorld;
-                
-                // Rotate the effector in world space around its own position
-                Matrix alignedEffWorld = rotateInPlace(finalEffWorld, alignRot);
-                
-                Matrix midInv = safeInvert(finalMidWorld, invertSuccess);
-                if (invertSuccess)
-                {
-                    localBones[effectorIdx] = alignedEffWorld * midInv;
-                }
+
+                // Rotates foot based on angle scaled by active weight to retain swing phase transitions.
+                Matrix alignRot = Matrix::CreateFromAxisAngle(alignAxis, alignAngle * activeWeight);
+                finalEffWorld = rotateInPlace(finalEffWorld, alignRot);
             }
+        }
+
+        // Overwrites local effector matrix with final configuration.
+        Matrix midInv = safeInvert(finalMidWorld, invertSuccess);
+        if (invertSuccess)
+        {
+            localBones[effectorIdx] = finalEffWorld * midInv;
         }
     }
 }

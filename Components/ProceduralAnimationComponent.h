@@ -20,6 +20,10 @@ namespace HEIN
         float weight = 1.0f;
         float heightOffset = 0.0f;
         bool isFoot = false;
+
+        // Temporal smoothing variables
+        float currentOffset = 0.0f;
+        DirectX::SimpleMath::Vector3 currentNormal = DirectX::SimpleMath::Vector3::Up;
     };
 
     class ProceduralAnimationComponent : public IComponent
@@ -34,11 +38,11 @@ namespace HEIN
         float m_globalIKWeight = 1.0f;
 
         std::vector<IKChain> m_ikChains;
-        
+
     public:
         ProceduralAnimationComponent(Actor* owner, ActorManager* manager = nullptr);
         ~ProceduralAnimationComponent() = default;
-        
+
         std::string GetComponentName() const override { return "ProceduralAnimationComponent"; }
 
         nlohmann::json Serialize() override;
@@ -59,11 +63,12 @@ namespace HEIN
         };
         std::vector<DebugLine> m_debugLines;
 
-        void SolveWholeBodyIK();
+        void SolveWholeBodyIK(float deltaTime);
         void SolveTwoBoneIK(
             DirectX::SimpleMath::Matrix* localBones,
             int rootIdx, int midIdx, int effectorIdx, int toeIdx,
             const DirectX::SimpleMath::Matrix& worldMatrix,
-            float weight, float heightOffset, bool alignToTerrain);
+            float weight, float heightOffset, bool alignToTerrain,
+            float deltaTime, float& currentOffset, DirectX::SimpleMath::Vector3& currentNormal);
     };
 }
