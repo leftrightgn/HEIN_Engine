@@ -8,6 +8,12 @@
 #include "DebugingTools/EditorUtils.h"
 #include <string>
 #include <filesystem>
+#include <d3dcompiler.h>
+#include "TransformComponent.h"
+#include "Common/ShadowSystem.h"
+#include "Entities/ActorManager.h"
+#include "Common/ShaderStructures.h"
+#include "LightComponent.h"
 
 
 std::shared_ptr<DirectX::EffectFactory> HEIN::SkinnedModelComponent::s_fxFactory = nullptr;
@@ -79,9 +85,13 @@ namespace HEIN
 		m_shapShotBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
 		m_blendedLocalBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
 
-		// Ensure it never holds uninitialized memory from the start
+		// Ensure they never hold uninitialized memory from the start
 		for (size_t i = 0; i < m_model->bones.size(); ++i)
 		{
+			m_drawBones[i] = DirectX::SimpleMath::Matrix::Identity;
+			m_skinBones[i] = DirectX::SimpleMath::Matrix::Identity;
+			m_targetBones[i] = DirectX::SimpleMath::Matrix::Identity;
+			m_shapShotBones[i] = DirectX::SimpleMath::Matrix::Identity;
 			m_blendedLocalBones[i] = DirectX::SimpleMath::Matrix::Identity;
 		}
 
@@ -95,7 +105,142 @@ namespace HEIN
 		}
 		OutputDebugStringW(L"--- BONE LIST END ---\n");*/
 
+		// Device is already declared above
 
+		// 1. Compile Shaders
+		Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
+		HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+		if (FAILED(hr))
+		{
+			hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+		}
+		if (FAILED(hr))
+		{
+			if (errorBlob) {
+				FILE* f;
+				if (fopen_s(&f, "ShaderError.txt", "w") == 0) {
+					fprintf(f, "%s", (char*)errorBlob->GetBufferPointer());
+					fclose(f);
+				}
+			}
+			return; // Gracefully fail
+		}
+		device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, m_vertexShader.ReleaseAndGetAddressOf());
+
+		hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+		if (FAILED(hr))
+		{
+			hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+		}
+		if (FAILED(hr))
+		{
+			if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+			return; // Gracefully fail
+		}
+		device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, m_pixelShader.ReleaseAndGetAddressOf());
+
+		// 2. Create Constant Buffers (moved up so they are always created even if layout fails)
+		D3D11_BUFFER_DESC cbDesc = {};
+		cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+		cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+		cbDesc.ByteWidth = sizeof(CB_Matrices);
+		device->CreateBuffer(&cbDesc, nullptr, m_cbMatrices.ReleaseAndGetAddressOf());
+
+		cbDesc.ByteWidth = sizeof(CB_Lighting);
+		device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
+
+		// 3. Create Input Layout explicitly to match CustomSkinned.hlsl shader using the actual vertex declaration from the model!
+		bool layoutCreated = false;
+		if (!m_model->meshes.empty())
+		{
+			for (const auto& mesh : m_model->meshes)
+			{
+				for (const auto& part : mesh->meshParts)
+				{
+					if (dynamic_cast<DirectX::IEffectSkinning*>(part->effect.get()))
+					{
+						auto& decl = part->vbDecl;
+						if (decl)
+						{
+							std::vector<D3D11_INPUT_ELEMENT_DESC> modifiedDecl = *decl;
+							for (auto& element : modifiedDecl)
+							{
+								if (strcmp(element.SemanticName, "SV_Position") == 0 || strcmp(element.SemanticName, "SV_POSITION") == 0)
+								{
+									element.SemanticName = "POSITION";
+								}
+							}
+
+							FILE* f;
+							if (fopen_s(&f, "VBDecl_Log.txt", "w") == 0)
+							{
+								fprintf(f, "--- SKINNED MESH VB DECL ---\n");
+								for (const auto& element : modifiedDecl)
+								{
+									fprintf(f, "Semantic: %s, Index: %d, Format: %d, Offset: %d\n", element.SemanticName, element.SemanticIndex, element.Format, element.AlignedByteOffset);
+								}
+								fprintf(f, "----------------------------\n");
+								fclose(f);
+							}
+
+							OutputDebugStringA("--- SKINNED MESH VB DECL ---\n");
+							for (const auto& element : modifiedDecl)
+							{
+								char buf[256];
+								sprintf_s(buf, "Semantic: %s, Index: %d, Format: %d, Offset: %d\n", element.SemanticName, element.SemanticIndex, element.Format, element.AlignedByteOffset);
+								OutputDebugStringA(buf);
+							}
+							OutputDebugStringA("----------------------------\n");
+
+							HRESULT hrLayout = device->CreateInputLayout(
+								modifiedDecl.data(),
+								(UINT)modifiedDecl.size(),
+								vsBlob->GetBufferPointer(),
+								vsBlob->GetBufferSize(),
+								m_inputLayout.ReleaseAndGetAddressOf()
+							);
+							if (SUCCEEDED(hrLayout))
+							{
+								FILE* f;
+								if (fopen_s(&f, "VBDecl_Log.txt", "a") == 0) {
+									fprintf(f, "SUCCESS: CreateInputLayout succeeded!\n");
+									fclose(f);
+								}
+								layoutCreated = true;
+								break;
+							}
+							else
+							{
+								char err[256];
+								sprintf_s(err, "CreateInputLayout FAILED with HRESULT 0x%X\n", hrLayout);
+								OutputDebugStringA(err);
+								FILE* f;
+								if (fopen_s(&f, "VBDecl_Log.txt", "a") == 0) {
+									fprintf(f, "%s", err);
+									fclose(f);
+								}
+							}
+						}
+					}
+				}
+				if (layoutCreated) break;
+			}
+		}
+
+		if (!layoutCreated)
+		{
+			OutputDebugStringA("ERROR: Failed to create input layout for CustomSkinned shader. Vertex format mismatch.\n");
+		}
+
+		// 4. Create Sampler State
+		D3D11_SAMPLER_DESC sampDesc = {};
+		sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+		device->CreateSamplerState(&sampDesc, m_samplerState.ReleaseAndGetAddressOf());
 
 	}
 
@@ -191,27 +336,294 @@ namespace HEIN
 		const DirectX::SimpleMath::Matrix& proj
 	)
 	{
-		if (m_needsReload)
-		{
-			if (m_textureDir.empty() && !m_modelPath.empty())
-			{
-				std::filesystem::path p(m_modelPath);
-				m_textureDir = p.parent_path().wstring() + L"/";
-			}
-
-			// Re-initialize the model from the newly set paths
-			Initialize(gameContext, m_modelPath.c_str(), m_textureDir.c_str());
-			m_needsReload = false;
-		}
-
-		if (!m_isVisible) return;
-
-		if (!m_model) return;
+		if (!m_model || !m_isVisible) return;
 
 		ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
-		DirectX::DX11::CommonStates& states = gameContext.commonStates;
 
-		m_model->DrawSkinned(context, states, m_model->bones.size(), m_skinBones.get(), world, view, proj);
+		// The Matrix Buffer update has been moved inside the mesh loop
+
+		// 2. Update Lighting Buffer
+		HEIN::LightComponent* activeLight = nullptr;
+		for (auto& pair : gameContext.actorManager->GetAllActors())
+		{
+			activeLight = pair.second->GetComponent<HEIN::LightComponent>();
+			if (activeLight) break;
+		}
+
+		if (m_cbLighting)
+		{
+			D3D11_MAPPED_SUBRESOURCE mapped;
+			if (SUCCEEDED(context->Map(m_cbLighting.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+			{
+				CB_Lighting* cbLight = (CB_Lighting*)mapped.pData;
+				if (activeLight)
+				{
+					HEIN::TransformComponent* lightTrans = activeLight->GetOwner()->GetComponent<HEIN::TransformComponent>();
+
+					cbLight->LightPos = lightTrans->GetPosition();
+					cbLight->LightDir = lightTrans->GetWorldMatrix().Forward();
+					// Ensure LightDir is never exactly zero to prevent normalize(0) -> NaN in shader
+					if (cbLight->LightDir.LengthSquared() < 0.0001f) cbLight->LightDir = DirectX::SimpleMath::Vector3(0, -1, 0);
+					
+					cbLight->LightType = static_cast<int>(activeLight->GetLightType());
+					cbLight->LightColor = activeLight->GetColor();
+					cbLight->LightIntensity = activeLight->GetIntensity();
+					cbLight->LightRange = activeLight->GetRange();
+					cbLight->LightSpotAngle = DirectX::XMConvertToRadians(activeLight->GetSpotAngle());
+				}
+				else
+				{
+					// Fallback if no LightComponent is in the scene so the model doesn't turn invisible (NaN)
+					cbLight->LightPos = DirectX::SimpleMath::Vector3(0, 10, 0);
+					cbLight->LightDir = DirectX::SimpleMath::Vector3(0, -1, 1); // Not zero!
+					cbLight->LightType = 0; // Directional
+					cbLight->LightColor = DirectX::SimpleMath::Color(1, 1, 1, 1);
+					cbLight->LightIntensity = 1.0f;
+					cbLight->LightRange = 100.0f;
+					cbLight->LightSpotAngle = 0.785f;
+				}
+				context->Unmap(m_cbLighting.Get(), 0);
+			}
+		}
+
+		// 3. Bind Pipeline
+		context->IASetInputLayout(m_inputLayout.Get());
+		context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+		context->PSSetShader(nullptr, nullptr, 0);
+
+		ID3D11Buffer* cbs[] = { m_cbMatrices.Get() };
+		context->VSSetConstantBuffers(0, 1, cbs);
+
+		ID3D11Buffer* lightCbs[] = { m_cbLighting.Get() };
+		context->PSSetConstantBuffers(1, 1, lightCbs);
+
+		ID3D11SamplerState* samplers[] = { m_samplerState.Get() };
+		context->PSSetSamplers(0, 1, samplers);
+
+		// 4. Draw Mesh Parts
+		for (const auto& mesh : m_model->meshes)
+		{
+			// UPDATE MATRIX BUFFER FOR THIS SPECIFIC MESH
+			if (m_cbMatrices)
+			{
+				D3D11_MAPPED_SUBRESOURCE mapped;
+				if (SUCCEEDED(context->Map(m_cbMatrices.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+				{
+					CB_Matrices* cb = (CB_Matrices*)mapped.pData;
+					cb->World = XMMatrixTranspose(world);
+					cb->WorldViewProj = XMMatrixTranspose(world * view * proj);
+
+					// This requires access to the shadow system from GameContext
+					cb->LightViewProj = XMMatrixTranspose(gameContext.shadowSystem->GetLightViewProj());
+
+					// Populate the bone matrices using the mesh's specific bone palette (boneInfluences)
+					for (size_t i = 0; i < 256; ++i)
+					{
+						cb->BoneTransforms[i] = DirectX::XMMatrixIdentity();
+					}
+
+					if (!mesh->boneInfluences.empty())
+					{
+						for (size_t i = 0; i < mesh->boneInfluences.size() && i < 256; ++i)
+						{
+							uint32_t globalBoneIndex = mesh->boneInfluences[i];
+							if (globalBoneIndex < m_model->bones.size())
+							{
+								cb->BoneTransforms[i] = XMMatrixTranspose(m_skinBones[globalBoneIndex]);
+							}
+						}
+					}
+					else
+					{
+						// Fallback if no palette is used
+						for (size_t i = 0; i < m_model->bones.size() && i < 256; ++i)
+						{
+							cb->BoneTransforms[i] = XMMatrixTranspose(m_skinBones[i]);
+						}
+					}
+					context->Unmap(m_cbMatrices.Get(), 0);
+				}
+			}
+
+			for (const auto& part : mesh->meshParts)
+			{
+				UINT stride = part->vertexStride;
+				UINT offset = 0;
+				context->IASetVertexBuffers(0, 1, part->vertexBuffer.GetAddressOf(), &stride, &offset);
+				context->IASetIndexBuffer(part->indexBuffer.Get(), part->indexFormat, 0);
+				context->IASetPrimitiveTopology(part->primitiveType);
+
+				auto skinnedEffect = dynamic_cast<DirectX::IEffectSkinning*>(part->effect.get());
+				if (skinnedEffect)
+				{
+					part->effect->Apply(context);
+					
+					if (!m_staticInputLayouts[part.get()])
+					{
+						part->CreateInputLayout(gameContext.deviceResources.GetD3DDevice(), part->effect.get(), m_staticInputLayouts[part.get()].GetAddressOf());
+					}
+					if (m_staticInputLayouts[part.get()])
+					{
+						context->IASetInputLayout(m_staticInputLayouts[part.get()].Get());
+					}
+
+					// Override with our custom shaders and buffers
+					context->IASetInputLayout(m_inputLayout.Get());
+					context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+					context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+					context->VSSetConstantBuffers(0, 1, m_cbMatrices.GetAddressOf());
+					context->PSSetConstantBuffers(1, 1, m_cbLighting.GetAddressOf());
+					ID3D11SamplerState* mySamplers[] = { m_samplerState.Get() };
+					context->PSSetSamplers(0, 1, mySamplers);
+				}
+				else if (part->effect)
+				{
+					// For non-skinned parts (like weapons), just use the default effect
+					part->effect->Apply(context);
+					
+					if (!m_staticInputLayouts[part.get()])
+					{
+						part->CreateInputLayout(gameContext.deviceResources.GetD3DDevice(), part->effect.get(), m_staticInputLayouts[part.get()].GetAddressOf());
+					}
+					if (m_staticInputLayouts[part.get()])
+					{
+						context->IASetInputLayout(m_staticInputLayouts[part.get()].Get());
+					}
+				}
+
+				// Force CullNone to guarantee we don't cull the front faces by accident!
+				context->RSSetState(gameContext.commonStates.CullNone());
+
+				// CRITICAL: Ensure Depth Testing and Opaque Blending are enabled!
+				// Without this, the character will render inside-out because back faces will draw over front faces!
+				context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+				context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+
+				context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
+			}
+		}
+	}
+
+	// Add the new DrawShadow method
+	void SkinnedModelComponent::DrawShadow(GameContext& gameContext, const DirectX::SimpleMath::Matrix& lightViewProj)
+	{
+		if (!m_model || !m_isVisible) return;
+
+		ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
+
+		for (const auto& mesh : m_model->meshes)
+		{
+			// UPDATE MATRIX BUFFER FOR THIS SPECIFIC MESH
+			if (m_cbMatrices)
+			{
+				D3D11_MAPPED_SUBRESOURCE mapped;
+				if (SUCCEEDED(context->Map(m_cbMatrices.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+				{
+					CB_Matrices* cb = (CB_Matrices*)mapped.pData;
+					cb->WorldViewProj = XMMatrixTranspose(m_owner->GetComponent<TransformComponent>()->GetWorldMatrix() * lightViewProj);
+
+					cb->World = DirectX::XMMatrixIdentity();
+					cb->LightViewProj = DirectX::XMMatrixIdentity();
+
+					// Populate the bone matrices using the mesh's specific bone palette (boneInfluences)
+					for (size_t i = 0; i < 256; ++i)
+					{
+						cb->BoneTransforms[i] = DirectX::XMMatrixIdentity();
+					}
+
+					if (!mesh->boneInfluences.empty())
+					{
+						for (size_t i = 0; i < mesh->boneInfluences.size() && i < 256; ++i)
+						{
+							uint32_t globalBoneIndex = mesh->boneInfluences[i];
+							if (globalBoneIndex < m_model->bones.size())
+							{
+								cb->BoneTransforms[i] = XMMatrixTranspose(m_skinBones[globalBoneIndex]);
+							}
+						}
+					}
+					else
+					{
+						for (size_t i = 0; i < m_model->bones.size() && i < 256; ++i)
+						{
+							cb->BoneTransforms[i] = XMMatrixTranspose(m_skinBones[i]);
+						}
+					}
+					context->Unmap(m_cbMatrices.Get(), 0);
+				}
+			}
+
+			for (const auto& part : mesh->meshParts)
+			{
+				if (part->isAlpha)
+				{
+					continue; // Skip transparent quads (like blob shadows/auras) in shadow pass
+				}
+
+				UINT stride = part->vertexStride;
+				UINT offset = 0;
+				context->IASetVertexBuffers(0, 1, part->vertexBuffer.GetAddressOf(), &stride, &offset);
+				context->IASetIndexBuffer(part->indexBuffer.Get(), part->indexFormat, 0);
+				context->IASetPrimitiveTopology(part->primitiveType);
+
+				auto skinnedEffect = dynamic_cast<DirectX::IEffectSkinning*>(part->effect.get());
+				if (skinnedEffect)
+				{
+					// Apply effect to bind textures, then immediately overwrite shaders/buffers with ours
+					part->effect->Apply(context);
+
+					context->IASetInputLayout(m_inputLayout.Get());
+					context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+					context->PSSetShader(nullptr, nullptr, 0); // DEPTH ONLY PASS
+					context->VSSetConstantBuffers(0, 1, m_cbMatrices.GetAddressOf());
+					
+					// Do not bind samplers or pixel shader constant buffers since we have no pixel shader
+
+					Microsoft::WRL::ComPtr<ID3D11InfoQueue> infoQueue;
+					if (SUCCEEDED(gameContext.deviceResources.GetD3DDevice()->QueryInterface(IID_PPV_ARGS(&infoQueue))))
+					{
+						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, FALSE);
+						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, FALSE);
+						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_WARNING, FALSE);
+						infoQueue->ClearStoredMessages();
+					}
+
+					// Force CullNone
+					context->RSSetState(gameContext.commonStates.CullNone());
+
+					// Shadows also need depth testing enabled to calculate proper occlusions!
+					context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+					context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+
+					context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
+
+					if (infoQueue)
+					{
+						UINT64 numMessages = infoQueue->GetNumStoredMessages();
+						if (numMessages > 0)
+						{
+							FILE* f;
+							if (fopen_s(&f, "D3D11_Crash_Log.txt", "a") == 0)
+							{
+								for (UINT64 i = 0; i < numMessages; ++i)
+								{
+									SIZE_T messageLength = 0;
+									infoQueue->GetMessage(i, nullptr, &messageLength);
+									if (messageLength > 0)
+									{
+										D3D11_MESSAGE* pMessage = (D3D11_MESSAGE*)malloc(messageLength);
+										infoQueue->GetMessage(i, pMessage, &messageLength);
+										fprintf(f, "D3D11_Shadow: %s\n", pMessage->pDescription);
+										free(pMessage);
+									}
+								}
+								fclose(f);
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	DirectX::SimpleMath::Vector3 SkinnedModelComponent::GetBoneWorldPosition(
@@ -312,12 +724,19 @@ namespace HEIN
 			DX::ThrowIfFailed(newAnim->Load(safePath.c_str()));
 			newAnim->Bind(*m_model);
 
+			bool wasCurrent = (m_currentAnimation != nullptr && m_animations.find(name) != m_animations.end() && m_currentAnimation == m_animations[name].get());
+			bool wasTarget = (m_targetAnimation != nullptr && m_animations.find(name) != m_animations.end() && m_targetAnimation == m_animations[name].get());
+
 			m_animations[name] = std::move(newAnim);
 			m_animationPaths[name] = animPath;
 
-			if (m_currentAnimation == nullptr)
+			if (m_currentAnimation == nullptr || wasCurrent)
 			{
 				m_currentAnimation = m_animations[name].get();
+			}
+			if (wasTarget)
+			{
+				m_targetAnimation = m_animations[name].get();
 			}
 		}
 		catch (const std::exception& e)

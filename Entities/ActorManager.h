@@ -46,6 +46,11 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& proj
 		);
 
+		void DrawAllShadows(
+			GameContext& gameContext, 
+			const DirectX::SimpleMath::Matrix& lightViewProj
+		);
+
 		// Called at the end of the frame (Phase D) to safely delete all queued actors.
 		void CleanUpDestroyedActors();
 

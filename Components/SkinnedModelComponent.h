@@ -1,6 +1,7 @@
 #pragma once
 #include "IComponent.h"
 #include "DirectXTK_Utilities/Animation.h"
+#include <map>
 
 namespace HEIN
 {
@@ -44,6 +45,14 @@ namespace HEIN
 		
 		bool m_needsReload = false;
 
+		Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
+		Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pixelShader;
+		Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout; // For CustomSkinned.hlsl
+		std::map<void*, Microsoft::WRL::ComPtr<ID3D11InputLayout>> m_staticInputLayouts; // For non-skinned parts (uses void* to avoid missing includes)
+		Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbMatrices;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbLighting;
+		Microsoft::WRL::ComPtr<ID3D11SamplerState> m_samplerState;
+
 	public:
 		
 		SkinnedModelComponent(Actor* owner);
@@ -61,6 +70,11 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& world, 
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj
+		) override;
+
+		void DrawShadow(
+			GameContext& gameContext, 
+			const DirectX::SimpleMath::Matrix& lightViewProj
 		) override;
 
 		DirectX::SimpleMath::Vector3 GetBoneWorldPosition(

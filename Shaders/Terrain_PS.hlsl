@@ -4,7 +4,9 @@ Texture2D shaderTexture : register(t0);
 Texture2D normalTexture : register(t1);
 Texture2D alphaTexture  : register(t2);
 Texture2D texture2      : register(t3);
+Texture2D shadowMap     : register(t4);
 SamplerState SampleType : register(s0);
+SamplerComparisonState ShadowSampler : register(s1);
 
 float4 main(PixelInputType input) : SV_Target
 {
@@ -23,13 +25,8 @@ float4 main(PixelInputType input) : SV_Target
         // TEXTURE SPLATTING
         if (hasAlphaMap > 0.5f && hasTexture2 > 0.5f)
         {
-            // Sample Alpha Map using RAW UVs (input.tex) so it stretches across the whole map!
             float4 alphaMap = alphaTexture.Sample(SampleType, input.tex);
-            
-            // Sample Second Texture (Dirt) using TILED UVs (input.tex * textureTiling)
             float4 tex2Color = texture2.Sample(SampleType, input.tex * textureTiling);
-            
-            // Blend them together using the Red channel of the Alpha Map
             textureColor = lerp(textureColor, tex2Color, alphaMap.r);
         }
     }
@@ -43,14 +40,9 @@ float4 main(PixelInputType input) : SV_Target
         bumpMap = normalTexture.Sample(SampleType, input.tex * textureTiling);
         bumpMap = (bumpMap * 2.0f) - 1.0f;
         
-        // ADD GRAM-SCHMIDT ORTHOGONALIZATION
-        // Force the Tangent to be exactly 90 degrees to the Normal
         float3 perfectTangent = normalize(input.tangent - dot(input.tangent, input.normal) * input.normal);
-        
-        // Mathematically generate a perfect Binormal using the Cross Product
         float3 perfectBinormal = cross(input.normal, perfectTangent);
         
-        // Use the perfect vectors to apply the bump map!
         bumpNormal = (bumpMap.x * perfectTangent) + (bumpMap.y * perfectBinormal) + (bumpMap.z * input.normal);
         bumpNormal = normalize(bumpNormal);
     }
@@ -59,10 +51,34 @@ float4 main(PixelInputType input) : SV_Target
         bumpNormal = normalize(input.normal); // Fallback
     }
     
+    // --- SHADOW MAPPING ---
+    float shadow = 1.0f; // 1.0 = fully lit, 0.5 = shadowed
+    
+    // Convert shadow clip space to NDC
+    float3 shadowCoords = input.shadowPos.xyz / input.shadowPos.w;
+    
+    // Check if we are inside the orthographic projection box
+    if (shadowCoords.x >= -1.0f && shadowCoords.x <= 1.0f &&
+        shadowCoords.y >= -1.0f && shadowCoords.y <= 1.0f &&
+        shadowCoords.z >= 0.0f && shadowCoords.z <= 1.0f)
+    {
+        // Convert XY from [-1, 1] to [0, 1] for Texture UVs
+        float2 shadowUV;
+        shadowUV.x = shadowCoords.x * 0.5f + 0.5f;
+        shadowUV.y = -shadowCoords.y * 0.5f + 0.5f; // Invert Y because V is down
+        
+        // Hardware PCF using SampleCmpLevelZero. 
+        // This is the only 100% hardware-compliant way to read a Depth Texture without driver bugs.
+        // It returns 1.0f if the depth in the texture is >= shadowCoords.z - 0.0005f (lit), and 0.0f if not (shadowed).
+        float shadowPercent = shadowMap.SampleCmpLevelZero(ShadowSampler, shadowUV, shadowCoords.z - 0.0005f).r;
+        
+        shadow = lerp(0.5f, 1.0f, shadowPercent);
+    }
+    
    // INVERT THE LIGHT DIRECTION!
     lightDir = -lightDirection;
     
-    lightIntensity = saturate(dot(bumpNormal, lightDir));
+    lightIntensity = saturate(dot(bumpNormal, lightDir)) * shadow;
     
     //ADD AMBIENT LIGHT (So shadows aren't 100% pitch black)
     float4 ambientColor = float4(0.3f, 0.3f, 0.3f, 1.0f);

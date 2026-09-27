@@ -46,6 +46,8 @@
     <ClCompile Include="Components\ProceduralAnimationComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
+    <ClCompile Include="Components\LightComponent.cpp" />
+    <ClCompile Include="Common\ShadowSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -106,6 +108,15 @@
     <ClInclude Include="Common\json.hpp">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="Components\LightComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\ShaderStructures.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\ShadowSystem.h">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -118,6 +129,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\Terrain_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\CustomSkinned.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

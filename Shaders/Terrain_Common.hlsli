@@ -6,6 +6,7 @@ cbuffer MatrixBuffer : register(b0)
     matrix worldMatrix; // where is the terrain in the world
     matrix viewMatrix; // where is the camera looking
     matrix projectionMatrix; // camera field of view (fov) aspect ration
+    matrix lightViewProj;
 }
 
 cbuffer lightBuffer : register(b1)
@@ -47,4 +48,5 @@ struct PixelInputType
     float3 tangent  : TANGENT;
     float3 binormal : BINORMAL;
     float4 color    : COLOR;
+    float4 shadowPos : TEXCOORD2;
 };

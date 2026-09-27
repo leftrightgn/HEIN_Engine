@@ -44,6 +44,14 @@ namespace HEIN
         {
             return DirectX::SimpleMath::Vector3::Transform(DirectX::SimpleMath::Vector3::Forward, m_rotation);
         }
+        DirectX::SimpleMath::Vector3 GetRight() const
+        {
+            return DirectX::SimpleMath::Vector3::Transform(DirectX::SimpleMath::Vector3::Right, m_rotation);
+        }
+        DirectX::SimpleMath::Vector3 GetUp() const
+        {
+            return DirectX::SimpleMath::Vector3::Transform(DirectX::SimpleMath::Vector3::Up, m_rotation);
+        }
    
         void SetRotationEuler(const DirectX::SimpleMath::Vector3& eulerAngles);
         DirectX::SimpleMath::Vector3 GetRotationEuler() const { return m_rotationEuler; }

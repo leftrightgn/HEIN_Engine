@@ -26,6 +26,9 @@ PixelInputType main(VertexInputType input)
     output.binormal = mul(input.binormal, (float3x3) worldMatrix);
     output.binormal = normalize(output.binormal);
     
+    float4 worldPosition = mul(input.position, worldMatrix);
+    output.shadowPos = mul(worldPosition, lightViewProj);
+    
     
     return output;
 }

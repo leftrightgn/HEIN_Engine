@@ -90,6 +90,10 @@ void HEIN::TransformComponent::DrawGizmo(
             SetRotation(rot);
             SetScale(scale);
         }
+        else
+        {
+            OutputDebugStringA("WARNING: Decompose failed in TransformComponent::DrawGizmo!\n");
+        }
     }
 }
 

@@ -185,7 +185,10 @@
     <ClInclude Include="Camera\ManualCameraMode.h" />
     <ClInclude Include="Common\json.hpp" />
     <ClInclude Include="Common\TerrainCell.h" />
+    <ClInclude Include="Common\ShadowSystem.h" />
+    <ClInclude Include="Common\ShaderStructures.h" />
     <ClInclude Include="Components\AnimationEditorComponent.h" />
+    <ClInclude Include="Components\LightComponent.h" />
     <ClInclude Include="Components\ColliderComponent\TerrainColliderComponent.h" />
     <ClInclude Include="Components\ProceduralAnimationComponent.h" />
     <ClInclude Include="Components\FogComponent.h" />
@@ -198,12 +201,14 @@
   <ItemGroup>
     <ClCompile Include="Camera\ManualCameraMode.cpp" />
     <ClCompile Include="Common\TerrainCell.cpp" />
+    <ClCompile Include="Common\ShadowSystem.cpp" />
     <ClCompile Include="Components\AnimationEditorComponent.cpp" />
     <ClCompile Include="Components\ColliderComponent\TerrainColliderComponent.cpp" />
     <ClCompile Include="Components\ProceduralAnimationComponent.cpp" />
     <ClCompile Include="Components\FogComponent.cpp" />
     <ClCompile Include="Components\TerrainComponent.cpp" />
     <ClCompile Include="Components\UIButtonComponent.cpp" />
+    <ClCompile Include="Components\LightComponent.cpp" />
     <ClCompile Include="DebugingTools\EditorUtils.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -218,6 +223,10 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shaders\Terrain_VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
