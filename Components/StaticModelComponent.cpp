@@ -567,6 +567,8 @@ void HEIN::StaticModelComponent::OnInspectorGUI(GameContext& gameContext)
         HWND windowHandle = gameContext.deviceResources.GetWindow();
         if (!m_lastError.empty()) ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", m_lastError.c_str());
         ImGui::Checkbox("Visible", &m_isVisible);
+        ImGui::SameLine();
+        ImGui::Checkbox("Cast Shadow", &m_castShadows);
 
         // Model Path Editor
         std::string modelPathStr = std::string(m_modelPath.begin(), m_modelPath.end());
@@ -658,15 +660,6 @@ void HEIN::StaticModelComponent::InitializeAfterDeserialize(GameContext& gameCon
             }
         }
         
-        // Force disable shadows on all stage props (walls, floors, pillars, bridges) regardless of old save file state
-        // to prevent them from blocking the sun and casting a giant eclipse shadow over the entire map bounds
-        if (m_modelPath.find(L"stage") != std::wstring::npos || 
-            m_modelPath.find(L"floor1") != std::wstring::npos ||
-            m_modelPath.find(L"wall") != std::wstring::npos)
-        {
-            m_castShadows = false;
-        }
-
         Initialize(gameContext, m_modelPath.c_str(), m_textureDir.empty() ? nullptr : m_textureDir.c_str());
     }
 }
