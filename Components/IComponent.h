@@ -60,6 +60,10 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& /*proj*/
 		) {}
 
+		virtual void DrawShadow(
+			GameContext& gameContext, 
+			const DirectX::SimpleMath::Matrix& lightViewProj
+		) {}
 		/** @brief Checks if this component requires 2D drawing. */
 		virtual bool Is2D() const { return false; }
 		

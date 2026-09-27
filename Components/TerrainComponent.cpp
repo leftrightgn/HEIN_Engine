@@ -1,9 +1,12 @@
 #include "pch.h"
 #include "TerrainComponent.h"
 #include "Entities/Actor.h"
+#include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
 #include "TransformComponent.h"
+#include "Common/ShadowSystem.h"
 #include "FogComponent.h"
+#include "LightComponent.h"
 #include "DebugingTools/DebugUIManager.h"
 #include "DebugingTools/EditorUtils.h"
 #include <ImGui/imgui_stdlib.h>
@@ -318,6 +321,7 @@ void HEIN::TerrainComponent::Draw(
 		dataPtr->world = finalworld.Transpose();
 		dataPtr->view = view.Transpose();
 		dataPtr->projection = proj.Transpose();
+		dataPtr->lightViewProj = gameContext.shadowSystem->GetLightViewProj().Transpose();
 		context->Unmap(m_matrixBuffer.Get(), 0);
 	}
 	context->VSSetConstantBuffers(0, 1, m_matrixBuffer.GetAddressOf());
@@ -326,10 +330,26 @@ void HEIN::TerrainComponent::Draw(
 	{
 		LightBufferType* dataPtr = (LightBufferType*)mappedResource.pData;
 
+		HEIN::LightComponent* activeLight = nullptr;
+		for (auto& pair : gameContext.actorManager->GetAllActors())
+		{
+			activeLight = pair.second->GetComponent<HEIN::LightComponent>();
+			if (activeLight) break;
+		}
+
 		DirectX::SimpleMath::Vector3 safeLightDir = m_lightDirection;
+		DirectX::SimpleMath::Vector4 safeDiffuseColor = DirectX::SimpleMath::Vector4(m_diffuseColor.x, m_diffuseColor.y, m_diffuseColor.z, 1.0f);
+
+		if (activeLight)
+		{
+			safeLightDir = activeLight->GetOwner()->GetComponent<HEIN::TransformComponent>()->GetForward();
+			DirectX::SimpleMath::Vector4 c = activeLight->GetColor();
+			safeDiffuseColor = DirectX::SimpleMath::Vector4(c.x, c.y, c.z, 1.0f) * activeLight->GetIntensity();
+		}
+		
 		safeLightDir.Normalize();
 
-		dataPtr->diffuseColor = DirectX::SimpleMath::Vector4(m_diffuseColor.x, m_diffuseColor.y, m_diffuseColor.z, 1.0f);
+		dataPtr->diffuseColor = safeDiffuseColor;
 		dataPtr->lightDirection = safeLightDir;
 		dataPtr->hasTexture = m_texture ? 1.0f : 0.0f;
 		dataPtr->textureTiling = m_texutreTiling;
@@ -367,8 +387,17 @@ void HEIN::TerrainComponent::Draw(
 		m_texture2 ? m_texture2.Get() : nullptr      // t3: Second Texture (Dirt)
 	};
 	context->PSSetShaderResources(0, 4, textures);
-	context->PSSetShaderResources(0, 2, textures);
 	context->PSSetSamplers(0, 1, m_sampleState.GetAddressOf());
+
+	// Explicitly re-bind shadow map resources to guarantee they aren't clobbered by other actors
+	if (gameContext.shadowSystem)
+	{
+		ID3D11ShaderResourceView* shadowSRV = gameContext.shadowSystem->GetShadowMapSRV();
+		context->PSSetShaderResources(4, 1, &shadowSRV);
+
+		ID3D11SamplerState* shadowSampler = gameContext.shadowSystem->GetShadowSampler();
+		context->PSSetSamplers(1, 1, &shadowSampler);
+	}
 
 	// Build World-Space Camera Frustum
 	DirectX::BoundingFrustum worldFrustum;

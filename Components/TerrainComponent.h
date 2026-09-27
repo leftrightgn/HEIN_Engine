@@ -14,6 +14,7 @@ namespace HEIN
 			DirectX::XMMATRIX world;
 			DirectX::XMMATRIX view;
 			DirectX::XMMATRIX projection;
+			DirectX::XMMATRIX lightViewProj;
 		};
 
 		struct LightBufferType

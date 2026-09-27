@@ -17,10 +17,10 @@ namespace HEIN
 		bool m_isVisible = true;
 		bool m_needsReload = false;
 		std::string m_lastError;
-
 	public:
 		std::wstring m_modelPath;
 		std::wstring m_textureDir;
+		bool m_castShadows = true;
 
 		StaticModelComponent(Actor* owner);
 
@@ -37,6 +37,11 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& world, 
 			const DirectX::SimpleMath::Matrix& view, 
 			const DirectX::SimpleMath::Matrix& proj
+		) override;
+
+		void DrawShadow(
+			GameContext& gameContext,
+			const DirectX::SimpleMath::Matrix& lightViewProj
 		) override;
 
 		std::string GetComponentName() const override { return "StaticModelComponent"; }

@@ -109,6 +109,19 @@ void HEIN::ActorManager::DrawAll(
     }
 }
 
+void HEIN::ActorManager::DrawAllShadows(GameContext& gameContext, const DirectX::SimpleMath::Matrix& lightViewProj)
+{
+    for (auto& pair : m_actors)
+    {
+        auto components = pair.second->GetComponents<IComponent>();
+        for (auto* comp : components)
+        {
+            // Call the new DrawShadow method from IComponent
+            comp->DrawShadow(gameContext, lightViewProj);
+        }
+    }
+}
+
 void HEIN::ActorManager::DeleteActor(ActorID id)
 {
     DestroyID(id);

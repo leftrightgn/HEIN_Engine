@@ -18,6 +18,8 @@ namespace HEIN {
 	class CameraController; 
 	class InputManager;
 	class SceneManager;
+	class ShadowSystem;
+	class ActorManager;
 }
 
 /**
@@ -65,4 +67,9 @@ struct GameContext
 
 	/// @brief Scene manager
 	HEIN::SceneManager* sceneManager = nullptr;
+
+	HEIN::ActorManager* actorManager = nullptr;
+	HEIN::ShadowSystem* shadowSystem = nullptr;
+
+	bool isEditorMode = false;
 };

@@ -1,6 +1,7 @@
 #pragma once
 #include "IComponent.h"
 #include "DirectXTK_Utilities/Animation.h"
+#include <map>
 
 namespace HEIN
 {
@@ -44,6 +45,14 @@ namespace HEIN
 		
 		bool m_needsReload = false;
 
+		Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
+		Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pixelShader;
+		Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout; // For CustomSkinned.hlsl
+		std::map<void*, Microsoft::WRL::ComPtr<ID3D11InputLayout>> m_staticInputLayouts; // For non-skinned parts (uses void* to avoid missing includes)
+		Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbMatrices;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbLighting;
+		Microsoft::WRL::ComPtr<ID3D11SamplerState> m_samplerState;
+
 	public:
 		
 		SkinnedModelComponent(Actor* owner);
@@ -61,6 +70,11 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& world, 
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj
+		) override;
+
+		void DrawShadow(
+			GameContext& gameContext, 
+			const DirectX::SimpleMath::Matrix& lightViewProj
 		) override;
 
 		DirectX::SimpleMath::Vector3 GetBoneWorldPosition(
@@ -133,28 +147,8 @@ namespace HEIN
 		}
 
 		// This function hijacks the rendering pipeline to draw custom Editor poses
-		void OverrideBones(const DirectX::SimpleMath::Matrix* localBones)
-		{
-			if (!m_model) return;
-
-			// Safely cast the SimpleMath matrix array to the raw XMMATRIX array DirectXTK expects
-			const DirectX::XMMATRIX* rawLocalBones = reinterpret_cast<const DirectX::XMMATRIX*>(localBones);
-
-			// Converts local matrices down the hierarchy into absolute world-space bone matrices
-			m_model->CopyAbsoluteBoneTransforms(m_model->bones.size(), rawLocalBones, m_drawBones.get());
-
-			// Copy the draw bones to the skin bones array
-			for (size_t i = 0; i < m_model->bones.size(); i++)
-			{
-				m_skinBones[i] = m_drawBones[i];
-			}
-
-			// Apply the Inverse Bind Pose securely using your existing AnimationSDKMESH setup
-			if (m_currentAnimation != nullptr)
-			{
-				m_currentAnimation->ApplySkinMatrix(*m_model, m_model->bones.size(), m_skinBones.get());
-			}
-		}
+		void OverrideBones(const DirectX::SimpleMath::Matrix* localBones);
+		
 	};
 }
 

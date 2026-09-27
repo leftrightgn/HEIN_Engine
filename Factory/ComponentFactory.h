@@ -24,6 +24,7 @@
 #include <Components/ColliderComponent/TerrainColliderComponent.h>
 #include <Components/UIButtonComponent.h>
 #include <Components/TerrainComponent.h>
+#include <Components/LightComponent.h>
 #include <Components/SlidingDoorComponent.h>
 #include <Components/ProceduralAnimationComponent.h>
 #include <Components/FogComponent.h>
@@ -115,6 +116,7 @@ namespace HEIN
 			RegisterComponent<UIButtonComponent>("UIButtonComponent");
 			RegisterComponent<TerrainComponent>("TerrainComponent");
 			RegisterComponent<TerrainColliderComponent>("TerrainColliderComponent");
+			RegisterComponent<LightComponent>("LightComponent");
 			RegisterComponent<SlidingDoorComponent>("SlidingDoorComponent");
 			RegisterComponent<ProceduralAnimationComponent>("ProceduralAnimationComponent");
 			RegisterComponent<FogComponent>("FogComponent");

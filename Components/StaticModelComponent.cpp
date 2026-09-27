@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include "TransformComponent.h"
 
 namespace HEIN
 {
@@ -403,6 +404,41 @@ void HEIN::StaticModelComponent::Draw(
     }
 }
 
+void HEIN::StaticModelComponent::DrawShadow(
+    GameContext& gameContext,
+    const DirectX::SimpleMath::Matrix& lightViewProj
+)
+{
+    if (!m_isVisible || !m_model || !m_castShadows) return;
+
+    ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
+    DirectX::DX11::CommonStates& states = gameContext.commonStates;
+
+    DirectX::SimpleMath::Matrix world = m_owner->GetComponent<TransformComponent>()->GetWorldMatrix();
+    DirectX::SimpleMath::Matrix view = DirectX::SimpleMath::Matrix::Identity;
+
+    // We can use the standard Draw method but with lightViewProj as the projection matrix.
+    // The DirectXTK effects will output to the shadow map (since GameScene bound the depth buffer).
+    // The pixel shader will still execute, but its color output is discarded by the pipeline, leaving only depth!
+    
+    // NOTE: DirectXTK effects might set their own Rasterizer/Blend states.
+    // We should restore the shadow states after drawing just in case, but Draw() itself binds states.
+    
+    if (!m_model->bones.empty() && m_drawBones)
+    {
+        m_model->Draw(context, states, m_model->bones.size(), m_drawBones.get(), world, view, lightViewProj);
+    }
+    else
+    {
+        m_model->Draw(context, states, world, view, lightViewProj);
+    }
+    
+    // Restore states for shadow mapping if DirectXTK modified them
+    context->RSSetState(gameContext.commonStates.CullNone());
+    context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+    context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+}
+
 DirectX::SimpleMath::Vector3 HEIN::StaticModelComponent::GetBoneWorldPosition(
     const wchar_t* boneName, 
     const DirectX::SimpleMath::Matrix& actorWorldMatrix
@@ -586,6 +622,7 @@ nlohmann::json HEIN::StaticModelComponent::Serialize()
     std::string narrowTextureDir(m_textureDir.begin(), m_textureDir.end());
     data["ModelPath"] = narrowModelPath;
     data["TextureDir"] = narrowTextureDir;
+    data["CastShadows"] = m_castShadows;
     return data;
 }
 
@@ -602,6 +639,10 @@ void HEIN::StaticModelComponent::Deserialize(const nlohmann::json& data)
         std::string narrowTextureDir = data["TextureDir"];
         m_textureDir = std::wstring(narrowTextureDir.begin(), narrowTextureDir.end());
     }
+    if (data.contains("CastShadows"))
+    {
+        m_castShadows = data["CastShadows"];
+    }
 }
 
 void HEIN::StaticModelComponent::InitializeAfterDeserialize(GameContext& gameContext)
@@ -617,6 +658,16 @@ void HEIN::StaticModelComponent::InitializeAfterDeserialize(GameContext& gameCon
                 m_textureDir = parent + L"/";
             }
         }
+        
+        // Force disable shadows on all stage props (walls, floors, pillars, bridges) regardless of old save file state
+        // to prevent them from blocking the sun and casting a giant eclipse shadow over the entire map bounds
+        if (m_modelPath.find(L"stage") != std::wstring::npos || 
+            m_modelPath.find(L"floor1") != std::wstring::npos ||
+            m_modelPath.find(L"wall") != std::wstring::npos)
+        {
+            m_castShadows = false;
+        }
+
         Initialize(gameContext, m_modelPath.c_str(), m_textureDir.empty() ? nullptr : m_textureDir.c_str());
     }
 }
