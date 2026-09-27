@@ -49,8 +49,8 @@ void Game::Initialize(HWND window, int width, int height)
     m_deviceResources->CreateWindowSizeDependentResources();
     CreateWindowSizeDependentResources();
 
-    // TODO: Change the timer settings if you want something other than the default variable timestep mode.
-    // e.g. for 60 FPS fixed timestep update logic, call:
+    // Step timer configuration: default mode uses variable timestep.
+    // Example: for 60 FPS fixed timestep update logic, call:
     /*
     m_timer.SetFixedTimeStep(true);
     m_timer.SetTargetElapsedSeconds(1.0 / 60);
@@ -113,7 +113,7 @@ void Game::Update(DX::StepTimer const& timer)
 
     float elapsedTime = float(timer.GetElapsedSeconds());
 
-    // TODO: Add your game logic here.
+    // Per-frame game loop logic execution
     elapsedTime;
 
     // キーボードトラッカーの更新
@@ -153,7 +153,7 @@ void Game::Render()
     m_deviceResources->PIXBeginEvent(L"Render");
     auto context = m_deviceResources->GetD3DDeviceContext();
 
-    // TODO: Add your rendering code here.
+    // Scene drawing pass
     context;
 
     // シーンの描画

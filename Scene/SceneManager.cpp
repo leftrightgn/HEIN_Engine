@@ -15,7 +15,7 @@ namespace HEIN
 
     void SceneManager::Update(GameContext& context)
     {
-        // 1. Process Unloads
+        // Process pending scene unloads
         for (const std::string& nameToUnload : m_pendingUnloads)
         {
             for (auto it = m_activeScenes.begin(); it != m_activeScenes.end(); )
@@ -33,10 +33,10 @@ namespace HEIN
         }
         m_pendingUnloads.clear();
 
-        // 2. Process Loads
+        // Process pending scene loads
         for (const PendingLoad& load : m_pendingLoads)
         {
-            // If Single mode, destroy everything currently running first
+            // Destroy currently active scenes if loading in Single mode
             if (load.mode == LoadSceneMode::Single)
             {
                 for (auto& active : m_activeScenes)
@@ -46,7 +46,7 @@ namespace HEIN
                 m_activeScenes.clear();
             }
 
-            // Instantiate the new scene
+            // Instantiate registered scene instance
             auto it = m_sceneRegistry.find(load.sceneName);
             if (it != m_sceneRegistry.end())
             {
@@ -60,7 +60,7 @@ namespace HEIN
         }
         m_pendingLoads.clear();
 
-        // 3. Update all currently active scenes
+        // Update all currently active scene instances
         for (auto& active : m_activeScenes)
         {
             active.instance->Update(context);

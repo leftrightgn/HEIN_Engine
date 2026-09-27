@@ -880,8 +880,8 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 			// BMP images are stored bottom-to-top in file
 			int pixelOffset = (m_terrainHeight - 1 - j) * rowPitch + i * bytesPerPixel;
 			
-			// For 24/32 bit, we just read the first channel (B) since heightmaps are usually grayscale.
-			// For 8-bit, it's the raw grayscale/palette index.
+			// 24/32-bit formats: sample primary channel (B) for grayscale heightfields
+			// 8-bit formats: read raw grayscale index directly
 			height = bitmapImage[pixelOffset];
 			
 			index = j * m_terrainWidth + i;

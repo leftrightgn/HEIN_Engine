@@ -97,7 +97,8 @@ void HEIN::TwoBoneLinkComponent::LateUpdate(float deltaTime)
 
 	DirectX::SimpleMath::Matrix actorWorld = ownerTransform->GetWorldMatrix();
 
-	// 1. Get exact world positions
+	// --- Skeletal Segment Extraction & Orthonormal Basis Construction ---
+	// Query world-space coordinates of both skeletal joints to define the bounding segment endpoints.
 	DirectX::SimpleMath::Vector3 posA = m_targetModel ? 
 		m_targetModel->GetBoneWorldPosition(m_boneAIndex, actorWorld) : 
 		m_targetStaticModel->GetBoneWorldPosition(m_boneAIndex, actorWorld);
@@ -105,34 +106,39 @@ void HEIN::TwoBoneLinkComponent::LateUpdate(float deltaTime)
 		m_targetModel->GetBoneWorldPosition(m_boneBIndex, actorWorld) : 
 		m_targetStaticModel->GetBoneWorldPosition(m_boneBIndex, actorWorld);
 
+	// Compute segment midpoint for collider center translation: C = (posA + posB) * 0.5
 	DirectX::SimpleMath::Vector3 center = (posA + posB) * 0.5f;
 
+	// Longitudinal axis (Up vector): aligned from bone B to bone A
 	DirectX::SimpleMath::Vector3 upDir = posA - posB;
 	float worldDistance = upDir.Length();
 	if (worldDistance < 0.0001f) return;
 	upDir.Normalize();
 
+	// Gram-Schmidt Orthogonalization:
+	// Select initial reference direction, defaulting to global Up (0, 1, 0).
+	// If collinear (|Dot| > 0.99), fallback to global Forward (0, 0, 1) to avoid singularity.
 	DirectX::SimpleMath::Vector3 worldUp = DirectX::SimpleMath::Vector3::Up;
 	if (abs(upDir.Dot(worldUp)) > 0.99f) worldUp = DirectX::SimpleMath::Vector3::Forward;
 
+	// Right vector = worldUp x upDir (normalized)
 	DirectX::SimpleMath::Vector3 rightDir = worldUp.Cross(upDir);
 	rightDir.Normalize();
 
+	// Forward vector = upDir x rightDir (guaranteed unit length and orthogonal)
 	DirectX::SimpleMath::Vector3 forwardDir = upDir.Cross(rightDir);
 	forwardDir.Normalize();
 
-	
-	//  Build a pure rotation matrix (Scale is strictly 1.0)
+	// Construct affine transformation matrix (pure rotation with translation; unit scale):
+	// Column 0: Right, Column 1: Up, Column 2: Forward, Row 3: Translation Center
 	DirectX::SimpleMath::Matrix boneMatrix;
 	boneMatrix._11 = rightDir.x;   boneMatrix._12 = rightDir.y;   boneMatrix._13 = rightDir.z;   boneMatrix._14 = 0.0f;
 	boneMatrix._21 = upDir.x;      boneMatrix._22 = upDir.y;      boneMatrix._23 = upDir.z;      boneMatrix._24 = 0.0f;
 	boneMatrix._31 = forwardDir.x; boneMatrix._32 = forwardDir.y; boneMatrix._33 = forwardDir.z; boneMatrix._34 = 0.0f;
 	boneMatrix._41 = center.x;     boneMatrix._42 = center.y;     boneMatrix._43 = center.z;     boneMatrix._44 = 1.0f;
 
-	// Push the Matrix
+	// Assign dynamic world orientation matrix and set capsule segment height to exact Euclidean distance
 	m_linkedCapsule->SetManualMatrix(boneMatrix);
-
-	// pass the exact world distance!
 	m_linkedCapsule->SetHeight(worldDistance);
 }
 

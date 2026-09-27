@@ -11,7 +11,7 @@
 
 void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorManager& actorManager, float deltaTime)
 {
-    // 1. Find Terrain collider dynamically for Ground Snapping
+    // Dynamic terrain collider lookup for ground alignment
     HEIN::TerrainColliderComponent* activeTerrain = nullptr;
     for (auto& pair : actorManager.GetAllActors())
     {
@@ -19,7 +19,7 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
         if (activeTerrain) break;
     }
 
-    // 2. Find Player Position for Hibernation 
+    // Player position query for distance-based simulation culling
     DirectX::SimpleMath::Vector3 playerPos = DirectX::SimpleMath::Vector3::Zero;
     HEIN::Actor* playerActor = actorManager.GetActorByName(L"Player");
     if (playerActor != nullptr)
@@ -33,7 +33,7 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
 
     const float SIMULATION_RADIUS_SQ = 200.0f * 200.0f;
 
-    // Loop through the manager's map
+    // Traverse all active actors in the registry
     for (auto& pair : actorManager.GetAllActors())
     {
         HEIN::Actor* actor = pair.second.get();
@@ -50,9 +50,7 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
 
         if (!rb || !transform) continue;
 
-        // -------------------------------------------------------------
-        // A. ECS GROUND SNAPPING & LEASHING MEMORY
-        // -------------------------------------------------------------
+        // Initial Ground Snapping & Spawn Anchor Persistence
         if (rb->NeedsInitialSnap() && activeTerrain != nullptr)
         {
             DirectX::SimpleMath::Vector3 pos = transform->GetPosition();
@@ -61,12 +59,12 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
 
             if (activeTerrain->GetHeightAtPosition(pos.x, pos.z, terrainHeight, normal))
             {
-                // Snap them perfectly to the dirt
+                // Align vertical elevation to terrain contact surface with offset
                 pos.y = terrainHeight + 0.5f;
                 transform->SetPosition(pos);
             }
 
-            // Record this exact snapped location as their "Home" for Leashing!
+            // Persist initial ground position as spawn anchor for tether return logic
             HEIN::CombatBlackBoard* bb = actor->GetComponent<HEIN::CombatBlackBoard>();
             if (bb)
             {
@@ -74,23 +72,19 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
                 bb->hasSetSpawnPosition = true;
             }
 
-            // Turn off the flag so this only ever runs ONCE per actor
+            // Deactivate initial snap flag after first successful alignment
             rb->SetNeedsInitialSnap(false);
         }
 
-        // -------------------------------------------------------------
-         // B. HIBERNATION CHECK (Distance Slicing)
-         // -------------------------------------------------------------
-         // Never put the player or the stage to sleep!
+        // Distance-Based Simulation Culling (Hibernation)
+        // Exempt Player and primary environmental roots from simulation culling
         if (actor->GetActorType() != HEIN::ActorType::Player && actor->GetTag() != L"StageRoot")
         {
             float distSq = DirectX::SimpleMath::Vector3::DistanceSquared(playerPos, transform->GetPosition());
 
             if (distSq > SIMULATION_RADIUS_SQ)
             {
-                // AAA OFF-SCREEN RESET
-                // If the player is > 200m away, instantly teleport the enemy back 
-                // to their spawn point so they don't get stuck in the woods!
+                // Off-Screen Distance Reset: return dormant actors to their anchor coordinate
                 HEIN::CombatBlackBoard* bb = actor->GetComponent<HEIN::CombatBlackBoard>();
                 if (bb && bb->hasSetSpawnPosition)
                 {
@@ -98,14 +92,12 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
                     bb->moveIntent = DirectX::SimpleMath::Vector3::Zero;
                 }
 
-                // Skip physics calculations
+                // Bypass remaining dynamics calculations for dormant actor
                 continue;
             }
         }
 
-        // -------------------------------------------------------------
-        // C. APPLY GRAVITY & VELOCITY (Only runs if awake!)
-        // -------------------------------------------------------------
+        // Numerical Integration (Semi-Implicit Euler: Acceleration -> Velocity -> Position)
         if (!rb->isKinematic())
         {
             if (rb->UsesGravity() && !rb->m_isGrounded)
@@ -129,7 +121,7 @@ void HEIN::PhysicsSystem::UpdateCollisions(GameContext& gameContext, HEIN::Actor
 {
     std::vector<HEIN::ColliderComponent*> allColliders;
 
-    // Gather all colliders from the manager
+    // Gather active collider components across all actors
     for (auto& pair : actorManager.GetAllActors())
     {
         HEIN::Actor* actor = pair.second.get();
@@ -141,7 +133,7 @@ void HEIN::PhysicsSystem::UpdateCollisions(GameContext& gameContext, HEIN::Actor
         }
     }
 
-    // (The rest of your exact collision resolution code stays exactly the same here!)
+    // Narrowphase collision pair detection and manifold resolution
     for (size_t i = 0; i < allColliders.size(); ++i)
     {
         for (size_t j = i + 1; j < allColliders.size(); ++j)

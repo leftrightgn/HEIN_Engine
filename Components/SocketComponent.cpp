@@ -55,7 +55,7 @@ void HEIN::SocketComponent::OnInspectorGUI(GameContext& gameContext)
             std::string narrowName(socket.name.begin(), socket.name.end());
             ImGui::Text("Socket: %s", narrowName.c_str());
 
-            // Push a unique ID so ImGui doesn't get confused if you have multiple sockets
+            // Scope identifier to prevent ImGui widget ID collision across multiple sockets
             ImGui::PushID(narrowName.c_str());
 
             // Edit the Local Position offset
@@ -135,7 +135,7 @@ void HEIN::SocketComponent::DrawGizmo(
             // Combine them to get the Socket's true World position for the Gizmo
             DirectX::SimpleMath::Matrix socketWorld = offsetMatrix * cleanBoneMatrix;
 
-            // Push a unique ID so ImGuizmo doesn't get confused if you have multiple sockets
+            // Scope identifier to prevent ImGuizmo state collision across multiple sockets
             ImGuizmo::SetID(gizmoId++);
 
             ImGuizmo::Manipulate(

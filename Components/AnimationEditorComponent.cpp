@@ -143,7 +143,7 @@ void AnimationEditorComponent::DrawAnimatorWindow(GameContext& gameContext)
         ImGui::Separator();
         ImGui::Text("Rigging Tools");
 
-        // Dropdown to select which bone we are posing
+        // Bone selection dropdown for skeletal posing
         std::string currentBoneName = (m_selectedBoneIndex == -1) ? "None" : (m_targetModel ? m_targetModel->GetBoneName(m_selectedBoneIndex) : "Unknown");
         if (currentBoneName.empty()) currentBoneName = "Bone " + std::to_string(m_selectedBoneIndex);
         if (m_targetModel && ImGui::BeginCombo("Select Bone", currentBoneName.c_str()))
@@ -200,7 +200,7 @@ void AnimationEditorComponent::DrawGizmo(
     TransformComponent* transform = m_owner->GetComponent<TransformComponent>();
     DirectX::SimpleMath::Matrix actorWorld = transform->GetWorldMatrix();
 
-    // Find exactly where the bone currently sits in world space
+    // Query bone world-space transformation matrix
     DirectX::SimpleMath::Matrix boneWorld = m_targetModel->GetBoneWorldMatrix(m_selectedBoneIndex, actorWorld);
 
     ImGuizmo::SetID(999);
@@ -208,7 +208,7 @@ void AnimationEditorComponent::DrawGizmo(
         (ImGuizmo::OPERATION)operation, (ImGuizmo::MODE)mode,
         (float*)&boneWorld.m[0][0]);
 
-    // If the user drags the Gizmo, we save the new transform
+    // Handle interactive Gizmo manipulation
     if (ImGuizmo::IsUsing())
     {
         int parentIndex = m_targetModel->GetParentBoneIndex(m_selectedBoneIndex);
@@ -219,7 +219,7 @@ void AnimationEditorComponent::DrawGizmo(
             parentWorld = m_targetModel->GetBoneWorldMatrix(parentIndex, actorWorld);
         }
 
-        // To save the pose, we must convert the World space Gizmo back to Local space relative to the parent bone.
+        // Convert world-space gizmo transform to parent-relative local coordinates:
         // Local Matrix = New World Matrix * Inverse(Parent World Matrix)
         DirectX::SimpleMath::Matrix newLocal = boneWorld * parentWorld.Invert();
 
@@ -349,7 +349,7 @@ bool AnimationEditorComponent::ExportToSDKMeshAnim(const std::string& filepath)
             file.write(reinterpret_cast<const char*>(&frameData), sizeof(SDKANIMATION_FRAME_DATA));
         }
 
-        // 3. Bake Keyframes (Evaluate the track at exactly 60 slices per second)
+        // Keyframe Baking: Sample animated bone tracks uniformly at designated sampling frequency
         for (auto const& [boneIndex, track] : m_tracks)
         {
             for (uint32_t frame = 0; frame < totalFrames; ++frame)

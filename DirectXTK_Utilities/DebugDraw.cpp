@@ -189,9 +189,9 @@ void XM_CALLCONV DX::DrawRing(PrimitiveBatch<VertexPositionColor>* batch,
     VertexPositionColor verts[c_ringSegments + 1];
 
     constexpr float fAngleDelta = XM_2PI / float(c_ringSegments);
-    // Instead of calling cos/sin for each segment we calculate
-    // the sign of the angle delta and then incrementally calculate sin
-    // and cosine from then on.
+
+    // Incremental trigonometric recurrence: computes sine and cosine iteratively
+    // to avoid per-segment transcendental function calls.
     const XMVECTOR cosDelta = XMVectorReplicate(cosf(fAngleDelta));
     const XMVECTOR sinDelta = XMVectorReplicate(sinf(fAngleDelta));
     XMVECTOR incrementalSin = XMVectorZero();

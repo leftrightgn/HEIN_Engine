@@ -19,10 +19,10 @@
 //#define NOGDI
 //#define NOBITMAP
 
-// Include <mcx.h> if you need this
+// Exclude modem configuration (<mcx.h>)
 #define NOMCX
 
-// Include <winsvc.h> if you need this
+// Exclude Windows services (<winsvc.h>)
 #define NOSERVICE
 
 // WinHelp is deprecated

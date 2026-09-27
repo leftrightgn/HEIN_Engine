@@ -417,12 +417,11 @@ void HEIN::StaticModelComponent::DrawShadow(
     DirectX::SimpleMath::Matrix world = m_owner->GetComponent<TransformComponent>()->GetWorldMatrix();
     DirectX::SimpleMath::Matrix view = DirectX::SimpleMath::Matrix::Identity;
 
-    // We can use the standard Draw method but with lightViewProj as the projection matrix.
-    // The DirectXTK effects will output to the shadow map (since GameScene bound the depth buffer).
-    // The pixel shader will still execute, but its color output is discarded by the pipeline, leaving only depth!
+    // Shadow depth rendering: substitute projection matrix with lightViewProj.
+    // The DirectXTK effects render against the bound shadow depth-stencil view.
+    // Pipeline color outputs are discarded, preserving depth information in the shadow buffer.
     
-    // NOTE: DirectXTK effects might set their own Rasterizer/Blend states.
-    // We should restore the shadow states after drawing just in case, but Draw() itself binds states.
+    // DirectXTK model draw calls configure internal rasterizer and blend states.
     
     if (!m_model->bones.empty() && m_drawBones)
     {
