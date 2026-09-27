@@ -96,18 +96,7 @@ namespace HEIN
 		}
 
 
-		// bone name checker
-		/*OutputDebugStringW(L"--- BONE LIST START ---\n");
-		for (const auto& bone : m_model->bones)
-		{
-			OutputDebugStringW(bone.name.c_str());
-			OutputDebugStringW(L"\n");
-		}
-		OutputDebugStringW(L"--- BONE LIST END ---\n");*/
-
-		// Device is already declared above
-
-		// 1. Compile Shaders
+		// Compile Shaders
 		Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
 		HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
 		if (FAILED(hr))
@@ -139,7 +128,7 @@ namespace HEIN
 		}
 		device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, m_pixelShader.ReleaseAndGetAddressOf());
 
-		// 2. Create Constant Buffers (moved up so they are always created even if layout fails)
+		// Create Constant Buffers 
 		D3D11_BUFFER_DESC cbDesc = {};
 		cbDesc.Usage = D3D11_USAGE_DYNAMIC;
 		cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -151,7 +140,7 @@ namespace HEIN
 		cbDesc.ByteWidth = sizeof(CB_Lighting);
 		device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
 
-		// 3. Create Input Layout explicitly to match CustomSkinned.hlsl shader using the actual vertex declaration from the model!
+		// Create Input Layout explicitly to match CustomSkinned.hlsl shader using the actual vertex declaration from the model!
 		bool layoutCreated = false;
 		if (!m_model->meshes.empty())
 		{
@@ -173,27 +162,6 @@ namespace HEIN
 								}
 							}
 
-							FILE* f;
-							if (fopen_s(&f, "VBDecl_Log.txt", "w") == 0)
-							{
-								fprintf(f, "--- SKINNED MESH VB DECL ---\n");
-								for (const auto& element : modifiedDecl)
-								{
-									fprintf(f, "Semantic: %s, Index: %d, Format: %d, Offset: %d\n", element.SemanticName, element.SemanticIndex, element.Format, element.AlignedByteOffset);
-								}
-								fprintf(f, "----------------------------\n");
-								fclose(f);
-							}
-
-							OutputDebugStringA("--- SKINNED MESH VB DECL ---\n");
-							for (const auto& element : modifiedDecl)
-							{
-								char buf[256];
-								sprintf_s(buf, "Semantic: %s, Index: %d, Format: %d, Offset: %d\n", element.SemanticName, element.SemanticIndex, element.Format, element.AlignedByteOffset);
-								OutputDebugStringA(buf);
-							}
-							OutputDebugStringA("----------------------------\n");
-
 							HRESULT hrLayout = device->CreateInputLayout(
 								modifiedDecl.data(),
 								(UINT)modifiedDecl.size(),
@@ -203,24 +171,8 @@ namespace HEIN
 							);
 							if (SUCCEEDED(hrLayout))
 							{
-								FILE* f;
-								if (fopen_s(&f, "VBDecl_Log.txt", "a") == 0) {
-									fprintf(f, "SUCCESS: CreateInputLayout succeeded!\n");
-									fclose(f);
-								}
 								layoutCreated = true;
 								break;
-							}
-							else
-							{
-								char err[256];
-								sprintf_s(err, "CreateInputLayout FAILED with HRESULT 0x%X\n", hrLayout);
-								OutputDebugStringA(err);
-								FILE* f;
-								if (fopen_s(&f, "VBDecl_Log.txt", "a") == 0) {
-									fprintf(f, "%s", err);
-									fclose(f);
-								}
 							}
 						}
 					}
@@ -229,12 +181,8 @@ namespace HEIN
 			}
 		}
 
-		if (!layoutCreated)
-		{
-			OutputDebugStringA("ERROR: Failed to create input layout for CustomSkinned shader. Vertex format mismatch.\n");
-		}
-
-		// 4. Create Sampler State
+		
+		// Create Sampler State
 		D3D11_SAMPLER_DESC sampDesc = {};
 		sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
 		sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -306,7 +254,7 @@ namespace HEIN
 					}
 					else
 					{
-						// Fallback if decompose fails (e.g. mirrored bones with negative scale).
+						// Fallback if decompose fails
 						// Cannot easily blend quaternions of reflected matrices, so just snap to the source animation.
 						m_blendedLocalBones[i] = sourceLocalBones[i];
 					}
@@ -342,7 +290,7 @@ namespace HEIN
 
 		// The Matrix Buffer update has been moved inside the mesh loop
 
-		// 2. Update Lighting Buffer
+		// Update Lighting Buffer
 		HEIN::LightComponent* activeLight = nullptr;
 		for (auto& pair : gameContext.actorManager->GetAllActors())
 		{
@@ -386,7 +334,7 @@ namespace HEIN
 			}
 		}
 
-		// 3. Bind Pipeline
+		// Bind Pipeline
 		context->IASetInputLayout(m_inputLayout.Get());
 		context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 		context->PSSetShader(nullptr, nullptr, 0);
@@ -400,7 +348,7 @@ namespace HEIN
 		ID3D11SamplerState* samplers[] = { m_samplerState.Get() };
 		context->PSSetSamplers(0, 1, samplers);
 
-		// 4. Draw Mesh Parts
+		// Draw Mesh Parts
 		for (const auto& mesh : m_model->meshes)
 		{
 			// UPDATE MATRIX BUFFER FOR THIS SPECIFIC MESH
@@ -475,6 +423,16 @@ namespace HEIN
 					context->PSSetConstantBuffers(1, 1, m_cbLighting.GetAddressOf());
 					ID3D11SamplerState* mySamplers[] = { m_samplerState.Get() };
 					context->PSSetSamplers(0, 1, mySamplers);
+
+					// Explicitly re-bind shadow map resources to guarantee they aren't clobbered by other actors
+					if (gameContext.shadowSystem)
+					{
+						ID3D11ShaderResourceView* shadowSRV = gameContext.shadowSystem->GetShadowMapSRV();
+						context->PSSetShaderResources(4, 1, &shadowSRV);
+
+						ID3D11SamplerState* shadowSampler = gameContext.shadowSystem->GetShadowSampler();
+						context->PSSetSamplers(1, 1, &shadowSampler);
+					}
 				}
 				else if (part->effect)
 				{
@@ -494,8 +452,7 @@ namespace HEIN
 				// Force CullNone to guarantee we don't cull the front faces by accident!
 				context->RSSetState(gameContext.commonStates.CullNone());
 
-				// CRITICAL: Ensure Depth Testing and Opaque Blending are enabled!
-				// Without this, the character will render inside-out because back faces will draw over front faces!
+				
 				context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
 				context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
 
@@ -504,7 +461,7 @@ namespace HEIN
 		}
 	}
 
-	// Add the new DrawShadow method
+
 	void SkinnedModelComponent::DrawShadow(GameContext& gameContext, const DirectX::SimpleMath::Matrix& lightViewProj)
 	{
 		if (!m_model || !m_isVisible) return;
@@ -597,30 +554,6 @@ namespace HEIN
 
 					context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
 
-					if (infoQueue)
-					{
-						UINT64 numMessages = infoQueue->GetNumStoredMessages();
-						if (numMessages > 0)
-						{
-							FILE* f;
-							if (fopen_s(&f, "D3D11_Crash_Log.txt", "a") == 0)
-							{
-								for (UINT64 i = 0; i < numMessages; ++i)
-								{
-									SIZE_T messageLength = 0;
-									infoQueue->GetMessage(i, nullptr, &messageLength);
-									if (messageLength > 0)
-									{
-										D3D11_MESSAGE* pMessage = (D3D11_MESSAGE*)malloc(messageLength);
-										infoQueue->GetMessage(i, pMessage, &messageLength);
-										fprintf(f, "D3D11_Shadow: %s\n", pMessage->pDescription);
-										free(pMessage);
-									}
-								}
-								fclose(f);
-							}
-						}
-					}
 				}
 			}
 		}
@@ -993,4 +926,28 @@ void HEIN::SkinnedModelComponent::InitializeAfterDeserialize(GameContext& gameCo
             LoadAnimation(pair.first, pair.second.c_str());
         }
     }
+}
+
+
+void HEIN::SkinnedModelComponent::OverrideBones(const DirectX::SimpleMath::Matrix* localBones)
+{
+	if (!m_model) return;
+
+	// Safely cast the SimpleMath matrix array to the raw XMMATRIX array DirectXTK expects
+	const DirectX::XMMATRIX* rawLocalBones = reinterpret_cast<const DirectX::XMMATRIX*>(localBones);
+
+	// Converts local matrices down the hierarchy into absolute world-space bone matrices
+	m_model->CopyAbsoluteBoneTransforms(m_model->bones.size(), rawLocalBones, m_drawBones.get());
+
+	// Copy the draw bones to the skin bones array
+	for (size_t i = 0; i < m_model->bones.size(); i++)
+	{
+		m_skinBones[i] = m_drawBones[i];
+	}
+
+	// Apply the Inverse Bind Pose securely using your existing AnimationSDKMESH setup
+	if (m_currentAnimation != nullptr)
+	{
+		m_currentAnimation->ApplySkinMatrix(*m_model, m_model->bones.size(), m_skinBones.get());
+	}
 }

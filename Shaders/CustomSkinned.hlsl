@@ -1,7 +1,7 @@
 // CustomSkinned.hlsl
 
 // ==============================================================================
-// 1. CONSTANT BUFFERS (Data from C++)
+// CONSTANT BUFFERS (Data from C++)
 // ==============================================================================
 cbuffer cbMatrices : register(b0)
 {
@@ -27,7 +27,7 @@ cbuffer cbLighting : register(b1)
 };
 
 // ==============================================================================
-// 2. TEXTURES & SAMPLERS
+// TEXTURES & SAMPLERS
 // ==============================================================================
 Texture2D DiffuseMap : register(t0); // The model's texture
 Texture2D ShadowMap : register(t4); // The generated shadow map
@@ -35,7 +35,7 @@ SamplerState LinearSampler : register(s0);
 SamplerComparisonState ShadowSampler : register(s1); // Sampler for shadow filtering
 
 // ==============================================================================
-// 3. STRUCTURES
+// STRUCTURES
 // ==============================================================================
 struct VSInput
 {
@@ -49,14 +49,14 @@ struct VSInput
 struct VSOutput
 {
     float4 Pos : SV_POSITION;
-    float3 WorldPos : POSITION1;
-    float3 Normal : NORMAL;
+    float3 WorldPos : TEXCOORD2;
+    float3 Normal : TEXCOORD3;
     float2 TexCoord : TEXCOORD0;
     float4 LightSpacePos : TEXCOORD1; // Position from the Light's point of view
 };
 
 // ==============================================================================
-// 4. VERTEX SHADER
+// VERTEX SHADER
 // ==============================================================================
 VSOutput VSMain(VSInput input)
 {
@@ -95,7 +95,7 @@ VSOutput VSMain(VSInput input)
 }
 
 // ==============================================================================
-// 5. SHADOW CALCULATION
+// SHADOW CALCULATION
 // ==============================================================================
 float CalculateShadow(float4 lightSpacePos)
 {
@@ -135,7 +135,7 @@ float CalculateShadow(float4 lightSpacePos)
 }
 
 // ==============================================================================
-// 6. PIXEL SHADER
+// PIXEL SHADER
 // ==============================================================================
 float4 PSMain(VSOutput input) : SV_TARGET
 {
@@ -149,13 +149,13 @@ float4 PSMain(VSOutput input) : SV_TARGET
     float3 lightVector = LightPos - input.WorldPos;
     float distanceToLight = length(lightVector);
     
-    // 1. Determine Light Direction (L)
+    // Determine Light Direction (L)
     float3 L = (LightType == 0) ? normalize(-LightDir) : normalize(lightVector);
 
-    // 2. Base Diffuse Calculation
+    // Base Diffuse Calculation
     float diff = max(dot(norm, L), 0.0f);
     
-    // 3. Attenuation (Falloff over distance for Point/Spot lights)
+    // Attenuation (Falloff over distance for Point/Spot lights)
     float attenuation = 1.0f;
     if (LightType == 1 || LightType == 2)
     {
@@ -163,7 +163,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
         attenuation *= attenuation; // Quadratic falloff
     }
 
-    // 4. Spot Light Cone Calculation
+    // Spot Light Cone Calculation
     if (LightType == 2)
     {
         float theta = dot(L, normalize(-LightDir));
@@ -175,14 +175,14 @@ float4 PSMain(VSOutput input) : SV_TARGET
             attenuation *= smoothstep(cosHalfAngle, cosHalfAngle + 0.05f, theta);
     }
 
-    // 5. Shadow Mapping (Only calculate shadows if attenuation > 0)
+    // Shadow Mapping (Only calculate shadows if attenuation > 0)
     float shadowFactor = 1.0f;
     if (attenuation > 0.0f && LightType == 0) // Currently shadows only for Directional
     {
         shadowFactor = CalculateShadow(input.LightSpacePos);
     }
 
-    // 6. Final Color Combination
+    // Final Color Combination
     float3 finalColor = baseColor.rgb * LightColor.rgb * diff * LightIntensity * attenuation * shadowFactor;
     
     // Add ambient light so shadows aren't pitch black

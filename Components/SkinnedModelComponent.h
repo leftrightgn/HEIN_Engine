@@ -147,28 +147,8 @@ namespace HEIN
 		}
 
 		// This function hijacks the rendering pipeline to draw custom Editor poses
-		void OverrideBones(const DirectX::SimpleMath::Matrix* localBones)
-		{
-			if (!m_model) return;
-
-			// Safely cast the SimpleMath matrix array to the raw XMMATRIX array DirectXTK expects
-			const DirectX::XMMATRIX* rawLocalBones = reinterpret_cast<const DirectX::XMMATRIX*>(localBones);
-
-			// Converts local matrices down the hierarchy into absolute world-space bone matrices
-			m_model->CopyAbsoluteBoneTransforms(m_model->bones.size(), rawLocalBones, m_drawBones.get());
-
-			// Copy the draw bones to the skin bones array
-			for (size_t i = 0; i < m_model->bones.size(); i++)
-			{
-				m_skinBones[i] = m_drawBones[i];
-			}
-
-			// Apply the Inverse Bind Pose securely using your existing AnimationSDKMESH setup
-			if (m_currentAnimation != nullptr)
-			{
-				m_currentAnimation->ApplySkinMatrix(*m_model, m_model->bones.size(), m_skinBones.get());
-			}
-		}
+		void OverrideBones(const DirectX::SimpleMath::Matrix* localBones);
+		
 	};
 }
 

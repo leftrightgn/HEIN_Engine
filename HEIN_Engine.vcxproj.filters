@@ -46,8 +46,12 @@
     <ClCompile Include="Components\ProceduralAnimationComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
-    <ClCompile Include="Components\LightComponent.cpp" />
-    <ClCompile Include="Common\ShadowSystem.cpp" />
+    <ClCompile Include="Components\LightComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\ShadowSystem.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
