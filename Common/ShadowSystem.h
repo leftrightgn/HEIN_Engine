@@ -8,6 +8,7 @@ namespace HEIN {
     public:
         void Initialize(ID3D11Device* device, int width, int height);
         void BindShadowMap(ID3D11DeviceContext* context);
+        void UnbindShadowMap(ID3D11DeviceContext* context);
         ID3D11ShaderResourceView* GetShadowMapSRV() const { return m_shadowSRV.Get(); }
         void SetLightViewProj(const DirectX::SimpleMath::Matrix& matrix) { m_lightViewProj = matrix; }
         DirectX::SimpleMath::Matrix GetLightViewProj() const { return m_lightViewProj; }

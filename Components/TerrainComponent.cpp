@@ -493,6 +493,14 @@ void HEIN::TerrainComponent::Draw(
 
 	// Reset rasterizer state to default
 	context->RSSetState(gameContext.commonStates.CullCounterClockwise());
+
+	if (gameContext.shadowSystem)
+	{
+		ID3D11ShaderResourceView* nullSRV = nullptr;
+		context->PSSetShaderResources(4, 1, &nullSRV);
+		ID3D11SamplerState* nullSampler = nullptr;
+		context->PSSetSamplers(1, 1, &nullSampler);
+	}
 }
 nlohmann::json HEIN::TerrainComponent::Serialize()
 {

@@ -459,6 +459,14 @@ namespace HEIN
 				context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
 			}
 		}
+
+		if (gameContext.shadowSystem)
+		{
+			ID3D11ShaderResourceView* nullSRV = nullptr;
+			context->PSSetShaderResources(4, 1, &nullSRV);
+			ID3D11SamplerState* nullSampler = nullptr;
+			context->PSSetSamplers(1, 1, &nullSampler);
+		}
 	}
 
 
@@ -535,16 +543,6 @@ namespace HEIN
 					context->VSSetConstantBuffers(0, 1, m_cbMatrices.GetAddressOf());
 					
 					// Depth-only shadow generation pass: omit pixel shader samplers and lighting constant buffers
-
-					Microsoft::WRL::ComPtr<ID3D11InfoQueue> infoQueue;
-					if (SUCCEEDED(gameContext.deviceResources.GetD3DDevice()->QueryInterface(IID_PPV_ARGS(&infoQueue))))
-					{
-						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, FALSE);
-						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, FALSE);
-						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_WARNING, FALSE);
-						infoQueue->ClearStoredMessages();
-					}
-
 					// Force CullNone
 					context->RSSetState(gameContext.commonStates.CullNone());
 

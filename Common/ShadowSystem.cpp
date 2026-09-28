@@ -52,10 +52,17 @@ namespace HEIN {
     }
 
     void ShadowSystem::BindShadowMap(ID3D11DeviceContext* context) {
+        // Ensure shadow map SRV is unbound from pixel shader (slot 4) to eliminate D3D11 OM hazard
+        ID3D11ShaderResourceView* nullSRV = nullptr;
+        context->PSSetShaderResources(4, 1, &nullSRV);
+
         // Unbind any bound render targets to ensure depth-only rendering
         context->OMSetRenderTargets(0, nullptr, m_shadowDSV.Get());
         context->RSSetViewports(1, &m_shadowViewport);
         context->ClearDepthStencilView(m_shadowDSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
     }
 
+    void ShadowSystem::UnbindShadowMap(ID3D11DeviceContext* context) {
+        context->OMSetRenderTargets(0, nullptr, nullptr);
+    }
 }
