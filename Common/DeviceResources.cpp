@@ -242,6 +242,8 @@ void DeviceResources::CreateDeviceResources()
             {
                 D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
                 D3D11_MESSAGE_ID_DEVICE_DRAW_RENDERTARGETVIEW_NOT_SET,
+                D3D11_MESSAGE_ID_DEVICE_OMSETRENDERTARGETS_HAZARD,
+                D3D11_MESSAGE_ID_DEVICE_PSSETSHADERRESOURCES_HAZARD,
             };
             D3D11_INFO_QUEUE_FILTER filter = {};
             filter.DenyList.NumIDs = static_cast<UINT>(std::size(hide));
@@ -481,8 +483,8 @@ void DeviceResources::Present()
         m_d3dContext->DiscardView(m_d3dDepthStencilView.Get());
     }
 
-    // If the device was removed either by a disconnection or a driver upgrade, we
-    // must recreate all device resources.
+    // Device removal detected (disconnection or driver update):
+    // Recreate all device-dependent graphics resources.
     if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
     {
 #ifdef _DEBUG
@@ -612,7 +614,7 @@ void DeviceResources::UpdateColorSpace()
 
     if (!m_dxgiFactory->IsCurrent())
     {
-        // Output information is cached on the DXGI Factory. If it is stale we need to create a new factory.
+        // Stale cached DXGI factory output metadata requires factory recreation
         CreateFactory();
     }
 

@@ -34,14 +34,11 @@ namespace HEIN
 		};
 
 	public:
-		// Data
+		// Data - Streamlined for collision (16 bytes vs original 60 bytes)
 		struct HeightMapType
 		{
-			float x, y, z;
+			float y;
 			float nx, ny, nz;
-			float tx, ty, tz; // tangent
-			float bx, by, bz; // binormal
-			float r, g, b;
 		};
 
 	private:
@@ -52,6 +49,7 @@ namespace HEIN
 		std::wstring m_heightMapFilename;
 
 		std::vector<HeightMapType> m_heightMap;
+		std::vector<DirectX::SimpleMath::Vector3> m_colorMap;
 
 		std::vector<std::unique_ptr<TerrainCell>> m_cells;
 		

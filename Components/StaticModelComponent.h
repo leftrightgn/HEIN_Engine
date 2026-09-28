@@ -76,5 +76,8 @@ namespace HEIN
 
 		void SetVisible(bool visible) { m_isVisible = visible; }
 		bool IsVisible() const { return m_isVisible; }
+
+		void SetCastShadows(bool castShadows) { m_castShadows = castShadows; }
+		bool CastsShadows() const { return m_castShadows; }
 	};
 }

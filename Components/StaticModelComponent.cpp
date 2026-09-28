@@ -417,12 +417,11 @@ void HEIN::StaticModelComponent::DrawShadow(
     DirectX::SimpleMath::Matrix world = m_owner->GetComponent<TransformComponent>()->GetWorldMatrix();
     DirectX::SimpleMath::Matrix view = DirectX::SimpleMath::Matrix::Identity;
 
-    // We can use the standard Draw method but with lightViewProj as the projection matrix.
-    // The DirectXTK effects will output to the shadow map (since GameScene bound the depth buffer).
-    // The pixel shader will still execute, but its color output is discarded by the pipeline, leaving only depth!
+    // Shadow depth rendering: substitute projection matrix with lightViewProj.
+    // The DirectXTK effects render against the bound shadow depth-stencil view.
+    // Pipeline color outputs are discarded, preserving depth information in the shadow buffer.
     
-    // NOTE: DirectXTK effects might set their own Rasterizer/Blend states.
-    // We should restore the shadow states after drawing just in case, but Draw() itself binds states.
+    // DirectXTK model draw calls configure internal rasterizer and blend states.
     
     if (!m_model->bones.empty() && m_drawBones)
     {
@@ -568,6 +567,8 @@ void HEIN::StaticModelComponent::OnInspectorGUI(GameContext& gameContext)
         HWND windowHandle = gameContext.deviceResources.GetWindow();
         if (!m_lastError.empty()) ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", m_lastError.c_str());
         ImGui::Checkbox("Visible", &m_isVisible);
+        ImGui::SameLine();
+        ImGui::Checkbox("Cast Shadow", &m_castShadows);
 
         // Model Path Editor
         std::string modelPathStr = std::string(m_modelPath.begin(), m_modelPath.end());
@@ -659,15 +660,6 @@ void HEIN::StaticModelComponent::InitializeAfterDeserialize(GameContext& gameCon
             }
         }
         
-        // Force disable shadows on all stage props (walls, floors, pillars, bridges) regardless of old save file state
-        // to prevent them from blocking the sun and casting a giant eclipse shadow over the entire map bounds
-        if (m_modelPath.find(L"stage") != std::wstring::npos || 
-            m_modelPath.find(L"floor1") != std::wstring::npos ||
-            m_modelPath.find(L"wall") != std::wstring::npos)
-        {
-            m_castShadows = false;
-        }
-
         Initialize(gameContext, m_modelPath.c_str(), m_textureDir.empty() ? nullptr : m_textureDir.c_str());
     }
 }

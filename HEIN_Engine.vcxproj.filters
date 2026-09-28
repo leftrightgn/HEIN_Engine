@@ -25,6 +25,9 @@
     <ClCompile Include="Components\FogComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
+    <ClCompile Include="Components\FoliageComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
     <ClCompile Include="DebugingTools\EditorUtils.cpp">
       <Filter>DebugingTools</Filter>
     </ClCompile>
@@ -85,6 +88,9 @@
     <ClInclude Include="Components\FogComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
+    <ClInclude Include="Components\FoliageComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
     <ClInclude Include="DebugingTools\EditorUtils.h">
       <Filter>DebugingTools</Filter>
     </ClInclude>
@@ -127,6 +133,9 @@
     <None Include="Shaders\Terrain_Common.hlsli">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="Shaders\Foliage_Common.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\Terrain_VS.hlsl">
@@ -136,6 +145,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\CustomSkinned.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\Foliage_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\Foliage_VS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

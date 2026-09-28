@@ -254,7 +254,17 @@ namespace HEIN
             return;
         }
 
-        // Calculates the model-space matrix of any bone by walking up the hierarchy.
+        // ==================================================================================
+        // ANALYTICAL TWO-BONE INVERSE KINEMATICS & TERRAIN ADAPTATION PIPELINE
+        // ==================================================================================
+        // Solves a 3-joint kinematic chain (Root/Thigh -> Mid/Knee -> Effector/Ankle)
+        // using the Law of Cosines combined with swing-twist rotational decomposition,
+        // dual-point ground raycasting, temporal smoothing, and terrain surface normal alignment.
+        // ==================================================================================
+
+        // Stage 1: Coordinate Space Transformations & Model Hierarchy Traversal
+        // Computes model-space transformation matrix for any bone index by walking up parent links:
+        // M_model = M_local[idx] * M_local[parent] * ... * M_local[root]
         auto modelMatrix = [&](int idx) -> DirectX::SimpleMath::Matrix
             {
                 DirectX::SimpleMath::Matrix m = localBones[idx];
@@ -267,7 +277,8 @@ namespace HEIN
                 return m;
             };
 
-        // Rotates a matrix around its own translation vector by a world-space rotation matrix.
+        // Rigid body rotation around pivot: preserves translation while rotating orientation:
+        // R_pivot(M, R) = T(pos) * R * T(-pos) * M_untranslated
         auto rotateInPlace = [](const DirectX::SimpleMath::Matrix& m, const DirectX::SimpleMath::Matrix& rot) -> DirectX::SimpleMath::Matrix
             {
                 DirectX::SimpleMath::Matrix r = m;
@@ -278,8 +289,8 @@ namespace HEIN
                 return r;
             };
 
-        // Current pose in world space 
-        // Computes initial world positions and matrices based on the un-modified animation pose.
+        // Stage 2: Unmodified Animation World Pose Evaluation
+        // Compute world-space matrices and translations for root, mid, and effector before IK adjustment
         const int rootParent = m_skinnedModel->GetParentBoneIndex(rootIdx);
         const DirectX::SimpleMath::Matrix rootParentModel = (rootParent >= 0) ? modelMatrix(rootParent) : DirectX::SimpleMath::Matrix::Identity;
         const DirectX::SimpleMath::Matrix rootParentWorld = rootParentModel * worldMatrix;
@@ -288,24 +299,25 @@ namespace HEIN
         const DirectX::SimpleMath::Matrix midWorld = localBones[midIdx] * rootWorld;
         const DirectX::SimpleMath::Matrix effWorld = localBones[effectorIdx] * midWorld;
 
-
         const DirectX::SimpleMath::Vector3 rootPos = rootWorld.Translation();
         const DirectX::SimpleMath::Vector3 midPos = midWorld.Translation();
         const DirectX::SimpleMath::Vector3 effPos = effWorld.Translation();
 
-        // Calculates the immutable lengths of the upper and lower leg segments.
+        // Bone segment lengths (invariant under rigid skeletal kinematics)
         const float upperLen = DirectX::SimpleMath::Vector3::Distance(rootPos, midPos);
         const float lowerLen = DirectX::SimpleMath::Vector3::Distance(midPos, effPos);
         if (upperLen < 0.0001f || lowerLen < 0.0001f)
             return;
 
-        // Target 
+        // Stage 3: Dynamic Target Coordinate & Footprint Ground Sampling
         DirectX::SimpleMath::Vector3 targetPos = effPos;
         DirectX::SimpleMath::Vector3 m_footNormal = DirectX::SimpleMath::Vector3::Up;
         float targetOffset = 0.0f;
 
-        DirectX::SimpleMath::Matrix effModel = modelMatrix(effectorIdx);
-        // SWING PHASE MASKING
+        // Swing Phase Masking:
+        // Evaluates vertical distance between foot and actor root.
+        // During gait swing phase (foot lifted off the floor), fade IK influence to 0
+        // to preserve natural walk/run animation curves and prevent legs sticking to ground.
         float footHeightRelative = effPos.y - worldMatrix.Translation().y;
         float swingMask = 1.0f;
 
@@ -320,7 +332,7 @@ namespace HEIN
             const DirectX::SimpleMath::Vector3 actorPos = worldMatrix.Translation();
             float groundAtFoot = 0.0f, groundAtActor = 0.0f;
 
-            // Helper lambda to query both terrain and mesh colliders for the highest floor point.
+            // Multi-surface raycast: queries heightmap and static mesh triangle BVH for highest contact
             auto getGroundHeight = [&](const DirectX::SimpleMath::Vector3& pos, float& outHeight, DirectX::SimpleMath::Vector3* outNormal = nullptr) -> bool {
                 bool hitAny = false;
                 float bestHeight = -FLT_MAX;
@@ -380,7 +392,7 @@ namespace HEIN
                 return false;
                 };
 
-            // Estimates horizontal footprint orientation based on the actor's forward vector.
+            // Dual-Point Sampling: Toe and Heel offsets along horizontal foot direction
             DirectX::SimpleMath::Vector3 footDir = worldMatrix.Forward();
             footDir.y = 0.0f;
             footDir.Normalize();
@@ -388,7 +400,6 @@ namespace HEIN
             DirectX::SimpleMath::Vector3 toePos = effPos + footDir * 0.15f;
             DirectX::SimpleMath::Vector3 heelPos = effPos - footDir * 0.05f;
 
-            // Refines footprint estimation using actual toe bone position if available.
             if (toeIdx >= 0 && toeIdx < boneCount)
             {
                 DirectX::SimpleMath::Matrix toeWorldMat = modelMatrix(toeIdx) * worldMatrix;
@@ -409,7 +420,6 @@ namespace HEIN
             bool hitToe = getGroundHeight(toePos, toeHeight, &terrainNormal);
             bool hitHeel = getGroundHeight(heelPos, heelHeight);
 
-            // Interpolates missing raycast data by falling back to actor ground height.
             if (hitActor || hitToe || hitHeel)
             {
                 if (!hitActor) groundAtActor = hitToe ? toeHeight : heelHeight;
@@ -421,15 +431,16 @@ namespace HEIN
                 }
                 m_footNormal.Normalize();
 
-                // Calculates ankle height requirement to prevent toe or heel clipping.
+                // Compute optimal ankle elevation: weighted average prevents toe/heel ground clipping
                 float optimalAnkleHeight = heelHeight + (toeHeight - heelHeight) * 0.25f;
                 const float maxStep = 5.0f;
                 targetOffset = std::clamp(optimalAnkleHeight - groundAtActor, -maxStep, maxStep);
             }
         }
 
-        // TEMPORAL SMOOTHING: Interpolates target offset and normal over time using deltaTime.
-        // Prevents violent, single-frame popping when stepping over sharp geometry edges.
+        // Stage 4: Temporal Low-Pass Filtering (Anti-Popping Filter)
+        // Uses frame-rate independent exponential smoothing to eliminate high-frequency jitter:
+        // offset(t) = offset(t-1) + (target - offset(t-1)) * (1 - e^(-k * dt))
         float lerpSpeed = 15.0f * deltaTime;
         lerpSpeed = std::clamp(lerpSpeed, 0.0f, 1.0f);
 
@@ -437,11 +448,12 @@ namespace HEIN
         currentNormal = DirectX::SimpleMath::Vector3::Lerp(currentNormal, m_footNormal, lerpSpeed);
         currentNormal.Normalize();
 
-        // Modifies target elevation based on smoothed terrain calculation and user offset.
         targetPos.y += currentOffset * activeWeight;
         targetPos.y += heightOffset;
 
-        // Restricts the target position to the mathematical limits of the leg reach.
+        // Stage 5: Reach Boundary Clamping (Triangle Inequality Enforcement)
+        // Maximum reachable distance: d_max = upperLen + lowerLen - epsilon (avoids singular stretch)
+        // Minimum foldable distance: d_min = |upperLen - lowerLen| + epsilon (avoids full self-collapse)
         DirectX::SimpleMath::Vector3 toTarget = targetPos - rootPos;
         float dist = toTarget.Length();
         if (dist < 0.0001f)
@@ -453,27 +465,31 @@ namespace HEIN
         toTarget.Normalize();
         targetPos = rootPos + toTarget * dist;
 
-        // Bend the knee so |root -> effector| == dist 
-        // Determines the current orientation vectors of the upper and lower leg.
+        // Stage 6: Analytical Knee Hinge Solve via the Law of Cosines
+        // For triangle with sides a = upperLen, b = lowerLen, c = dist:
+        // cos(theta_interior) = (a^2 + b^2 - c^2) / (2 * a * b)
+        // Knee bend angle: wantedBend = XM_PI - theta_interior
         DirectX::SimpleMath::Vector3 U = midPos - rootPos;  U.Normalize();
         DirectX::SimpleMath::Vector3 L = effPos - midPos;   L.Normalize();
        
+        // Knee hinge rotation axis: perpendicular to plane formed by thigh and calf vectors
         DirectX::SimpleMath::Vector3 axis = U.Cross(L);
         if (axis.LengthSquared() < 1e-8f)
         {
-            // Fallback to the thigh's local right vector only if the leg is perfectly straight
+            // Collinear fallback: use root bone lateral right axis when leg is fully straight
             axis = rootWorld.Right();
         }
         axis.Normalize();
         
-        // Applies the Law of Cosines to calculate the interior angle required to reach the target distance.
         const float curBend = std::acos(std::clamp(U.Dot(L), -1.0f, 1.0f));
         const float cosInterior = std::clamp(
             (upperLen * upperLen + lowerLen * lowerLen - dist * dist) / (2.0f * upperLen * lowerLen),
             -1.0f, 1.0f);
         const float wantedBend = DirectX::XM_PI - std::acos(cosInterior);
        
-        // Safe matrix inversion lambda. Aborts inversion if determinant approaches zero (scale corruption).
+        // Safe matrix inversion lambda via Cramer's Rule for 3D affine transformations.
+        // Computes analytic 3x3 cofactor determinant and inverts translation block.
+        // Aborts inversion if determinant approaches zero (scale singularity).
         auto safeInvert = [](const DirectX::SimpleMath::Matrix& m, bool& outSuccess) -> DirectX::SimpleMath::Matrix
             {
                 float a11 = m._11, a12 = m._12, a13 = m._13;
@@ -514,7 +530,8 @@ namespace HEIN
                 return invM;
             };
 
-        // Rotates the mid-joint relative to the calculated axis and bend delta.
+        // Stage 7: Knee Hinge Rotation & Mid Joint Local Matrix Update
+        // Rotate mid joint around hinge axis by angular difference delta = wantedBend - curBend
         const DirectX::SimpleMath::Matrix bendRot = DirectX::SimpleMath::Matrix::CreateFromAxisAngle(axis, wantedBend - curBend);
         const DirectX::SimpleMath::Matrix newMidWorld = rotateInPlace(midWorld, bendRot);
 
@@ -522,11 +539,12 @@ namespace HEIN
         DirectX::SimpleMath::Matrix rootWorldInv = safeInvert(rootWorld, invertSuccess);
         if (!invertSuccess) return;
 
-        // Overwrites local mid matrix based on the new world configuration.
+        // Reconstruct local mid matrix: M_local[mid] = M_world[mid, new] * (M_world[root])^-1
         localBones[midIdx] = newMidWorld * rootWorldInv;
     
-        // Swing the whole leg so the effector direction points at the target 
-        // Computes the angular difference between the current effector direction and target direction.
+        // Stage 8: Whole-Leg Swing Rotation to Aim Effector at Target Coordinate
+        // Evaluates angular difference between solved leg direction (root -> effector) and target vector (root -> target):
+        // cos(theta) = curDir . toTarget, sin(theta) = ||curDir x toTarget||
         const DirectX::SimpleMath::Matrix newEffWorld = localBones[effectorIdx] * newMidWorld;
         DirectX::SimpleMath::Vector3 curDir = newEffWorld.Translation() - rootPos;
         curDir.Normalize();
@@ -540,7 +558,8 @@ namespace HEIN
             const float angle = std::atan2(swingSin, swingCos);
             const DirectX::SimpleMath::Matrix swingRot = DirectX::SimpleMath::Matrix::CreateFromAxisAngle(swingAxis / swingSin, angle);
             
-            // Applies rotation to root bone to pivot the entire leg towards the target coordinate.
+            // Apply swing rotation to root bone and recalculate local root bone matrix:
+            // M_local[root] = (M_pivot(M_world[root], swingRot)) * (M_world[rootParent])^-1
             const DirectX::SimpleMath::Matrix newRootWorld = rotateInPlace(rootWorld, swingRot);
             DirectX::SimpleMath::Matrix rootParentInv = safeInvert(rootParentWorld, invertSuccess);
             if (invertSuccess)
@@ -549,16 +568,17 @@ namespace HEIN
             }
         }
 
-        // Align the foot to the terrain normal 
-        // Recalculates mid bone world matrix reflecting the completed bend and swing operations.
+        // Stage 9: Foot Orientation & Terrain Normal Alignment
+        // Recalculate intermediate mid world matrix post-swing:
         DirectX::SimpleMath::Matrix finalMidWorld = localBones[midIdx] * (localBones[rootIdx] * rootParentWorld);
 
-        // Isolates original effector rotation while substituting the solved IK translation position.
-        // Prevents the foot geometry from pitching downwards automatically when the knee bends.
+        // Preserve unconstrained ankle rotation while translating to solved IK position:
+        // Decouples foot pitch from knee bend to prevent unnatural toe dipping.
         DirectX::SimpleMath::Matrix finalEffWorld = effWorld;
         finalEffWorld.Translation((localBones[effectorIdx] * finalMidWorld).Translation());
 
-        // Aligns foot orientation by rotating the global upward vector towards the terrain normal.
+        // Align foot bottom with terrain contact normal vector via shortest-arc quaternion/axis-angle:
+        // axis = globalUp x terrainNormal, angle = atan2(||axis||, globalUp . terrainNormal)
         if (alignToTerrain && currentNormal.y > 0.001f)
         {
             DirectX::SimpleMath::Vector3 alignAxis = DirectX::SimpleMath::Vector3::Up.Cross(currentNormal);
@@ -570,13 +590,14 @@ namespace HEIN
                 alignAxis.Normalize();
                 float alignAngle = std::atan2(alignSin, alignCos);
 
-                // Rotates foot based on angle scaled by active weight to retain swing phase transitions.
+                // Blend rotation angle by active weight (faded during swing phase)
                 DirectX::SimpleMath::Matrix alignRot = DirectX::SimpleMath::Matrix::CreateFromAxisAngle(alignAxis, alignAngle * activeWeight);
                 finalEffWorld = rotateInPlace(finalEffWorld, alignRot);
             }
         }
 
-        // Overwrites local effector matrix with final configuration.
+        // Stage 10: Local Effector Matrix Reconstruction
+        // M_local[effector] = M_world[effector, final] * (M_world[mid, final])^-1
         DirectX::SimpleMath::Matrix midInv = safeInvert(finalMidWorld, invertSuccess);
         if (invertSuccess)
         {

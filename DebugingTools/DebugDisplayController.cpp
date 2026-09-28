@@ -298,6 +298,12 @@ namespace HEIN
             context->RSSetViewports(1, &fullscreen);
             m_currentAction = HEIN::EditorAction::None;
         }
+
+        // Unbind shadow SRV and sampler to eliminate pipeline hazards across frame boundaries
+        ID3D11ShaderResourceView* nullSRV = nullptr;
+        context->PSSetShaderResources(4, 1, &nullSRV);
+        ID3D11SamplerState* nullSampler = nullptr;
+        context->PSSetSamplers(1, 1, &nullSampler);
     }
 	const DirectX::SimpleMath::Matrix DebugDisplayController::GetViewMatrix() const
 	{

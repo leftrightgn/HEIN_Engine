@@ -415,7 +415,7 @@ namespace HEIN
 						context->IASetInputLayout(m_staticInputLayouts[part.get()].Get());
 					}
 
-					// Override with our custom shaders and buffers
+					// Bind specialized skinned mesh shaders and constant buffers
 					context->IASetInputLayout(m_inputLayout.Get());
 					context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 					context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
@@ -449,7 +449,7 @@ namespace HEIN
 					}
 				}
 
-				// Force CullNone to guarantee we don't cull the front faces by accident!
+				// Rasterizer state: CullNone ensures two-sided geometry remains visible
 				context->RSSetState(gameContext.commonStates.CullNone());
 
 				
@@ -458,6 +458,14 @@ namespace HEIN
 
 				context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
 			}
+		}
+
+		if (gameContext.shadowSystem)
+		{
+			ID3D11ShaderResourceView* nullSRV = nullptr;
+			context->PSSetShaderResources(4, 1, &nullSRV);
+			ID3D11SamplerState* nullSampler = nullptr;
+			context->PSSetSamplers(1, 1, &nullSampler);
 		}
 	}
 
@@ -534,17 +542,7 @@ namespace HEIN
 					context->PSSetShader(nullptr, nullptr, 0); // DEPTH ONLY PASS
 					context->VSSetConstantBuffers(0, 1, m_cbMatrices.GetAddressOf());
 					
-					// Do not bind samplers or pixel shader constant buffers since we have no pixel shader
-
-					Microsoft::WRL::ComPtr<ID3D11InfoQueue> infoQueue;
-					if (SUCCEEDED(gameContext.deviceResources.GetD3DDevice()->QueryInterface(IID_PPV_ARGS(&infoQueue))))
-					{
-						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, FALSE);
-						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, FALSE);
-						infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_WARNING, FALSE);
-						infoQueue->ClearStoredMessages();
-					}
-
+					// Depth-only shadow generation pass: omit pixel shader samplers and lighting constant buffers
 					// Force CullNone
 					context->RSSetState(gameContext.commonStates.CullNone());
 
@@ -945,7 +943,7 @@ void HEIN::SkinnedModelComponent::OverrideBones(const DirectX::SimpleMath::Matri
 		m_skinBones[i] = m_drawBones[i];
 	}
 
-	// Apply the Inverse Bind Pose securely using your existing AnimationSDKMESH setup
+	// Evaluate inverse bind pose transformation using active animation frame matrices
 	if (m_currentAnimation != nullptr)
 	{
 		m_currentAnimation->ApplySkinMatrix(*m_model, m_model->bones.size(), m_skinBones.get());

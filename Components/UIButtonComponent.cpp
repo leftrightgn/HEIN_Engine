@@ -182,7 +182,7 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
     float renderSizeX = m_size.x * m_lastScaleX;
     float renderSizeY = m_size.y * m_lastScaleY;
 
-    // 1. Draw Textures for Button or Image elements
+    // Texture Pass: Button or Image elements
     if ((m_elementType == UIElementType::Button || m_elementType == UIElementType::Image) && m_spriteBatch)
     {
         ID3D11ShaderResourceView* textureToDraw = m_normalTexture.Get();
@@ -216,7 +216,7 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
         }
     }
 
-    // 2. Draw Text (for Text elements or Buttons with labels)
+    // Text Pass: Text elements or labeled buttons
     if (!m_text.empty())
     {
         ImDrawList* drawList = ImGui::GetForegroundDrawList();

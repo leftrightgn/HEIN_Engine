@@ -212,16 +212,16 @@ void HEIN::ColliderComponent::DrawGizmo(
             // Extract Euler angles for DirectX Y-X-Z order
             DirectX::SimpleMath::Vector3 euler;
             
-            // 1. Extract pitch(x-axis)
+            // Pitch (X-axis): domain-clamped to prevent asin domain violation
             float sinp = std::clamp(2.0f * (localRot.w * localRot.x + localRot.y * localRot.z), -1.0f, 1.0f);
             euler.x = std::asin(sinp);
 
-            // 2. Extract yaw(y-axis)
+            // Yaw (Y-axis): azimuthal angle
             float siny = 2.0f * (localRot.w * localRot.y - localRot.z * localRot.x);
             float cosy = 1.0f - 2.0f * (localRot.x * localRot.x + localRot.y * localRot.y);
             euler.y = std::atan2(siny, cosy);
 
-            // 3. Extract roll(z-axis)
+            // Roll (Z-axis): bank angle
             float sinr = 2.0f * (localRot.w * localRot.z - localRot.x * localRot.y);
             float cosr = 1.0f - 2.0f * (localRot.x * localRot.x + localRot.z * localRot.z);
             euler.z = std::atan2(sinr, cosr);

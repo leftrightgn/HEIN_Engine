@@ -102,16 +102,17 @@ void HEIN::TransformComponent::SetRotation(const DirectX::SimpleMath::Quaternion
     m_rotation = rot;
     m_rotation.Normalize();
 
-    // 1. Extract Pitch (X-axis) with clamp to prevent NaN
+    // Tait-Bryan (Yaw-Pitch-Roll / Y-X-Z) conversion from normalized unit quaternion:
+    // Pitch (X-axis): domain-clamped to [-1.0, 1.0] to prevent asin floating-point NaN at poles (+/- 90 deg)
     float sinp = std::clamp(2.0f * (m_rotation.w * m_rotation.x + m_rotation.y * m_rotation.z), -1.0f, 1.0f);
     m_rotationEuler.x = std::asin(sinp);
 
-    // 2. Extract Yaw (Y-axis) for DirectX Y-X-Z order
+    // Yaw (Y-axis): evaluated via atan2 of quaternion cross-products
     float siny = 2.0f * (m_rotation.w * m_rotation.y - m_rotation.z * m_rotation.x);
     float cosy = 1.0f - 2.0f * (m_rotation.x * m_rotation.x + m_rotation.y * m_rotation.y);
     m_rotationEuler.y = std::atan2(siny, cosy);
 
-    // 3. Extract Roll (Z-axis) for DirectX Y-X-Z order
+    // Roll (Z-axis): evaluated via atan2 of quaternion cross-products
     float sinr = 2.0f * (m_rotation.w * m_rotation.z - m_rotation.x * m_rotation.y);
     float cosr = 1.0f - 2.0f * (m_rotation.x * m_rotation.x + m_rotation.z * m_rotation.z);
     m_rotationEuler.z = std::atan2(sinr, cosr);

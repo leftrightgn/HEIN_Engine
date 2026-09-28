@@ -229,7 +229,7 @@ HEIN::Actor* HEIN::ActorManager::DuplicateActor(Actor* sourceActor, GameContext&
 
     newActor->SetActorType(sourceActor->GetActorType());
 
-    // Serialize source actor (WITHOUT children in the JSON, we duplicate children recursively)
+    // Serialize source actor excluding children from JSON payload (children are cloned recursively)
     nlohmann::json actorJson = sourceActor->Serialize(nullptr);
     actorJson["Name"] = std::string(copyName.begin(), copyName.end());
 

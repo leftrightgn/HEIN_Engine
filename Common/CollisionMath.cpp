@@ -14,6 +14,22 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColl
 
     if (capsule == nullptr || obb == nullptr) return manifold;
    
+    // ==================================================================================
+    // CAPSULE vs OBB NARROWPHASE COLLISION: ALTERNATING PROJECTION ALGORITHM
+    // ==================================================================================
+    // Determines the minimum Euclidean distance between a 3D line segment (capsule core)
+    // and an Oriented Bounding Box (OBB).
+    //
+    // Pipeline:
+    // - Space Reduction: Transform the capsule line segment into the OBB's local coordinate frame,
+    //   simplifying the OBB to an origin-centered Axis-Aligned Box (AABB) with extents [-E, E].
+    // - Alternating Projections: Converge to the global minimum distance pair between segment and AABB:
+    //   * Clamp the current segment sample to the AABB boundary box.
+    //   * Project the clamped box point back onto the segment line:
+    //     t = clamp(((P_box - P_bottom) . d) / ||d||^2, 0.0, 1.0)
+    //   * Iterate 3 times for numerical convergence.
+    // - Penetration Evaluation: If minimum distance d < radius R, compute penetration depth delta = R - d.
+    // ==================================================================================
     DirectX::SimpleMath::Vector3 SegTop = capsule->GetWorldTopCenter();
     DirectX::SimpleMath::Vector3 SegBottom = capsule->GetWorldBottomCenter();
 
@@ -22,17 +38,20 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColl
 
     DirectX::SimpleMath::Quaternion boxRotation(worldBox.Orientation);
 
+    // Construct OBB local coordinate frame transform and compute its inverse
     DirectX::SimpleMath::Matrix cleanTransform =
         DirectX::SimpleMath::Matrix::CreateFromQuaternion(boxRotation) * DirectX::SimpleMath::Matrix::CreateTranslation(worldBox.Center);
 
     DirectX::SimpleMath::Matrix inverseTransform = cleanTransform.Invert();
 
+    // Map capsule endpoints into OBB local frame
     DirectX::SimpleMath::Vector3 localSegTop = DirectX::SimpleMath::Vector3::Transform(SegTop, inverseTransform);
     DirectX::SimpleMath::Vector3 localSegBottom = DirectX::SimpleMath::Vector3::Transform(SegBottom, inverseTransform);
 
     DirectX::SimpleMath::Vector3 d = localSegTop - localSegBottom;
     float len = d.Length();
 
+    // Projection lambda: clamps any 3D coordinate to the AABB boundary volume [-extents, extents]
     std::function<DirectX::SimpleMath::Vector3(const DirectX::SimpleMath::Vector3&)> clampToAABB =
         [&extents](const DirectX::SimpleMath::Vector3& p) -> DirectX::SimpleMath::Vector3
         {
@@ -43,6 +62,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColl
             );
         };
 
+    // Alternating projection iteration loop
     DirectX::SimpleMath::Vector3 localClosestOnSeg = (localSegTop + localSegBottom) * 0.5f;
     DirectX::SimpleMath::Vector3 localClosestOnObb = clampToAABB(localClosestOnSeg);
 
@@ -392,18 +412,18 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsMesh(HEIN::CapsuleCol
     // Final Resolution (If at least one ray hit the floor)
     if (validHits > 0)
     {
-        // Average the accumulated normals and normalize the result to get a perfectly smooth slope vector
+        // Compute average surface normal across contact samples to produce continuous slope gradient
         accumulatedNormal /= static_cast<float>(validHits);
         accumulatedNormal.Normalize();
 
-        // Find the absolute lowest pixel of the player's feet
+        // Lowest vertical coordinate of the capsule's bottom hemispherical cap
         float playerFeetY = bottom.y - radius;
 
-        // If the HIGHEST floor point we hit is higher than the player's feet, push the player UP!
+        // Ground penetration resolution: detect when highest floor contact exceeds bottom contact plane
         if (playerFeetY < highestHitY + 0.01f)
         {
             manifold.isColliding = true;
-            manifold.normal = accumulatedNormal; // Smooth blended normal!
+            manifold.normal = accumulatedNormal;
             manifold.penetrationDepth = highestHitY - playerFeetY;
         }
     }
@@ -418,28 +438,25 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsTerrain(HEIN::Capsule
 
     if (!capsule || !terrain) return manifold;
 
-    // Get the bottom center of the capsule (the player's feet position)
+    // Bottom center of the capsule segment
     DirectX::SimpleMath::Vector3 bottom = capsule->GetWorldBottomCenter();
     float radius = capsule->GetRadius();
     float playerFeetY = bottom.y - radius;
 
-    // We can sample the terrain height at the center of the capsule
-    // For more advanced collision, we could sample 5 points in a ring (like CheckCapsuleVsMesh),
-    // but a single sample is usually sufficient and extremely fast for a heightmap.
+    // Heightfield surface elevation query at capsule vertical axis projection
     float terrainHeight = 0.0f;
     DirectX::SimpleMath::Vector3 terrainNormal;
 
     if (terrain->GetHeightAtPosition(bottom.x, bottom.z, terrainHeight, terrainNormal))
     {
-        // If the terrain is higher than the player's feet, we have a collision!
-        // We add a tiny epsilon (0.01f) so we don't jitter when standing perfectly still.
+        // Detect terrain elevation exceeding lower boundary with threshold epsilon (0.01f)
         if (playerFeetY < terrainHeight + 0.01f)
         {
             manifold.isColliding = true;
             manifold.normal = terrainNormal;
             manifold.penetrationDepth = terrainHeight - playerFeetY;
             
-            // Optional: The contact point is roughly the feet position projected onto the terrain
+            // Contact coordinate projected onto terrain elevation plane
             manifold.contactPoint = DirectX::SimpleMath::Vector3(bottom.x, terrainHeight, bottom.z);
         }
     }
@@ -447,6 +464,29 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsTerrain(HEIN::Capsule
     return manifold;
 }
 
+// ==================================================================================
+// MÖLLER–TRUMBORE FAST RAY-TRIANGLE INTERSECTION ALGORITHM
+// ==================================================================================
+// Computes intersection point without precomputing the triangle's plane equation.
+//
+// Mathematical Formulation:
+// A point P on the triangle is parameterized by barycentric coordinates (u, v):
+//   T(u, v) = (1 - u - v)*V0 + u*V1 + v*V2 = V0 + u*E1 + v*E2
+// A point on the ray is parameterized by distance t >= 0:
+//   R(t) = O + t*D
+//
+// Equating R(t) = T(u, v) yields the linear system:
+//   [-D, E1, E2] * [t, u, v]^T = O - V0
+//
+// Solved using Cramer's rule:
+//   det = (D x E2) . E1 = h . E1
+//   u = (s . h) / det
+//   q = s x E1
+//   v = (D . q) / det
+//   t = (E2 . q) / det
+//
+// Valid intersection occurs when: det != 0, u in [0, 1], v in [0, 1], u + v <= 1, t > 0.
+// ==================================================================================
 bool HEIN::CollisionMath::IntersectRayTriangle(
     const DirectX::SimpleMath::Vector3& rayOrigin, 
     const DirectX::SimpleMath::Vector3& rayDir, 
@@ -459,29 +499,29 @@ bool HEIN::CollisionMath::IntersectRayTriangle(
     DirectX::SimpleMath::Vector3 edge2 = triangle.v2 - triangle.v0;
     DirectX::SimpleMath::Vector3 h = rayDir.Cross(edge2);
 
-    float a = edge1.Dot(h);
-    if (a > -0.0001f && a < 0.0001f) return false; // Ray is Parallel To Triangle
+    float a = edge1.Dot(h); // Matrix determinant: det = edge1 . (rayDir x edge2)
+    if (a > -0.0001f && a < 0.0001f) return false; // Ray is parallel to triangle plane (det ~= 0)
 
     float f = 1.0f / a;
     DirectX::SimpleMath::Vector3 s = rayOrigin - triangle.v0;
     float u = f * s.Dot(h);
-    if (u < 0.0f || u > 1.0f) return false;
+    if (u < 0.0f || u > 1.0f) return false; // Barycentric coordinate u outside [0, 1]
 
     DirectX::SimpleMath::Vector3 q = s.Cross(edge1);
     float v = f * rayDir.Dot(q); 
-    if (v < 0.0f || u + v > 1.0f) return false;
+    if (v < 0.0f || u + v > 1.0f) return false; // Barycentric coordinate v outside [0, 1] or u + v > 1
 
+    // Ray parameter distance along rayDir
     float t = f * edge2.Dot(q);
     if (t > 0.0001f)
     {
         outDistance = t;
-        outNormal = edge1.Cross(edge2);
+        outNormal = edge1.Cross(edge2); // Geometric surface normal via cross product
         outNormal.Normalize();
 
         return true;
     }
     return false;
-
 }
 
 bool HEIN::CollisionMath::SweepSphereVSTriangle(
