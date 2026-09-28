@@ -74,16 +74,9 @@ bool HEIN::TerrainComponent::Initialize(
 
 	m_vertexCount = m_terrainWidth * m_terrainHeight;
 
-	if (!m_colorMapFilename.empty() && LoadColorMap(m_colorMapFilename.c_str()))
+	if (!m_colorMapFilename.empty())
 	{
-		// Color map successfully applied to the grid
-	}
-	else
-	{
-		for (int i = 0; i < m_vertexCount; i++)
-		{
-			m_heightMap[i].r = 1.0f; m_heightMap[i].g = 1.0f; m_heightMap[i].b = 1.0f;
-		}
+		LoadColorMap(m_colorMapFilename.c_str());
 	}
 
 	CalculateNormals();
@@ -893,10 +886,7 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 			height = bitmapImage[pixelOffset];
 			
 			index = j * m_terrainWidth + i;
-
-			m_heightMap[index].x = (float)i;
 			m_heightMap[index].y = (float)height / 255.0f; // Normalize 0 to 1
-			m_heightMap[index].z = (float)j;
 		}
 	}
 
@@ -945,10 +935,8 @@ bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 		{
 			int rawIndex = (j * m_terrainWidth) + i;
 			int index = j * m_terrainWidth + i;
-			m_heightMap[index].x = (float)i;
 			// Normalize by dividing by 65535 instead of 255!
 			m_heightMap[index].y = (float)rawImage[rawIndex] / 65535.0f;
-			m_heightMap[index].z = (float)j;
 		}
 	}
 	delete[] rawImage;
@@ -992,25 +980,9 @@ bool HEIN::TerrainComponent::CalculateNormals()
 			DirectX::SimpleMath::Vector3 normal(-dHdX, 1.0f, -dHdZ);
 			normal.Normalize();
 
-			// Tangent vector along +X
-			DirectX::SimpleMath::Vector3 tangent(1.0f, dHdX, 0.0f);
-			tangent.Normalize();
-
-			// Binormal vector along +Z
-			DirectX::SimpleMath::Vector3 binormal(0.0f, dHdZ, 1.0f);
-			binormal.Normalize();
-
 			m_heightMap[index].nx = normal.x;
 			m_heightMap[index].ny = normal.y;
 			m_heightMap[index].nz = normal.z;
-
-			m_heightMap[index].tx = tangent.x;
-			m_heightMap[index].ty = tangent.y;
-			m_heightMap[index].tz = tangent.z;
-
-			m_heightMap[index].bx = binormal.x;
-			m_heightMap[index].by = binormal.y;
-			m_heightMap[index].bz = binormal.z;
 		}
 	}
 
@@ -1062,21 +1034,38 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 
 					int globalIndex = (globalY * m_terrainWidth) + globalX;
 
-					vertices[vertexIndex].position.x = m_heightMap[globalIndex].x - halfWidth;
+					vertices[vertexIndex].position.x = (float)globalX - halfWidth;
 					vertices[vertexIndex].position.y = m_heightMap[globalIndex].y * m_heightScale;
-					vertices[vertexIndex].position.z = m_heightMap[globalIndex].z - halfDepth;
+					vertices[vertexIndex].position.z = (float)globalY - halfDepth;
 
 					vertices[vertexIndex].normal.x = m_heightMap[globalIndex].nx;
 					vertices[vertexIndex].normal.y = m_heightMap[globalIndex].ny;
 					vertices[vertexIndex].normal.z = m_heightMap[globalIndex].nz;
 
-					vertices[vertexIndex].tangent.x = m_heightMap[globalIndex].tx;
-					vertices[vertexIndex].tangent.y = m_heightMap[globalIndex].ty;
-					vertices[vertexIndex].tangent.z = m_heightMap[globalIndex].tz;
+					int leftX = (globalX > 0) ? globalX - 1 : 0;
+					int rightX = (globalX < m_terrainWidth - 1) ? globalX + 1 : m_terrainWidth - 1;
+					int downY = (globalY > 0) ? globalY - 1 : 0;
+					int upY = (globalY < m_terrainHeight - 1) ? globalY + 1 : m_terrainHeight - 1;
 
-					vertices[vertexIndex].binormal.x = m_heightMap[globalIndex].bx;
-					vertices[vertexIndex].binormal.y = m_heightMap[globalIndex].by;
-					vertices[vertexIndex].binormal.z = m_heightMap[globalIndex].bz;
+					float hL = m_heightMap[globalY * m_terrainWidth + leftX].y * m_heightScale;
+					float hR = m_heightMap[globalY * m_terrainWidth + rightX].y * m_heightScale;
+					float hD = m_heightMap[downY * m_terrainWidth + globalX].y * m_heightScale;
+					float hU = m_heightMap[upY * m_terrainWidth + globalX].y * m_heightScale;
+
+					float dx = (float)(rightX - leftX); if (dx <= 0.0001f) dx = 1.0f;
+					float dz = (float)(upY - downY); if (dz <= 0.0001f) dz = 1.0f;
+
+					float dHdX = (hR - hL) / dx;
+					float dHdZ = (hU - hD) / dz;
+
+					DirectX::SimpleMath::Vector3 tangent(1.0f, dHdX, 0.0f);
+					tangent.Normalize();
+
+					DirectX::SimpleMath::Vector3 binormal(0.0f, dHdZ, 1.0f);
+					binormal.Normalize();
+
+					vertices[vertexIndex].tangent = tangent;
+					vertices[vertexIndex].binormal = binormal;
 
 					float u = ((float)globalX / (float)(m_terrainWidth - 1));
 					float v = ((float)globalY / (float)(m_terrainHeight - 1));
@@ -1094,9 +1083,10 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 						cellTint = DirectX::SimpleMath::Vector3(cr, cg, cb);
 					}
 
-					vertices[vertexIndex].color.x = m_heightMap[globalIndex].r * cellTint.x;
-					vertices[vertexIndex].color.y = m_heightMap[globalIndex].g * cellTint.y;
-					vertices[vertexIndex].color.z = m_heightMap[globalIndex].b * cellTint.z;
+					DirectX::SimpleMath::Vector3 baseColor = (globalIndex < static_cast<int>(m_colorMap.size())) ? m_colorMap[globalIndex] : DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f);
+					vertices[vertexIndex].color.x = baseColor.x * cellTint.x;
+					vertices[vertexIndex].color.y = baseColor.y * cellTint.y;
+					vertices[vertexIndex].color.z = baseColor.z * cellTint.z;
 					vertices[vertexIndex].color.w = 1.0f;
 
 					vertexIndex++;
@@ -1130,6 +1120,10 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 			m_cells.push_back(std::move(cell));
 		}
 	}
+
+	// Release temporary colormap CPU buffer now that all vertex colors are baked into GPU buffers
+	m_colorMap.clear();
+	m_colorMap.shrink_to_fit();
 
 	return true;
 }
@@ -1167,6 +1161,8 @@ bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
 	fread(bitmapImage, 1, imageSize, filePtr);
 	fclose(filePtr);
 
+	m_colorMap.resize(m_terrainWidth * m_terrainHeight);
+
 	// Read the image Data into the RGB fields
 	for (j = 0; j < m_terrainHeight; j++)
 	{
@@ -1176,9 +1172,9 @@ bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
 			index = j * m_terrainWidth + i;
 
 			// Windows BMP files store pixels in BGR (Blue, Green, Red) format!
-			m_heightMap[index].b = (float)bitmapImage[pixelOffset] / 255.0f;
-			m_heightMap[index].g = (float)bitmapImage[pixelOffset + 1] / 255.0f;
-			m_heightMap[index].r = (float)bitmapImage[pixelOffset + 2] / 255.0f;
+			m_colorMap[index].z = (float)bitmapImage[pixelOffset] / 255.0f;     // B
+			m_colorMap[index].y = (float)bitmapImage[pixelOffset + 1] / 255.0f; // G
+			m_colorMap[index].x = (float)bitmapImage[pixelOffset + 2] / 255.0f; // R
 		}
 	}
 
