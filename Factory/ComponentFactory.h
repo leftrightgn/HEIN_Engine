@@ -28,6 +28,7 @@
 #include <Components/SlidingDoorComponent.h>
 #include <Components/ProceduralAnimationComponent.h>
 #include <Components/FogComponent.h>
+#include <Components/FoliageComponent.h>
 
 namespace HEIN
 {
@@ -120,6 +121,7 @@ namespace HEIN
 			RegisterComponent<SlidingDoorComponent>("SlidingDoorComponent");
 			RegisterComponent<ProceduralAnimationComponent>("ProceduralAnimationComponent");
 			RegisterComponent<FogComponent>("FogComponent");
+			RegisterComponent<FoliageComponent>("FoliageComponent");
 		}
 	};
 }
