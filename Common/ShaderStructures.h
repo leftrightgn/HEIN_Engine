@@ -25,9 +25,17 @@ namespace HEIN
         // 16 bytes: Vector4 (16 bytes)
         DirectX::SimpleMath::Vector4 LightColor;
 
-        // 16 bytes: float (4 bytes) + float (4 bytes) + Vector2 (8 bytes)
+        // 16 bytes: float (4 bytes) x4
         float LightRange;
         float LightSpotAngle;
-        DirectX::SimpleMath::Vector2 Padding; // Dead space to reach the 16-byte boundary
+        float FogStart;
+        float FogEnd;
+
+        // 16 bytes: Vector4 (16 bytes)
+        DirectX::SimpleMath::Vector4 FogColor;
+
+        // 16 bytes: Vector3 (12 bytes) + float (4 bytes)
+        DirectX::SimpleMath::Vector3 CameraPos;
+        float FogPadding;
     };
 }

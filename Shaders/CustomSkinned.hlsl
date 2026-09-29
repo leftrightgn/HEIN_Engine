@@ -23,7 +23,13 @@ cbuffer cbLighting : register(b1)
     
     float LightRange;
     float LightSpotAngle; // Passed in radians
-    float2 Padding;
+    float FogStart;
+    float FogEnd;
+    
+    float4 FogColor;
+    
+    float3 CameraPos;
+    float FogPadding;
 };
 
 // ==============================================================================
@@ -188,6 +194,11 @@ float4 PSMain(VSOutput input) : SV_TARGET
     // Add ambient light so shadows aren't pitch black
     float3 ambient = baseColor.rgb * 0.4f;
     finalColor += ambient;
+
+    // FOG CALCULATION (distance-based)
+    float dist = length(input.WorldPos - CameraPos);
+    float fogFactor = saturate((dist - FogStart) / (FogEnd - FogStart));
+    finalColor = lerp(finalColor, FogColor.rgb, fogFactor);
 
     return float4(finalColor, baseColor.a);
 }

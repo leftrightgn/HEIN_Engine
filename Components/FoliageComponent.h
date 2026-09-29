@@ -7,14 +7,19 @@
 #include <string>
 #include <memory>
 #include <cstdint>
+#include <unordered_map>
 #include <Common/json.hpp>
 
 namespace HEIN
 {
 	class TerrainComponent;
 
+	// ==================================================================================
+	// ENUMERATIONS & DATA STRUCTURES
+	// ==================================================================================
+
 	/// <summary>
-	/// Foliage species/type enumeration.
+	/// Foliage species/type enumeration used for indexing into arrays and determining shader logic.
 	/// </summary>
 	enum class FoliageType : uint32_t
 	{
@@ -26,32 +31,64 @@ namespace HEIN
 
 	/// <summary>
 	/// Ultra-compact foliage instance representation (24 bytes per instance).
-	/// Maximizes memory efficiency so tens of thousands of instances occupy only ~240 KB.
+	/// Maximizes memory efficiency so tens of thousands of instances occupy minimal memory footprint.
 	/// </summary>
 	struct FoliageInstanceData
 	{
-		DirectX::SimpleMath::Vector3 worldPos; // 12 bytes
-		float rotation;                        // 4 bytes: Yaw angle in radians
-		float scale;                           // 4 bytes: Uniform scale
-		uint32_t type;                         // 4 bytes: 0 = Grass, 1 = Flower, 2 = Tree
+		DirectX::SimpleMath::Vector3 worldPos; // 12 bytes: World-space position
+		float rotation;                        // 4 bytes: Yaw angle in radians for variation
+		float scale;                           // 4 bytes: Uniform scale multiplier
+		uint32_t type;                         // 4 bytes: Identifier (0 = Grass, 1 = Flower, 2 = Tree)
 	};
 
 	/// <summary>
 	/// Vertex structure for foliage cards and procedural meshes.
+	/// Passed to the GPU via the static mesh buffer (Slot 0).
 	/// </summary>
 	struct FoliageVertex
 	{
 		DirectX::XMFLOAT3 position;
 		DirectX::XMFLOAT3 normal;
 		DirectX::XMFLOAT2 texCoord;
-		float windWeight; // 0.0 at base/root, 1.0 at blade/leaf tip
+		float windWeight; // 0.0 at base/root (stiff), 1.0 at blade/leaf tip (full sway)
 		DirectX::XMFLOAT4 color;
 	};
 
 	/// <summary>
+	/// Spatial partition cell. Contains instances localized to a specific chunk of the world.
+	/// Utilized to perform rapid frustum culling, sending only visible instances to the GPU.
+	/// </summary>
+	struct FoliageCell
+	{
+		// The world-space bounding box used for camera frustum culling tests.
+		DirectX::BoundingBox boundingBox;
+
+		// Instance data arrays isolated to this specific spatial grid cell.
+		std::vector<FoliageInstanceData> instances[static_cast<size_t>(FoliageType::Count)];
+
+		// Dedicated dynamic GPU buffers for streaming this cell's data to the graphics card.
+		Microsoft::WRL::ComPtr<ID3D11Buffer> instanceBuffers[static_cast<size_t>(FoliageType::Count)];
+		uint32_t instanceBufferCapacities[static_cast<size_t>(FoliageType::Count)] = {};
+
+		// Flags indicating whether the CPU instance array has changed and requires a GPU buffer update.
+		bool bufferDirty[static_cast<size_t>(FoliageType::Count)] = { true, true, true };
+
+		// Default constructor initializes an "inside-out" box so the first added instance expands it correctly.
+		FoliageCell()
+		{
+			boundingBox.Center = DirectX::SimpleMath::Vector3::Zero;
+			boundingBox.Extents = DirectX::SimpleMath::Vector3(-1.0f, -1.0f, -1.0f);
+		}
+	};
+
+	// ==================================================================================
+	// FOLIAGE COMPONENT
+	// ==================================================================================
+
+	/// <summary>
 	/// Memory-efficient Instanced Foliage System with real-time Editor Brush,
 	/// stylized wind swaying via scrolling noise, terrain color map integration,
-	/// and solid depth buffer rendering (avoiding transparency sorting glitches).
+	/// and spatial grid partitioning for high-performance frustum culling.
 	/// </summary>
 	class FoliageComponent : public IComponent
 	{
@@ -61,6 +98,12 @@ namespace HEIN
 			Paint = 0,
 			Erase = 1
 		};
+
+		// Modifiable grass shape parameters exported to the shader.
+		float m_maxGrassHeight = 3.0f;
+		float m_maxGrassWidth = 0.9f;
+		float m_tilt = 8.0f;
+		float m_bend = 0.45f;
 
 	private:
 		// Shaders & D3D11 Pipeline Resources
@@ -77,28 +120,25 @@ namespace HEIN
 		Microsoft::WRL::ComPtr<ID3D11RasterizerState> m_rasterizerState;
 		Microsoft::WRL::ComPtr<ID3D11DepthStencilState> m_depthStencilState;
 
-		// Shared meshes per foliage type
+		// Shared static meshes (geometry) per foliage type. Reused by all instances.
 		Microsoft::WRL::ComPtr<ID3D11Buffer> m_meshVB[static_cast<size_t>(FoliageType::Count)];
 		Microsoft::WRL::ComPtr<ID3D11Buffer> m_meshIB[static_cast<size_t>(FoliageType::Count)];
 		uint32_t m_vertexCount[static_cast<size_t>(FoliageType::Count)] = {};
 		uint32_t m_indexCount[static_cast<size_t>(FoliageType::Count)] = {};
 
-		// Dynamic GPU instance buffers per foliage type
-		Microsoft::WRL::ComPtr<ID3D11Buffer> m_instanceBuffer[static_cast<size_t>(FoliageType::Count)];
-		uint32_t m_instanceBufferCapacity[static_cast<size_t>(FoliageType::Count)] = {};
+		// Spatial Grid Map mapping 64-bit coordinate hashes to specific foliage cells.
+		std::unordered_map<uint64_t, std::unique_ptr<FoliageCell>> m_cells;
 
-		// Instance data arrays (CPU)
-		std::vector<FoliageInstanceData> m_instances[static_cast<size_t>(FoliageType::Count)];
-		bool m_bufferDirty[static_cast<size_t>(FoliageType::Count)] = { true, true, true };
+		// Temporary holding array utilized during JSON deserialization before the Terrain is fully loaded.
+		std::vector<FoliageInstanceData> m_tempLoadedInstances;
 
 		// Textures & SRVs
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_foliageSRV;
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_noiseSRV;
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_colorMapSRV;
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_defaultAtlasSRV;
-		// Ghost of Tsushima style grass mask (splat map)
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_grassMaskSRV;
-		// CPU copy of the mask (8‑bit per pixel) for fast sampling
+
 		std::vector<unsigned char> m_grassMaskData;
 		int m_maskWidth = 0;
 		int m_maskHeight = 0;
@@ -140,7 +180,11 @@ namespace HEIN
 		bool m_eraseSelectedOnly = false;
 		float m_paintCooldown = 0.0f;
 
-		// Cached camera & viewport from Draw
+		bool m_enableFrustumCulling = true;
+		bool m_freezeFrustum = false;
+		DirectX::BoundingFrustum m_frozenFrustum;
+
+		// Cached camera & viewport from Draw to calculate raycasting in editor
 		DirectX::SimpleMath::Matrix m_cachedView = DirectX::SimpleMath::Matrix::Identity;
 		DirectX::SimpleMath::Matrix m_cachedProj = DirectX::SimpleMath::Matrix::Identity;
 		D3D11_VIEWPORT m_cachedViewport = {};
@@ -171,7 +215,7 @@ namespace HEIN
 		void InitializeAfterDeserialize(GameContext& gameContext) override;
 
 		// Manual Placement & Management API
-		void AddInstance(FoliageType type, const DirectX::SimpleMath::Vector3& position, float rotation, float scale);
+		void AddInstance(FoliageType type, const DirectX::SimpleMath::Vector3& position, float rotation, float scale, TerrainComponent* terrain);
 		void ClearType(FoliageType type);
 		void ClearAll();
 		size_t GetInstanceCount(FoliageType type) const;
@@ -182,8 +226,12 @@ namespace HEIN
 		void BuildFoliageMeshes(ID3D11Device* device);
 		void BuildDefaultAtlas(ID3D11Device* device);
 		bool LoadTexture(ID3D11Device* device, const std::wstring& path, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& outSrv);
-		void UpdateInstanceBuffers(ID3D11Device* device, ID3D11DeviceContext* context);
 
+		// Spatial Grid Processing Methods
+		uint64_t GetTerrainAlignedCellKey(const DirectX::SimpleMath::Vector3& worldPos, TerrainComponent* terrain) const;
+		void UpdateCellBuffers(ID3D11Device* device, ID3D11DeviceContext* context, FoliageCell* cell);
+
+		// Terrain Interaction Methods
 		TerrainComponent* FindTerrain(GameContext& gameContext);
 		bool RaycastTerrain(
 			TerrainComponent* terrain,
@@ -207,6 +255,7 @@ namespace HEIN
 			DirectX::SimpleMath::Vector3& outNormal
 		);
 
+		// Editor Painting Methods
 		void HandleEditorPainting(GameContext& gameContext, TerrainComponent* terrain, const DirectX::SimpleMath::Vector3& hitPos);
 		void PaintInstances(TerrainComponent* terrain, const DirectX::SimpleMath::Vector3& center);
 		void EraseInstances(const DirectX::SimpleMath::Vector3& center);
