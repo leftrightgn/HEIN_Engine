@@ -14,6 +14,8 @@
 #include "Entities/ActorManager.h"
 #include "Common/ShaderStructures.h"
 #include "LightComponent.h"
+#include "Camera/CameraController.h"
+#include "FogComponent.h"
 
 
 std::shared_ptr<DirectX::EffectFactory> HEIN::SkinnedModelComponent::s_fxFactory = nullptr;
@@ -286,16 +288,81 @@ namespace HEIN
 	{
 		if (!m_model || !m_isVisible) return;
 
+		bool isPlayer = (m_owner->GetActorType() == HEIN::ActorType::Player);
+
+		if (!isPlayer)
+		{
+			DirectX::SimpleMath::Matrix cullingView = view;
+			DirectX::SimpleMath::Matrix cullingProj = proj;
+
+			// Force culling to use the main camera
+			if (gameContext.mainCamera != nullptr)
+			{
+				cullingView = gameContext.mainCamera->GetView();
+
+				D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
+				float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
+				float fov = gameContext.mainCamera->GetFov();
+				if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
+
+				cullingProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
+					fov, aspect, 0.1f, 5000.0f
+				);
+			}
+
+			// Build the World-Space Camera Frustum
+			DirectX::BoundingFrustum worldFrustum(cullingProj, true);
+			DirectX::SimpleMath::Matrix camWorld;
+			if (std::abs(cullingView.Determinant()) < 1e-6f)
+				camWorld = DirectX::SimpleMath::Matrix::Identity;
+			else
+				camWorld = cullingView.Invert();
+
+			worldFrustum.Transform(worldFrustum, camWorld);
+
+			DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&worldFrustum.Orientation);
+			q = DirectX::XMQuaternionNormalize(q);
+			DirectX::XMStoreFloat4(&worldFrustum.Orientation, q);
+
+			// Test Expanded Bounding Boxes against the Frustum
+			bool isVisible = false;
+			for (const auto& mesh : m_model->meshes)
+			{
+				// Retrieve the base static bounding box
+				DirectX::BoundingBox expandedBox = mesh->boundingBox;
+
+				// Expand the extents by 50% to account for animation stretching/reaching
+				expandedBox.Extents.x *= 1.5f;
+				expandedBox.Extents.y *= 1.5f;
+				expandedBox.Extents.z *= 1.5f;
+
+				DirectX::BoundingOrientedBox worldOBB;
+				DirectX::BoundingOrientedBox::CreateFromBoundingBox(worldOBB, expandedBox);
+				worldOBB.Transform(worldOBB, world);
+
+				if (worldFrustum.Intersects(worldOBB))
+				{
+					isVisible = true;
+					break;
+				}
+			}
+
+			// Abort drawing if completely off-screen
+			if (!isVisible) return;
+		}
+
 		ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
 
 		// The Matrix Buffer update has been moved inside the mesh loop
 
 		// Update Lighting Buffer
 		HEIN::LightComponent* activeLight = nullptr;
+		HEIN::FogComponent* fogComp = nullptr;
 		for (auto& pair : gameContext.actorManager->GetAllActors())
 		{
-			activeLight = pair.second->GetComponent<HEIN::LightComponent>();
-			if (activeLight) break;
+			if (!activeLight) activeLight = pair.second->GetComponent<HEIN::LightComponent>();
+			if (!fogComp) fogComp = pair.second->GetComponent<HEIN::FogComponent>();
+			if (activeLight && fogComp) break;
 		}
 
 		if (m_cbLighting)
@@ -330,6 +397,27 @@ namespace HEIN
 					cbLight->LightRange = 100.0f;
 					cbLight->LightSpotAngle = 0.785f;
 				}
+
+				// Fill fog data from global FogComponent
+				if (fogComp)
+				{
+					cbLight->FogStart = fogComp->m_fogStart;
+					cbLight->FogEnd = fogComp->m_fogEnd;
+					cbLight->FogColor = fogComp->m_fogColor;
+				}
+				else
+				{
+					// Default: push fog far away to effectively disable it
+					cbLight->FogStart = 100000.0f;
+					cbLight->FogEnd = 200000.0f;
+					cbLight->FogColor = DirectX::SimpleMath::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
+				}
+
+				// Camera position for distance-based fog in the pixel shader
+				DirectX::SimpleMath::Matrix viewInv = view.Invert();
+				cbLight->CameraPos = viewInv.Translation();
+				cbLight->FogPadding = 0.0f;
+
 				context->Unmap(m_cbLighting.Get(), 0);
 			}
 		}

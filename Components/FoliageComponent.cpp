@@ -18,6 +18,11 @@
 
 namespace HEIN
 {
+	// ==================================================================================
+	// GPU CONSTANT BUFFER STRUCTURES
+	// Must exactly match the alignment and layout of the HLSL files.
+	// ==================================================================================
+
 	struct CBPerFrame
 	{
 		DirectX::XMMATRIX worldMatrix;
@@ -47,7 +52,17 @@ namespace HEIN
 		DirectX::SimpleMath::Vector4 lightColor;
 		DirectX::SimpleMath::Vector4 ambientColor;
 		DirectX::SimpleMath::Vector4 flags; // x: useColorMap, y: useTexture, z: hasShadows, w: unused
+
+		// Dynamic grass shape parameters updated live in the editor
+		float maxGrassHeight;
+		float maxGrassWidth;
+		float tilt;
+		float bend;
 	};
+
+	// ==================================================================================
+	// COMPONENT LIFECYCLE
+	// ==================================================================================
 
 	FoliageComponent::FoliageComponent(Actor* owner)
 		: IComponent(owner)
@@ -69,65 +84,124 @@ namespace HEIN
 		}
 	}
 
-	void FoliageComponent::AddInstance(FoliageType type, const DirectX::SimpleMath::Vector3& position, float rotation, float scale)
+	// ==================================================================================
+	// INSTANCE MANAGEMENT & SPATIAL PARTITIONING
+	// ==================================================================================
+
+	uint64_t FoliageComponent::GetTerrainAlignedCellKey(const DirectX::SimpleMath::Vector3& worldPos, TerrainComponent* terrain) const
+	{
+		// Fallback to origin cell if no terrain is found
+		if (terrain == nullptr || terrain->GetOwner() == nullptr) return 0;
+
+		TransformComponent* terrainTrans = terrain->GetOwner()->GetComponent<TransformComponent>();
+		DirectX::SimpleMath::Matrix invWorld = terrainTrans ? terrainTrans->GetWorldMatrix().Invert() : DirectX::SimpleMath::Matrix::Identity;
+
+		// 1. Transform grass world position into the Terrain's localized space
+		DirectX::SimpleMath::Vector3 localPos = DirectX::SimpleMath::Vector3::Transform(worldPos, invWorld);
+
+		// 2. Reverse the terrain's half-width/depth shift to acquire absolute grid coordinates
+		float halfWidth = static_cast<float>(terrain->GetTerrainWidth()) / 2.0f;
+		float halfDepth = static_cast<float>(terrain->GetTerrainHeight()) / 2.0f;
+
+		float gridX = localPos.x + halfWidth;
+		float gridZ = localPos.z + halfDepth;
+
+		// 3. Divide by the identical quad chunk size used in TerrainComponent (32)
+		// This guarantees that foliage cells perfectly overlap terrain cells.
+		const float quadsPerCell = 32.0f;
+
+		int32_t cellX = static_cast<int32_t>(std::floor(gridX / quadsPerCell));
+		int32_t cellY = static_cast<int32_t>(std::floor(gridZ / quadsPerCell));
+
+		// 4. Pack into a distinct 64-bit hash key for dictionary lookup
+		return (static_cast<uint64_t>(static_cast<uint32_t>(cellX)) << 32) | static_cast<uint32_t>(cellY);
+	}
+
+	void FoliageComponent::AddInstance(FoliageType type, const DirectX::SimpleMath::Vector3& position, float rotation, float scale, TerrainComponent* terrain)
 	{
 		size_t typeIdx = static_cast<size_t>(type);
 		if (typeIdx >= static_cast<size_t>(FoliageType::Count)) return;
 
+		// Retrieve or generate the proper spatial cell for this world coordinate
+		uint64_t cellKey = GetTerrainAlignedCellKey(position, terrain);
+		if (m_cells.find(cellKey) == m_cells.end())
+		{
+			m_cells[cellKey] = std::make_unique<FoliageCell>();
+		}
+
+		FoliageCell* cell = m_cells[cellKey].get();
+
+		// Append the specific instance configuration
 		FoliageInstanceData inst;
 		inst.worldPos = position;
 		inst.rotation = rotation;
 		inst.scale = scale;
 		inst.type = static_cast<uint32_t>(type);
 
-		m_instances[typeIdx].push_back(inst);
-		m_bufferDirty[typeIdx] = true;
+		cell->instances[typeIdx].push_back(inst);
+		cell->bufferDirty[typeIdx] = true;
+
+		// Expand the cell's physical boundaries to ensure accurate camera culling.
+		// Significant vertical padding prevents popping when tall objects enter the frame.
+		DirectX::BoundingBox pointBox(position, DirectX::SimpleMath::Vector3(1.0f, 10.0f, 1.0f));
+		if (cell->boundingBox.Extents.x < 0.0f)
+		{
+			cell->boundingBox = pointBox;
+		}
+		else
+		{
+			DirectX::BoundingBox::CreateMerged(cell->boundingBox, cell->boundingBox, pointBox);
+		}
 	}
 
 	void FoliageComponent::ClearType(FoliageType type)
 	{
 		size_t typeIdx = static_cast<size_t>(type);
-		if (typeIdx < static_cast<size_t>(FoliageType::Count))
+		for (auto& pair : m_cells)
 		{
-			m_instances[typeIdx].clear();
-			m_bufferDirty[typeIdx] = true;
+			pair.second->instances[typeIdx].clear();
+			pair.second->bufferDirty[typeIdx] = true;
 		}
 	}
 
 	void FoliageComponent::ClearAll()
 	{
-		for (size_t i = 0; i < static_cast<size_t>(FoliageType::Count); ++i)
-		{
-			m_instances[i].clear();
-			m_bufferDirty[i] = true;
-		}
+		m_cells.clear();
 	}
 
 	size_t FoliageComponent::GetInstanceCount(FoliageType type) const
 	{
+		size_t count = 0;
 		size_t typeIdx = static_cast<size_t>(type);
-		if (typeIdx < static_cast<size_t>(FoliageType::Count))
+		for (const auto& pair : m_cells)
 		{
-			return m_instances[typeIdx].size();
+			count += pair.second->instances[typeIdx].size();
 		}
-		return 0;
+		return count;
 	}
 
 	size_t FoliageComponent::GetTotalInstanceCount() const
 	{
 		size_t total = 0;
-		for (size_t i = 0; i < static_cast<size_t>(FoliageType::Count); ++i)
+		for (const auto& pair : m_cells)
 		{
-			total += m_instances[i].size();
+			for (size_t i = 0; i < static_cast<size_t>(FoliageType::Count); ++i)
+			{
+				total += pair.second->instances[i].size();
+			}
 		}
 		return total;
 	}
+
+	// ==================================================================================
+	// GPU RESOURCE INITIALIZATION & MESH GENERATION
+	// ==================================================================================
 
 	bool FoliageComponent::InitializeResources(ID3D11Device* device)
 	{
 		if (m_isInitialized) return true;
 
-		// 1. Compile Shaders
+		// Compile Vertex and Pixel Shaders dynamically
 		Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
 		HRESULT hr = D3DCompileFromFile(
 			L"../External/Engine/Shaders/Foliage_VS.hlsl",
@@ -174,17 +248,14 @@ namespace HEIN
 		DX::ThrowIfFailed(device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, m_vertexShader.ReleaseAndGetAddressOf()));
 		DX::ThrowIfFailed(device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, m_pixelShader.ReleaseAndGetAddressOf()));
 
-		// 2. Input Layout matching FoliageVertex (Stream 0) and FoliageInstanceData (Stream 1)
+		// Specify Input Layout bridging the static geometry (Slot 0) and dynamic instance data (Slot 1)
 		D3D11_INPUT_ELEMENT_DESC layoutDesc[] =
 		{
-			// Slot 0: Per-vertex shared mesh data
 			{ "POSITION",    0, DXGI_FORMAT_R32G32B32_FLOAT,    0, offsetof(FoliageVertex, position),   D3D11_INPUT_PER_VERTEX_DATA,   0 },
 			{ "NORMAL",      0, DXGI_FORMAT_R32G32B32_FLOAT,    0, offsetof(FoliageVertex, normal),     D3D11_INPUT_PER_VERTEX_DATA,   0 },
 			{ "TEXCOORD",    0, DXGI_FORMAT_R32G32_FLOAT,       0, offsetof(FoliageVertex, texCoord),   D3D11_INPUT_PER_VERTEX_DATA,   0 },
 			{ "BLENDWEIGHT", 0, DXGI_FORMAT_R32_FLOAT,          0, offsetof(FoliageVertex, windWeight), D3D11_INPUT_PER_VERTEX_DATA,   0 },
 			{ "COLOR",       0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, offsetof(FoliageVertex, color),      D3D11_INPUT_PER_VERTEX_DATA,   0 },
-
-			// Slot 1: Per-instance dynamic stream data
 			{ "INST_POS",    0, DXGI_FORMAT_R32G32B32_FLOAT,    1, offsetof(FoliageInstanceData, worldPos), D3D11_INPUT_PER_INSTANCE_DATA, 1 },
 			{ "INST_ROT",    0, DXGI_FORMAT_R32_FLOAT,          1, offsetof(FoliageInstanceData, rotation), D3D11_INPUT_PER_INSTANCE_DATA, 1 },
 			{ "INST_SCALE",  0, DXGI_FORMAT_R32_FLOAT,          1, offsetof(FoliageInstanceData, scale),    D3D11_INPUT_PER_INSTANCE_DATA, 1 },
@@ -193,7 +264,7 @@ namespace HEIN
 
 		DX::ThrowIfFailed(device->CreateInputLayout(layoutDesc, _countof(layoutDesc), vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), m_inputLayout.ReleaseAndGetAddressOf()));
 
-		// 3. Constant Buffers
+		// Allocate Constant Buffers
 		D3D11_BUFFER_DESC cbDesc = {};
 		cbDesc.Usage = D3D11_USAGE_DYNAMIC;
 		cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -205,7 +276,7 @@ namespace HEIN
 		cbDesc.ByteWidth = sizeof(CBFoliageSettings);
 		DX::ThrowIfFailed(device->CreateBuffer(&cbDesc, nullptr, m_settingsBuffer.ReleaseAndGetAddressOf()));
 
-		// 4. Samplers
+		// Setup Texture Samplers
 		D3D11_SAMPLER_DESC sampDesc = {};
 		sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
 		sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -230,7 +301,7 @@ namespace HEIN
 		shadowSampDesc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
 		DX::ThrowIfFailed(device->CreateSamplerState(&shadowSampDesc, m_shadowSampler.ReleaseAndGetAddressOf()));
 
-		// 5. Rasterizer State (Cull None for double-sided foliage leaves/cards)
+		// Configure Rasterization: Cull None allows leaves to be viewed from both sides
 		D3D11_RASTERIZER_DESC rastDesc = {};
 		rastDesc.FillMode = D3D11_FILL_SOLID;
 		rastDesc.CullMode = D3D11_CULL_NONE;
@@ -238,18 +309,16 @@ namespace HEIN
 		rastDesc.DepthClipEnable = TRUE;
 		DX::ThrowIfFailed(device->CreateRasterizerState(&rastDesc, m_rasterizerState.ReleaseAndGetAddressOf()));
 
-		// 6. Depth Stencil State: solid depth writes enabled to eliminate transparency sorting glitches
+		// Configure Depth testing for solid alpha cutouts
 		D3D11_DEPTH_STENCIL_DESC depthDesc = {};
 		depthDesc.DepthEnable = TRUE;
 		depthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 		depthDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 		DX::ThrowIfFailed(device->CreateDepthStencilState(&depthDesc, m_depthStencilState.ReleaseAndGetAddressOf()));
 
-		// 7. Build Meshes & Default Fallback Atlas
 		BuildFoliageMeshes(device);
 		BuildDefaultAtlas(device);
 
-		// 8. Load Textures
 		LoadTexture(device, m_foliageTexturePath, m_foliageSRV);
 		LoadTexture(device, m_noiseTexturePath, m_noiseSRV);
 		LoadTexture(device, m_colorMapTexturePath, m_colorMapSRV);
@@ -273,12 +342,11 @@ namespace HEIN
 			for (int i = 0; i < numRows; ++i)
 			{
 				float v = static_cast<float>(i) / static_cast<float>(numSegments);
-				float yCoord = 1.0f - v; // Texture V coordinate (1.0 at base, 0.0 at tip)
+				float yCoord = 1.0f - v;
 
 				uint32_t baseIdx = static_cast<uint32_t>(vertices.size());
 
-				// position.x holds the 'isLeft' multiplier (-1.0 for left, 1.0 for right)
-				// windWeight holds 'v' (0.0 at base, 1.0 at tip)
+				// Position X denotes whether the vertex belongs to the left (-1.0) or right (1.0) side
 				FoliageVertex vLeft{ { -1.0f, 0.0f, 0.0f }, { 0, 1, 0 }, { 0.0f, yCoord }, v, { 1, 1, 1, 1 } };
 				FoliageVertex vRight{ {  1.0f, 0.0f, 0.0f }, { 0, 1, 0 }, { 1.0f, yCoord }, v, { 1, 1, 1, 1 } };
 
@@ -320,7 +388,6 @@ namespace HEIN
 			std::vector<FoliageVertex> vertices;
 			std::vector<uint32_t> indices;
 
-			// Stem: 2 crossed quads
 			for (int p = 0; p < 2; ++p)
 			{
 				float angle = (static_cast<float>(p) / 2.0f) * DirectX::XM_PI;
@@ -346,7 +413,6 @@ namespace HEIN
 				indices.push_back(baseIdx + 3);
 			}
 
-			// Blossom: 2 wider crossed cards at top
 			for (int p = 0; p < 2; ++p)
 			{
 				float angle = (static_cast<float>(p) / 2.0f) * DirectX::XM_PI + 0.25f * DirectX::XM_PI;
@@ -395,7 +461,6 @@ namespace HEIN
 			std::vector<FoliageVertex> vertices;
 			std::vector<uint32_t> indices;
 
-			// Trunk: 6-sided cylinder
 			const int sides = 6;
 			const float rBottom = 0.28f;
 			const float rTop = 0.16f;
@@ -439,7 +504,6 @@ namespace HEIN
 				indices.push_back(baseIdx + 3);
 			}
 
-			// Canopy: 3 intersecting large spherical foliage puff cards (Ghibli card clusters)
 			const int canopyCards = 3;
 			const float canopyWidth = 3.2f;
 			const float canopyBottom = 1.8f;
@@ -489,11 +553,6 @@ namespace HEIN
 
 	void FoliageComponent::BuildDefaultAtlas(ID3D11Device* device)
 	{
-		// Synthesizes a 128x128 RGBA texture with 4 quadrants:
-		// [0,0]-[64,64]: Grass blades with alpha
-		// [64,0]-[128,64]: Flower blossom petals with alpha
-		// [0,64]-[64,128]: Wood trunk bark
-		// [64,64]-[128,128]: Leaf cluster puff with alpha
 		const int size = 128;
 		std::vector<uint32_t> pixels(size * size, 0);
 
@@ -512,7 +571,6 @@ namespace HEIN
 
 				if (qx == 0 && qy == 0) // Grass clump quadrant
 				{
-					// Multiple tapered blades
 					float blade1 = std::abs(u - 0.25f) - (1.0f - v) * 0.12f;
 					float blade2 = std::abs(u - 0.50f) - (1.0f - v) * 0.15f;
 					float blade3 = std::abs(u - 0.75f) - (1.0f - v) * 0.12f;
@@ -607,41 +665,48 @@ namespace HEIN
 		return false;
 	}
 
-	void FoliageComponent::UpdateInstanceBuffers(ID3D11Device* device, ID3D11DeviceContext* context)
+	void FoliageComponent::UpdateCellBuffers(ID3D11Device* device, ID3D11DeviceContext* context, FoliageCell* cell)
 	{
+		// Map and write instance data for the specific spatial cell to the GPU.
+		// Ensures only regions marked as dirty undergo PCI bus transfers.
 		for (size_t i = 0; i < static_cast<size_t>(FoliageType::Count); ++i)
 		{
-			if (!m_bufferDirty[i]) continue;
-			m_bufferDirty[i] = false;
+			if (!cell->bufferDirty[i]) continue;
+			cell->bufferDirty[i] = false;
 
-			const size_t count = m_instances[i].size();
+			const size_t count = cell->instances[i].size();
 			if (count == 0) continue;
 
-			if (m_instanceBuffer[i] == nullptr || m_instanceBufferCapacity[i] < count)
+			if (cell->instanceBuffers[i] == nullptr || cell->instanceBufferCapacities[i] < count)
 			{
-				m_instanceBufferCapacity[i] = static_cast<uint32_t>(std::max(count, size_t(64)) * 3 / 2);
+				cell->instanceBufferCapacities[i] = static_cast<uint32_t>(std::max(count, size_t(64)) * 3 / 2);
 
 				D3D11_BUFFER_DESC bd = {};
 				bd.Usage = D3D11_USAGE_DYNAMIC;
-				bd.ByteWidth = static_cast<UINT>(sizeof(FoliageInstanceData) * m_instanceBufferCapacity[i]);
+				bd.ByteWidth = static_cast<UINT>(sizeof(FoliageInstanceData) * cell->instanceBufferCapacities[i]);
 				bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 				bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-				D3D11_SUBRESOURCE_DATA initData = { m_instances[i].data(), 0, 0 };
-				DX::ThrowIfFailed(device->CreateBuffer(&bd, &initData, m_instanceBuffer[i].ReleaseAndGetAddressOf()));
+				// Create with no initial data: ByteWidth includes growth headroom that the
+				// source vector does not own, so passing it as pInitialData would make the
+				// driver read past the allocation (0xC0000005 in nvwgf2umx.dll).
+				DX::ThrowIfFailed(device->CreateBuffer(&bd, nullptr, cell->instanceBuffers[i].ReleaseAndGetAddressOf()));
 			}
-			else
+
+			// Upload only the valid instances; identical path for newly created and existing buffers.
+			D3D11_MAPPED_SUBRESOURCE mapped;
+			HRESULT hr = context->Map(cell->instanceBuffers[i].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+			if (SUCCEEDED(hr))
 			{
-				D3D11_MAPPED_SUBRESOURCE mapped;
-				HRESULT hr = context->Map(m_instanceBuffer[i].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-				if (SUCCEEDED(hr))
-				{
-					memcpy(mapped.pData, m_instances[i].data(), sizeof(FoliageInstanceData) * count);
-					context->Unmap(m_instanceBuffer[i].Get(), 0);
-				}
+				memcpy(mapped.pData, cell->instances[i].data(), sizeof(FoliageInstanceData) * count);
+				context->Unmap(cell->instanceBuffers[i].Get(), 0);
 			}
 		}
 	}
+
+	// ==================================================================================
+	// CORE RENDERING LOOP
+	// ==================================================================================
 
 	void FoliageComponent::Draw(
 		GameContext& gameContext,
@@ -659,13 +724,55 @@ namespace HEIN
 		UINT numVp = 1;
 		context->RSGetViewports(&numVp, &m_cachedViewport);
 
+		// Safely compiles shaders and loads textures if not already completed or if hot reloaded.
 		if (!InitializeResources(device)) return;
-
-		UpdateInstanceBuffers(device, context);
 
 		if (GetTotalInstanceCount() == 0) return;
 
-		// 1. Update Per-Frame Constant Buffer
+		// 1. Build World-Space Camera Frustum
+		DirectX::BoundingFrustum worldFrustum;
+		if (m_freezeFrustum)
+		{
+			worldFrustum = m_frozenFrustum;
+		}
+		else
+		{
+			DirectX::SimpleMath::Matrix cullingView = view;
+			DirectX::SimpleMath::Matrix cullingProj = proj;
+
+			// Use Main Game Camera's View and Proj for culling to match TerrainComponent exactly
+			if (gameContext.mainCamera != nullptr)
+			{
+				cullingView = gameContext.mainCamera->GetView();
+
+				D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
+				float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
+				float fov = gameContext.mainCamera->GetFov();
+				if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
+
+				cullingProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
+					fov, aspect, 0.1f, 5000.0f
+				);
+			}
+
+			DirectX::BoundingFrustum localFrustum(cullingProj, true);
+			DirectX::SimpleMath::Matrix camWorld;
+			if (std::abs(cullingView.Determinant()) < 1e-6f)
+				camWorld = DirectX::SimpleMath::Matrix::Identity;
+			else
+				camWorld = cullingView.Invert();
+
+			localFrustum.Transform(worldFrustum, camWorld);
+
+			// Normalize orientation quaternion to guarantee numerical stability
+			DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&worldFrustum.Orientation);
+			q = DirectX::XMQuaternionNormalize(q);
+			DirectX::XMStoreFloat4(&worldFrustum.Orientation, q);
+
+			m_frozenFrustum = worldFrustum;
+		}
+
+		// 2. Setup Shared Constants
 		TerrainComponent* terrain = FindTerrain(gameContext);
 		float terW = terrain ? static_cast<float>(terrain->GetTerrainWidth()) : 256.0f;
 		float terH = terrain ? static_cast<float>(terrain->GetTerrainHeight()) : 256.0f;
@@ -704,7 +811,6 @@ namespace HEIN
 			context->Unmap(m_perFrameBuffer.Get(), 0);
 		}
 
-		// 2. Update Settings Constant Buffer
 		if (SUCCEEDED(context->Map(m_settingsBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
 		{
 			CBFoliageSettings* cb = static_cast<CBFoliageSettings*>(mapped.pData);
@@ -726,10 +832,17 @@ namespace HEIN
 
 			cb->flags = DirectX::SimpleMath::Vector4(hasColorMap, hasTex, hasShadow, 0.0f);
 
+			// Synchronize shape modifications directed by the inspector
+			cb->maxGrassHeight = m_maxGrassHeight;
+			cb->maxGrassWidth = m_maxGrassWidth;
+			cb->tilt = m_tilt;
+			cb->bend = m_bend;
+
 			context->Unmap(m_settingsBuffer.Get(), 0);
 		}
 
-		// 3. Bind Pipeline State
+
+		// 3. Bind Graphics Pipeline Variables
 		context->IASetInputLayout(m_inputLayout.Get());
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -764,37 +877,52 @@ namespace HEIN
 		context->OMSetDepthStencilState(m_depthStencilState.Get(), 0);
 		context->OMSetBlendState(gameContext.commonStates.AlphaBlend(), nullptr, 0xFFFFFFFF);
 
-		// 4. Render Each Foliage Species with a Single Instanced Draw Call
-		for (size_t i = 0; i < static_cast<size_t>(FoliageType::Count); ++i)
+		// 4. Frustum Cull and Execute Draws over Iterated Cells
+		for (auto& pair : m_cells)
 		{
-			const uint32_t instanceCount = static_cast<uint32_t>(m_instances[i].size());
-			if (instanceCount == 0 || m_indexCount[i] == 0) continue;
+			FoliageCell* cell = pair.second.get();
 
-			ID3D11Buffer* vbs[] = { m_meshVB[i].Get(), m_instanceBuffer[i].Get() };
-			UINT strides[] = { sizeof(FoliageVertex), sizeof(FoliageInstanceData) };
-			UINT offsets[] = { 0, 0 };
+			// Bounding box intersection check dictates visibility state.
+			if (m_enableFrustumCulling && !worldFrustum.Intersects(cell->boundingBox))
+			{
+				continue; // Cell is off-screen, skip it entirely!
+			}
 
-			context->IASetVertexBuffers(0, 2, vbs, strides, offsets);
-			context->IASetIndexBuffer(m_meshIB[i].Get(), DXGI_FORMAT_R32_UINT, 0);
+			UpdateCellBuffers(device, context, cell);
 
-			context->DrawIndexedInstanced(m_indexCount[i], instanceCount, 0, 0, 0);
+			for (size_t i = 0; i < static_cast<size_t>(FoliageType::Count); ++i)
+			{
+				const uint32_t instanceCount = static_cast<uint32_t>(cell->instances[i].size());
+				if (instanceCount == 0 || m_indexCount[i] == 0) continue;
+
+				ID3D11Buffer* vbs[] = { m_meshVB[i].Get(), cell->instanceBuffers[i].Get() };
+				UINT strides[] = { sizeof(FoliageVertex), sizeof(FoliageInstanceData) };
+				UINT offsets[] = { 0, 0 };
+
+				context->IASetVertexBuffers(0, 2, vbs, strides, offsets);
+				context->IASetIndexBuffer(m_meshIB[i].Get(), DXGI_FORMAT_R32_UINT, 0);
+
+				context->DrawIndexedInstanced(m_indexCount[i], instanceCount, 0, 0, 0);
+			}
 		}
 
-		// Clean up shader resource bindings to avoid resource hazards
+		// Prevent subsequent rendering conflicts by zeroing utilized slots.
 		ID3D11ShaderResourceView* nullSRVs[4] = { nullptr, nullptr, nullptr, nullptr };
 		context->PSSetShaderResources(0, 4, nullSRVs);
 		context->VSSetShaderResources(0, 2, nullSRVs);
 	}
 
+	// ==================================================================================
+	// UTILITIES & TERRAIN QUERYING
+	// ==================================================================================
+
 	TerrainComponent* FoliageComponent::FindTerrain(GameContext& gameContext)
 	{
-		// 1. Check if owner has TerrainComponent
 		if (m_owner != nullptr)
 		{
 			TerrainComponent* t = m_owner->GetComponent<TerrainComponent>();
 			if (t != nullptr) return t;
 
-			// 2. Check if owner is a child of the terrain actor
 			if (gameContext.actorManager != nullptr && m_owner->GetParentID() != INVALID_ACTOR_ID)
 			{
 				Actor* parent = gameContext.actorManager->GetActor(m_owner->GetParentID());
@@ -806,7 +934,6 @@ namespace HEIN
 			}
 		}
 
-		// 3. Fallback: Search all actors in scene
 		if (gameContext.actorManager != nullptr)
 		{
 			for (const auto& pair : gameContext.actorManager->GetAllActors())
@@ -964,7 +1091,6 @@ namespace HEIN
 		float halfW = static_cast<float>(width) / 2.0f;
 		float halfH = static_cast<float>(height) / 2.0f;
 
-		// Generous bounding box to encompass all possible terrain altitudes
 		float maxBoxY = std::max(scale * 2.0f, 1000.0f);
 		DirectX::BoundingBox box(
 			DirectX::SimpleMath::Vector3(0.0f, maxBoxY * 0.5f, 0.0f),
@@ -1011,7 +1137,6 @@ namespace HEIN
 
 		if (!foundIntersection) return false;
 
-		// Binary search refinement for sub-millimeter precision
 		float t0 = prevT;
 		float t1 = t;
 		for (int i = 0; i < 8; ++i)
@@ -1051,6 +1176,10 @@ namespace HEIN
 		return true;
 	}
 
+	// ==================================================================================
+	// EDITOR INTERACTIVITY (PAINTING)
+	// ==================================================================================
+
 	void FoliageComponent::PaintInstances(TerrainComponent* terrain, const DirectX::SimpleMath::Vector3& center)
 	{
 		static std::mt19937 rng(1337);
@@ -1068,21 +1197,6 @@ namespace HEIN
 			float px = center.x + r * std::cos(theta);
 			float pz = center.z + r * std::sin(theta);
 
-			// Check minimum spacing against existing instances of this type
-			bool tooClose = false;
-			float spacingSq = m_minSpacing * m_minSpacing;
-			for (const auto& inst : m_instances[typeIdx])
-			{
-				float dx = inst.worldPos.x - px;
-				float dz = inst.worldPos.z - pz;
-				if ((dx * dx + dz * dz) < spacingSq)
-				{
-					tooClose = true;
-					break;
-				}
-			}
-			if (tooClose) continue;
-
 			float py = 0.0f;
 			DirectX::SimpleMath::Vector3 norm;
 			if (!SampleTerrainHeightAndNormal(terrain, px, pz, py, norm)) continue;
@@ -1090,7 +1204,7 @@ namespace HEIN
 			float rot = m_randomYaw ? (dist01(rng) * DirectX::XM_2PI) : 0.0f;
 			float sc = m_minScale + dist01(rng) * (m_maxScale - m_minScale);
 
-			AddInstance(static_cast<FoliageType>(m_selectedTypeIndex), DirectX::SimpleMath::Vector3(px, py, pz), rot, sc);
+			AddInstance(static_cast<FoliageType>(m_selectedTypeIndex), DirectX::SimpleMath::Vector3(px, py, pz), rot, sc, terrain);
 		}
 	}
 
@@ -1098,28 +1212,31 @@ namespace HEIN
 	{
 		float radiusSq = m_brushRadius * m_brushRadius;
 
-		for (size_t t = 0; t < static_cast<size_t>(FoliageType::Count); ++t)
+		// Iterates exclusively over active spatial cells avoiding full-world scans
+		for (auto& pair : m_cells)
 		{
-			if (m_eraseSelectedOnly && t != static_cast<size_t>(m_selectedTypeIndex))
+			FoliageCell* cell = pair.second.get();
+			for (size_t t = 0; t < static_cast<size_t>(FoliageType::Count); ++t)
 			{
-				continue;
-			}
+				if (m_eraseSelectedOnly && t != static_cast<size_t>(m_selectedTypeIndex)) continue;
 
-			auto& list = m_instances[t];
-			size_t beforeSize = list.size();
+				auto& list = cell->instances[t];
+				size_t beforeSize = list.size();
 
-			list.erase(
-				std::remove_if(list.begin(), list.end(), [&](const FoliageInstanceData& inst) {
-					float dx = inst.worldPos.x - center.x;
-					float dz = inst.worldPos.z - center.z;
-					return (dx * dx + dz * dz) <= radiusSq;
-				}),
-				list.end()
-			);
+				// Leverages standardized container removal functions determining instance proximity
+				list.erase(
+					std::remove_if(list.begin(), list.end(), [&](const FoliageInstanceData& inst) {
+						float dx = inst.worldPos.x - center.x;
+						float dz = inst.worldPos.z - center.z;
+						return (dx * dx + dz * dz) <= radiusSq;
+						}),
+					list.end()
+				);
 
-			if (list.size() != beforeSize)
-			{
-				m_bufferDirty[t] = true;
+				if (list.size() != beforeSize)
+				{
+					cell->bufferDirty[t] = true;
+				}
 			}
 		}
 	}
@@ -1148,6 +1265,10 @@ namespace HEIN
 		}
 	}
 
+	// ==================================================================================
+	// INSPECTOR AND SERIALIZATION
+	// ==================================================================================
+
 	void FoliageComponent::OnInspectorGUI(GameContext& gameContext)
 	{
 		if (!ImGui::CollapsingHeader("Foliage System (Procedural & Instanced)", ImGuiTreeNodeFlags_DefaultOpen))
@@ -1166,8 +1287,11 @@ namespace HEIN
 		}
 
 		ImGui::Separator();
+		ImGui::Text("Cell Management & Debugging");
+		ImGui::Checkbox("Enable Frustum Culling", &m_enableFrustumCulling);
+		ImGui::Checkbox("Freeze Culling Frustum", &m_freezeFrustum);
+		ImGui::Separator();
 
-		// Large, Clear Brush Toggle Button
 		if (m_brushActive)
 		{
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.55f, 0.22f, 1.0f));
@@ -1189,18 +1313,15 @@ namespace HEIN
 			ImGui::PopStyleColor(2);
 		}
 
-		// Mode: Paint or Erase
 		int modeInt = static_cast<int>(m_brushMode);
 		ImGui::RadioButton("Paint", &modeInt, 0);
 		ImGui::SameLine();
 		ImGui::RadioButton("Erase", &modeInt, 1);
 		m_brushMode = static_cast<BrushMode>(modeInt);
 
-		// Foliage Species Selection
 		const char* foliageTypes[] = { "Grass", "Flower", "Tree" };
 		ImGui::Combo("Foliage Type", &m_selectedTypeIndex, foliageTypes, IM_ARRAYSIZE(foliageTypes));
 
-		// Brush Parameters
 		ImGui::SliderFloat("Brush Radius", &m_brushRadius, 0.5f, 30.0f, "%.1f m");
 		if (m_brushMode == BrushMode::Paint)
 		{
@@ -1217,29 +1338,17 @@ namespace HEIN
 
 		ImGui::Separator();
 
-		// Stylized Wind & Breezing Controls
-		if (ImGui::TreeNode("Stylized Wind & Breezing (Scrolling Noise)"))
-		{
-			ImGui::SliderFloat("Wind Speed", &m_windSpeed, 0.0f, 5.0f, "%.2f");
-			ImGui::SliderFloat("Wind Strength", &m_windStrength, 0.0f, 1.0f, "%.2f");
-			ImGui::SliderFloat("Noise Scale", &m_noiseScale, 0.005f, 0.2f, "%.3f");
-
-			float angle = std::atan2(m_windDirection.y, m_windDirection.x);
-			if (ImGui::SliderAngle("Wind Direction", &angle))
-			{
-				m_windDirection.x = std::cos(angle);
-				m_windDirection.y = std::sin(angle);
-			}
-
-			ImGui::TreePop();
-		}
-
-		// Color & Shading Palette
 		if (ImGui::TreeNode("Stylized Palette & Shading"))
 		{
 			ImGui::Checkbox("Blend with Terrain Color Map", &m_useColorMap);
 			ImGui::Checkbox("Use Texture Atlas", &m_useTexture);
 			ImGui::SliderFloat("Alpha Cutoff (Depth Test)", &m_alphaCutoff, 0.1f, 0.9f, "%.2f");
+
+			// Procedural generation parameters for the cubic bezier curve
+			ImGui::SliderFloat("Max Grass Height", &m_maxGrassHeight, 0.1f, 10.0f, "%.2f");
+			ImGui::SliderFloat("Max Grass Width", &m_maxGrassWidth, 0.1f, 5.0f, "%.2f");
+			ImGui::SliderFloat("Grass Tilt", &m_tilt, 0.0f, 45.0f, "%.2f");
+			ImGui::SliderFloat("Grass Bend", &m_bend, 0.0f, 1.0f, "%.2f");
 
 			ImGui::ColorEdit3("Grass Root Color", &m_grassRootColor.x);
 			ImGui::ColorEdit3("Grass Tip Color", &m_grassTipColor.x);
@@ -1247,33 +1356,19 @@ namespace HEIN
 			ImGui::ColorEdit3("Tree Leaf Color", &m_leafColor.x);
 			ImGui::ColorEdit3("Tree Bark Color", &m_barkColor.x);
 
+			ImGui::Separator();
+
+			// Hot Reload Button forces the initialization logic to reload the HLSL text files directly from storage.
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.0f, 1.0f));
+			if (ImGui::Button("Recompile Shaders (Hot Reload)", ImVec2(-1, 30)))
+			{
+				m_isInitialized = false;
+			}
+			ImGui::PopStyleColor();
+
 			ImGui::TreePop();
 		}
 
-		// Instance Statistics & Memory Footprint
-		ImGui::Separator();
-		size_t grassCount = GetInstanceCount(FoliageType::Grass);
-		size_t flowerCount = GetInstanceCount(FoliageType::Flower);
-		size_t treeCount = GetInstanceCount(FoliageType::Tree);
-		size_t totalCount = grassCount + flowerCount + treeCount;
-		size_t totalMemoryBytes = totalCount * sizeof(FoliageInstanceData);
-
-		ImGui::Text("Active Instances: %zu (Grass: %zu, Flowers: %zu, Trees: %zu)", totalCount, grassCount, flowerCount, treeCount);
-		ImGui::Text("Data Usage: %.2f KB (%zu bytes, 24 bytes/instance)", static_cast<float>(totalMemoryBytes) / 1024.0f, totalMemoryBytes);
-
-		if (ImGui::Button("Clear Current Type"))
-		{
-			ClearType(static_cast<FoliageType>(m_selectedTypeIndex));
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Clear All Foliage"))
-		{
-			ClearAll();
-		}
-
-		// ---------------------------------------------------------
-		// Interactive 3D Brush Ring Rendering & Raycast Handling
-		// ---------------------------------------------------------
 		if (m_brushActive && terrain != nullptr)
 		{
 			RECT size = gameContext.deviceResources.GetOutputSize();
@@ -1297,7 +1392,6 @@ namespace HEIN
 			DirectX::SimpleMath::Matrix view = m_cachedView;
 			DirectX::SimpleMath::Matrix proj = m_cachedProj;
 
-			// If m_cachedView is not yet populated from Draw, fallback to gameContext.mainCamera
 			if (std::abs(view.Determinant()) < 1e-5f && gameContext.mainCamera != nullptr)
 			{
 				view = gameContext.mainCamera->GetCameraData().viewMatrix;
@@ -1330,7 +1424,6 @@ namespace HEIN
 					m_currentHitPos = hitPos;
 					m_currentHitNormal = hitNormal;
 
-					// Draw contour-following brush circle directly on ImGui's Foreground Draw List
 					ImDrawList* drawList = ImGui::GetForegroundDrawList();
 					const int segments = 40;
 					std::vector<ImVec2> polyPoints;
@@ -1367,7 +1460,6 @@ namespace HEIN
 						drawList->AddPolyline(polyPoints.data(), static_cast<int>(polyPoints.size()), outlineColor, ImDrawFlags_Closed, 3.0f);
 					}
 
-					// Center dot & badge
 					DirectX::SimpleMath::Vector3 centerSp = vp.Project(
 						DirectX::SimpleMath::Vector3(hitPos.x, hitPos.y + 0.1f, hitPos.z),
 						proj, view, DirectX::SimpleMath::Matrix::Identity
@@ -1393,7 +1485,6 @@ namespace HEIN
 						drawList->AddText(txtPos, outlineColor, badge);
 					}
 
-					// Mouse painting / erasing
 					if (!ImGui::GetIO().WantCaptureMouse && ImGui::IsMouseDown(ImGuiMouseButton_Left))
 					{
 						if (m_paintCooldown <= 0.0f)
@@ -1435,26 +1526,29 @@ namespace HEIN
 		j["UseTexture"] = m_useTexture;
 
 		j["GrassRootColor"] = { m_grassRootColor.x, m_grassRootColor.y, m_grassRootColor.z, m_grassRootColor.w };
-		j["GrassTipColor"]  = { m_grassTipColor.x, m_grassTipColor.y, m_grassTipColor.z, m_grassTipColor.w };
-		j["FlowerColor"]    = { m_flowerColor.x, m_flowerColor.y, m_flowerColor.z, m_flowerColor.w };
-		j["LeafColor"]      = { m_leafColor.x, m_leafColor.y, m_leafColor.z, m_leafColor.w };
-		j["BarkColor"]      = { m_barkColor.x, m_barkColor.y, m_barkColor.z, m_barkColor.w };
+		j["GrassTipColor"] = { m_grassTipColor.x, m_grassTipColor.y, m_grassTipColor.z, m_grassTipColor.w };
+		j["FlowerColor"] = { m_flowerColor.x, m_flowerColor.y, m_flowerColor.z, m_flowerColor.w };
+		j["LeafColor"] = { m_leafColor.x, m_leafColor.y, m_leafColor.z, m_leafColor.w };
+		j["BarkColor"] = { m_barkColor.x, m_barkColor.y, m_barkColor.z, m_barkColor.w };
 
-		// Compact flat serialization of instances for minimum file size
-		// Each instance: [x, y, z, rot, scale, type]
+		j["MaxGrassHeight"] = m_maxGrassHeight;
+		j["MaxGrassWidth"] = m_maxGrassWidth;
+		j["Tilt"] = m_tilt;
+		j["Bend"] = m_bend;
+
+		// Compresses instance structures into flat arrays limiting file bloat
 		nlohmann::json instancesJson = nlohmann::json::array();
-		for (size_t t = 0; t < static_cast<size_t>(FoliageType::Count); ++t)
+		for (const auto& pair : m_cells)
 		{
-			for (const auto& inst : m_instances[t])
+			for (size_t t = 0; t < static_cast<size_t>(FoliageType::Count); ++t)
 			{
-				instancesJson.push_back({
-					inst.worldPos.x,
-					inst.worldPos.y,
-					inst.worldPos.z,
-					inst.rotation,
-					inst.scale,
-					inst.type
-				});
+				for (const auto& inst : pair.second->instances[t])
+				{
+					instancesJson.push_back({
+						inst.worldPos.x, inst.worldPos.y, inst.worldPos.z,
+						inst.rotation, inst.scale, inst.type
+						});
+				}
 			}
 		}
 		j["Instances"] = instancesJson;
@@ -1502,8 +1596,16 @@ namespace HEIN
 			m_barkColor = DirectX::SimpleMath::Vector4(c[0], c[1], c[2], c[3]);
 		}
 
-		ClearAll();
+		if (data.contains("MaxGrassHeight")) m_maxGrassHeight = data["MaxGrassHeight"].get<float>();
+		if (data.contains("MaxGrassWidth")) m_maxGrassWidth = data["MaxGrassWidth"].get<float>();
+		if (data.contains("Tilt")) m_tilt = data["Tilt"].get<float>();
+		if (data.contains("Bend")) m_bend = data["Bend"].get<float>();
 
+		ClearAll();
+		m_tempLoadedInstances.clear();
+
+		// Accumulates elements in an intermediate array. Construction happens during 
+		// InitializeAfterDeserialize, ensuring Terrain dependency is accessible.
 		if (data.contains("Instances") && data["Instances"].is_array())
 		{
 			for (const auto& item : data["Instances"])
@@ -1514,16 +1616,11 @@ namespace HEIN
 					inst.worldPos.x = item[0].get<float>();
 					inst.worldPos.y = item[1].get<float>();
 					inst.worldPos.z = item[2].get<float>();
-					inst.rotation   = item[3].get<float>();
-					inst.scale      = item[4].get<float>();
-					inst.type       = item[5].get<uint32_t>();
+					inst.rotation = item[3].get<float>();
+					inst.scale = item[4].get<float>();
+					inst.type = item[5].get<uint32_t>();
 
-					size_t typeIdx = static_cast<size_t>(inst.type);
-					if (typeIdx < static_cast<size_t>(FoliageType::Count))
-					{
-						m_instances[typeIdx].push_back(inst);
-						m_bufferDirty[typeIdx] = true;
-					}
+					m_tempLoadedInstances.push_back(inst);
 				}
 			}
 		}
@@ -1533,5 +1630,16 @@ namespace HEIN
 	{
 		ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
 		InitializeResources(device);
+
+		TerrainComponent* terrain = FindTerrain(gameContext);
+
+		// Distribute loaded instances into spatial grid cells 
+		for (const auto& inst : m_tempLoadedInstances)
+		{
+			AddInstance(static_cast<FoliageType>(inst.type), inst.worldPos, inst.rotation, inst.scale, terrain);
+		}
+
+		m_tempLoadedInstances.clear();
+		m_tempLoadedInstances.shrink_to_fit();
 	}
 }

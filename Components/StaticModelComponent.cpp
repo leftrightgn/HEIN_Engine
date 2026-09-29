@@ -12,6 +12,9 @@
 #include <vector>
 #include <filesystem>
 #include "TransformComponent.h"
+#include "FogComponent.h"
+#include "Entities/ActorManager.h"
+#include "Camera/CameraController.h"
 
 namespace HEIN
 {
@@ -142,58 +145,6 @@ namespace HEIN
         return false;
     }
 
-    class SmartCMOEffectFactory : public DirectX::DGSLEffectFactory
-    {
-    private:
-        ID3D11Device* m_pDevice;
-        std::wstring m_dir;
-
-    public:
-        SmartCMOEffectFactory(ID3D11Device* device)
-            : DirectX::DGSLEffectFactory(device), m_pDevice(device)
-        {
-        }
-
-        void SetDirectory(const wchar_t* path)
-        {
-            m_dir = path ? path : L"";
-            DirectX::DGSLEffectFactory::SetDirectory(path);
-        }
-
-        void CreateTexture(
-            const wchar_t* name,
-            ID3D11DeviceContext* deviceContext,
-            ID3D11ShaderResourceView** textureView
-        ) override
-        {
-            std::wstring wname = name ? name : L"";
-            std::wstring cand1 = m_dir + wname;
-            std::wstring cand2 = wname;
-            
-            bool exists = false;
-            if (!wname.empty())
-            {
-                if (std::filesystem::exists(cand1) || std::filesystem::exists(cand2) ||
-                    std::filesystem::exists(cand1 + L".dds") || std::filesystem::exists(cand2 + L".dds"))
-                {
-                    exists = true;
-                }
-            }
-
-            if (exists)
-            {
-                try
-                {
-                    DirectX::DGSLEffectFactory::CreateTexture(name, deviceContext, textureView);
-                    if (textureView && *textureView) return;
-                }
-                catch (...) {}
-            }
-
-            TryLoadTexture(m_pDevice, m_dir, name, textureView);
-        }
-    };
-
     class SmartEffectFactory : public DirectX::EffectFactory
     {
     private:
@@ -294,20 +245,22 @@ void HEIN::StaticModelComponent::Initialize(
 
             if (ext == L".cmo")
             {
-                SmartCMOEffectFactory dgslFactory(device);
+                // Use EffectFactory (not DGSLEffectFactory) so the model gets BasicEffect
+                // which supports IEffectFog for fog blending. DGSLEffect does not support IEffectFog.
+                SmartEffectFactory cmoFactory(device);
                 if (!m_textureDir.empty())
                 {
-                    dgslFactory.SetDirectory(m_textureDir.c_str());
+                    cmoFactory.SetDirectory(m_textureDir.c_str());
                 }
                 else
                 {
-                    dgslFactory.SetDirectory(nullptr);
+                    cmoFactory.SetDirectory(nullptr);
                 }
 
                 m_model = DirectX::Model::CreateFromCMO(
                     device,
                     m_modelPath.c_str(),
-                    dgslFactory,
+                    cmoFactory,
                     static_cast<DirectX::ModelLoaderFlags>(
                         DirectX::ModelLoader_CounterClockwise |
                         DirectX::ModelLoader_IncludeBones
@@ -367,32 +320,125 @@ void HEIN::StaticModelComponent::Update(float)
 }
 
 void HEIN::StaticModelComponent::Draw(
-    GameContext& gameContext, 
-    const DirectX::SimpleMath::Matrix& world, 
-    const DirectX::SimpleMath::Matrix& view, 
+    GameContext& gameContext,
+    const DirectX::SimpleMath::Matrix& world,
+    const DirectX::SimpleMath::Matrix& view,
     const DirectX::SimpleMath::Matrix& proj
 )
 {
-    if (m_needsReload || (!m_model && !m_modelPath.empty()))
+    if (!m_isVisible || !m_model) return;
+
+    bool isPlayer = (m_owner->GetActorType() == HEIN::ActorType::Player);
+
+    if (!isPlayer)
     {
-        if (m_textureDir.empty() && !m_modelPath.empty())
+        DirectX::SimpleMath::Matrix cullingView = view;
+        DirectX::SimpleMath::Matrix cullingProj = proj;
+
+        // Force culling to use the main camera to match Terrain and Foliage systems
+        if (gameContext.mainCamera != nullptr)
         {
-            std::filesystem::path p(m_modelPath);
-            std::wstring parent = p.parent_path().wstring();
-            if (!parent.empty())
+            cullingView = gameContext.mainCamera->GetView();
+
+            D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
+            float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
+            float fov = gameContext.mainCamera->GetFov();
+            if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
+
+            cullingProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
+                fov, aspect, 0.1f, 5000.0f
+            );
+        }
+
+        // Build the World-Space Camera Frustum
+        DirectX::BoundingFrustum worldFrustum(cullingProj, true); // true for Right-Handed
+        DirectX::SimpleMath::Matrix camWorld;
+        if (std::abs(cullingView.Determinant()) < 1e-6f)
+            camWorld = DirectX::SimpleMath::Matrix::Identity;
+        else
+            camWorld = cullingView.Invert();
+
+        worldFrustum.Transform(worldFrustum, camWorld);
+
+        // Normalize orientation quaternion to guarantee numerical stability
+        DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&worldFrustum.Orientation);
+        q = DirectX::XMQuaternionNormalize(q);
+        DirectX::XMStoreFloat4(&worldFrustum.Orientation, q);
+
+        // Combine all sub-meshes into one master bounding box
+        DirectX::BoundingBox masterBox;
+        if (!m_model->meshes.empty())
+        {
+            masterBox = m_model->meshes[0]->boundingBox;
+            for (size_t i = 1; i < m_model->meshes.size(); i++)
             {
-                m_textureDir = parent + L"/";
+                DirectX::BoundingBox::CreateMerged(masterBox, masterBox, m_model->meshes[i]->boundingBox);
             }
         }
 
-        Initialize(gameContext, m_modelPath.c_str(), m_textureDir.empty() ? nullptr : m_textureDir.c_str());
-        m_needsReload = false;
-    }
+        // SDKMESH files often default to 1x1x1 bounding boxes (Extents = 0.5f).
+        // If the master box is suspiciously small (<= 1.0f), force the massive fallback.
+        if (masterBox.Extents.x <= 1.0f && masterBox.Extents.y <= 1.0f && masterBox.Extents.z <= 1.0f)
+        {
+            masterBox.Extents = DirectX::SimpleMath::Vector3(100.0f, 100.0f, 100.0f);
+        }
+        else
+        {
+            // Pad legitimate bounding boxes by 50% just in case of slight exporter inaccuracies
+            masterBox.Extents.x *= 1.5f;
+            masterBox.Extents.y *= 1.5f;
+            masterBox.Extents.z *= 1.5f;
+        }
 
-    if (!m_isVisible || !m_model) return;
+        DirectX::BoundingOrientedBox worldOBB;
+        DirectX::BoundingOrientedBox::CreateFromBoundingBox(worldOBB, masterBox);
+        worldOBB.Transform(worldOBB, world);
+
+        // Abort drawing if the entire merged model is completely off-screen
+        if (!worldFrustum.Intersects(worldOBB))
+        {
+            return;
+        }
+    }
 
     ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
     DirectX::DX11::CommonStates& states = gameContext.commonStates;
+
+    // Find global FogComponent (same pattern as LightComponent search)
+    HEIN::FogComponent* fogComp = nullptr;
+    for (auto& pair : gameContext.actorManager->GetAllActors())
+    {
+        fogComp = pair.second->GetComponent<HEIN::FogComponent>();
+        if (fogComp) break;
+    }
+
+    // Apply fog to DirectXTK built-in effects (BasicEffect, SkinnedEffect, etc.)
+    for (const auto& mesh : m_model->meshes)
+    {
+        for (const auto& part : mesh->meshParts)
+        {
+            auto fogEffect = dynamic_cast<DirectX::IEffectFog*>(part->effect.get());
+            if (fogEffect)
+            {
+                if (fogComp)
+                {
+                    fogEffect->SetFogEnabled(true);
+                    fogEffect->SetFogStart(fogComp->m_fogStart);
+                    fogEffect->SetFogEnd(fogComp->m_fogEnd);
+                    fogEffect->SetFogColor(DirectX::XMVectorSet(
+                        fogComp->m_fogColor.x,
+                        fogComp->m_fogColor.y,
+                        fogComp->m_fogColor.z,
+                        1.0f
+                    ));
+                }
+                else
+                {
+                    fogEffect->SetFogEnabled(false);
+                }
+            }
+        }
+    }
 
     if (!m_model->bones.empty() && m_drawBones)
     {

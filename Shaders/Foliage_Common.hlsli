@@ -32,6 +32,11 @@ cbuffer FoliageSettingsBuffer : register(b1)
     float4 lightColor;
     float4 ambientColor;
     float4 flags; // x: useColorMap, y: useTexture, z: hasShadows, w: unused
+    
+    float maxGrassHeight;
+    float maxGrassWidth;
+    float tilt;
+    float bend;
 };
 
 struct FoliageVertexInput
