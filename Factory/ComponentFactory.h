@@ -29,6 +29,7 @@
 #include <Components/ProceduralAnimationComponent.h>
 #include <Components/FogComponent.h>
 #include <Components/FoliageComponent.h>
+#include <Components/GaugeComponent.h>
 
 namespace HEIN
 {
@@ -122,6 +123,7 @@ namespace HEIN
 			RegisterComponent<ProceduralAnimationComponent>("ProceduralAnimationComponent");
 			RegisterComponent<FogComponent>("FogComponent");
 			RegisterComponent<FoliageComponent>("FoliageComponent");
+			RegisterComponent<GaugeComponent>("GaugeComponent");
 		}
 	};
 }

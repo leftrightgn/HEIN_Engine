@@ -194,6 +194,7 @@
     <ClInclude Include="Components\FogComponent.h" />
     <ClInclude Include="Components\FoliageComponent.h" />
     <ClInclude Include="Components\TerrainComponent.h" />
+    <ClInclude Include="Components\GaugeComponent.h" />
     <ClInclude Include="Components\UIButtonComponent.h" />
     <ClInclude Include="DebugingTools\EditorUtils.h" />
     <ClInclude Include="Factory\ComponentFactory.h" />
@@ -209,6 +210,7 @@
     <ClCompile Include="Components\FogComponent.cpp" />
     <ClCompile Include="Components\FoliageComponent.cpp" />
     <ClCompile Include="Components\TerrainComponent.cpp" />
+    <ClCompile Include="Components\GaugeComponent.cpp" />
     <ClCompile Include="Components\UIButtonComponent.cpp" />
     <ClCompile Include="Components\LightComponent.cpp" />
     <ClCompile Include="DebugingTools\EditorUtils.cpp" />
