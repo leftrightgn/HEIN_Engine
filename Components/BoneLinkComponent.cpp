@@ -74,6 +74,12 @@ void HEIN::BoneLinkComponent::Start()
 
 void HEIN::BoneLinkComponent::LateUpdate(float deltaTime)
 {
+	if (m_owner != nullptr)
+	{
+		SkinnedModelComponent* activeModel = m_owner->GetComponent<SkinnedModelComponent>();
+		if (activeModel != nullptr) m_targetModel = activeModel;
+	}
+
 	if (m_targetModel == nullptr && m_targetStaticModel == nullptr)
 	{
 		m_targetModel = m_owner->GetComponent<SkinnedModelComponent>();

@@ -307,6 +307,79 @@ void AnimationSDKMESH::Release()
     m_animBones.reset();
 }
 
+DirectX::SimpleMath::Vector3 AnimationSDKMESH::GetRootTranslationAtKey(int boneIndex, uint32_t key) const
+{
+    if (!m_animData || boneIndex < 0 || boneIndex >= static_cast<int>(m_boneToTrack.size()))
+        return DirectX::SimpleMath::Vector3::Zero;
+
+    uint32_t track = m_boneToTrack[boneIndex];
+    if (track == DirectX::ModelBone::c_Invalid)
+        return DirectX::SimpleMath::Vector3::Zero;
+
+    const auto* header = reinterpret_cast<const SDKANIMATION_FILE_HEADER*>(m_animData.get());
+    if (!header || header->NumAnimationKeys == 0)
+        return DirectX::SimpleMath::Vector3::Zero;
+
+    uint32_t clampedKey = (key < header->NumAnimationKeys) ? key : (header->NumAnimationKeys - 1);
+    const auto* frameData = reinterpret_cast<const SDKANIMATION_FRAME_DATA*>(m_animData.get() + header->AnimationDataOffset);
+    const auto* keyData = &frameData[track].pAnimationData[clampedKey];
+    return DirectX::SimpleMath::Vector3(keyData->Translation.x, keyData->Translation.y, keyData->Translation.z);
+}
+
+DirectX::SimpleMath::Vector3 AnimationSDKMESH::GetRootTranslationAtTime(int boneIndex, double time) const
+{
+    if (!m_animData || boneIndex < 0 || boneIndex >= static_cast<int>(m_boneToTrack.size()))
+        return DirectX::SimpleMath::Vector3::Zero;
+
+    uint32_t track = m_boneToTrack[boneIndex];
+    if (track == DirectX::ModelBone::c_Invalid)
+        return DirectX::SimpleMath::Vector3::Zero;
+
+    const auto* header = reinterpret_cast<const SDKANIMATION_FILE_HEADER*>(m_animData.get());
+    if (!header || header->NumAnimationKeys == 0 || header->AnimationFPS == 0)
+        return DirectX::SimpleMath::Vector3::Zero;
+
+    float timeInTicks = static_cast<float>(header->AnimationFPS) * static_cast<float>(time);
+    if (timeInTicks < 0.0f) timeInTicks = 0.0f;
+
+    uint32_t tick1 = static_cast<uint32_t>(timeInTicks);
+    const auto* frameData = reinterpret_cast<const SDKANIMATION_FRAME_DATA*>(m_animData.get() + header->AnimationDataOffset);
+
+    // Clamp to last key (do NOT wrap back to 0 when sampling continuous time within a cycle!)
+    if (tick1 >= header->NumAnimationKeys - 1)
+    {
+        const auto* keyData = &frameData[track].pAnimationData[header->NumAnimationKeys - 1];
+        return DirectX::SimpleMath::Vector3(keyData->Translation.x, keyData->Translation.y, keyData->Translation.z);
+    }
+
+    uint32_t tick2 = tick1 + 1;
+    float lerpFactor = timeInTicks - std::floor(timeInTicks);
+
+    const auto* data1 = &frameData[track].pAnimationData[tick1];
+    const auto* data2 = &frameData[track].pAnimationData[tick2];
+
+    DirectX::XMVECTOR p1 = DirectX::XMLoadFloat3(&data1->Translation);
+    DirectX::XMVECTOR p2 = DirectX::XMLoadFloat3(&data2->Translation);
+    DirectX::XMVECTOR p = DirectX::XMVectorLerp(p1, p2, lerpFactor);
+    DirectX::SimpleMath::Vector3 result;
+    DirectX::XMStoreFloat3(&result, p);
+    return result;
+}
+
+uint32_t AnimationSDKMESH::GetNumAnimationKeys() const
+{
+    if (!m_animData) return 0;
+    const auto* header = reinterpret_cast<const SDKANIMATION_FILE_HEADER*>(m_animData.get());
+    return header ? header->NumAnimationKeys : 0;
+}
+
+uint32_t AnimationSDKMESH::GetAnimationFPS() const
+{
+    if (!m_animData) return 0;
+    const auto* header = reinterpret_cast<const SDKANIMATION_FILE_HEADER*>(m_animData.get());
+    return header ? header->AnimationFPS : 0;
+}
+
 
 
 //--------------------------------------------------------------------------------------

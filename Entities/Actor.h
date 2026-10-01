@@ -26,6 +26,7 @@ namespace HEIN
 
 	class IComponent;
 	class ActorManager;
+	class SkinnedModelComponent;
 
 	/// <summary>
 	/// Represents an entity in the game world using a handle-based architecture.
@@ -41,6 +42,9 @@ namespace HEIN
 		ActorID m_ownerID = INVALID_ACTOR_ID;
 		ActorID m_parentID = INVALID_ACTOR_ID;
 		std::vector<ActorID> m_childrensID;
+
+		// Active SkinnedModel tracking for toggling between models (e.g. root motion vs non-root motion)
+		int m_activeSkinnedModelIndex = 0;
 
 		// Memory safe Array of Components
 		std::vector<std::unique_ptr<HEIN::IComponent>> m_components;
@@ -154,6 +158,16 @@ namespace HEIN
 			return result;
 		}
 
+		// Skinned Model Management (Support switching between multiple models, e.g. with and without root motion)
+		HEIN::SkinnedModelComponent* GetActiveSkinnedModel();
+		int GetActiveSkinnedModelIndex() const { return m_activeSkinnedModelIndex; }
+		void SetActiveSkinnedModelIndex(int index);
+		void ToggleSkinnedModel();
+
 	};
+
+	// Explicit specialization so GetComponent<SkinnedModelComponent>() returns the active / visible model
+	template <>
+	HEIN::SkinnedModelComponent* Actor::GetComponent<HEIN::SkinnedModelComponent>();
 
 }

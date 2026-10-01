@@ -2,6 +2,7 @@
 #include "Actor.h"
 #include "Components/IComponent.h"
 #include <Components/TransformComponent.h>
+#include <Components/SkinnedModelComponent.h>
 #include <Factory/ComponentFactory.h>
 #include "ActorManager.h"
 #include <ImGui/imgui.h>
@@ -72,6 +73,19 @@ void HEIN::Actor::Start()
 void HEIN::Actor::DrawInspector(GameContext& gameContext)
 {
 	HEIN::IComponent* compToRemove = nullptr;
+
+	std::vector<HEIN::SkinnedModelComponent*> skinnedModels = GetComponents<HEIN::SkinnedModelComponent>();
+	if (skinnedModels.size() > 1)
+	{
+		ImGui::Separator();
+		ImGui::Text("Skinned Model Switcher (Key: M)");
+		ImGui::Text("Active Model: [%d / %d]", m_activeSkinnedModelIndex + 1, static_cast<int>(skinnedModels.size()));
+		if (ImGui::Button("Toggle Active Model"))
+		{
+			ToggleSkinnedModel();
+		}
+		ImGui::Separator();
+	}
 
 	for (auto& comp : m_components)
 	{
@@ -223,4 +237,81 @@ void HEIN::Actor::InitializeAfterDeserialize(GameContext& gameContext)
 	{
 		comp->InitializeAfterDeserialize(gameContext);
 	}
+}
+
+
+HEIN::SkinnedModelComponent* HEIN::Actor::GetActiveSkinnedModel()
+{
+	std::vector<HEIN::SkinnedModelComponent*> models = GetComponents<HEIN::SkinnedModelComponent>();
+	if (models.empty()) return nullptr;
+
+	// Check if any model is explicitly marked visible
+	for (size_t i = 0; i < models.size(); ++i)
+	{
+		if (models[i] && models[i]->IsVisible())
+		{
+			m_activeSkinnedModelIndex = static_cast<int>(i);
+			return models[i];
+		}
+	}
+
+	if (m_activeSkinnedModelIndex >= 0 && m_activeSkinnedModelIndex < static_cast<int>(models.size()))
+	{
+		return models[m_activeSkinnedModelIndex];
+	}
+	return models[0];
+}
+
+void HEIN::Actor::SetActiveSkinnedModelIndex(int index)
+{
+	std::vector<HEIN::SkinnedModelComponent*> models = GetComponents<HEIN::SkinnedModelComponent>();
+	if (models.empty() || index < 0 || index >= static_cast<int>(models.size())) return;
+
+	m_activeSkinnedModelIndex = index;
+	for (int i = 0; i < static_cast<int>(models.size()); ++i)
+	{
+		if (models[i])
+		{
+			models[i]->SetVisible(i == index);
+		}
+	}
+}
+
+void HEIN::Actor::ToggleSkinnedModel()
+{
+	std::vector<HEIN::SkinnedModelComponent*> models = GetComponents<HEIN::SkinnedModelComponent>();
+	if (models.empty()) return;
+
+	if (models.size() == 1)
+	{
+		// Single model: toggle root motion directly
+		bool current = models[0]->IsRootMotionEnabled();
+		models[0]->SetEnableRootMotion(!current);
+		char buf[128];
+		sprintf_s(buf, "[ModelToggle] Single model: Root Motion toggled to %s\n", !current ? "ENABLED" : "DISABLED");
+		OutputDebugStringA(buf);
+		return;
+	}
+
+	// Multiple models: toggle active model index
+	m_activeSkinnedModelIndex = (m_activeSkinnedModelIndex + 1) % static_cast<int>(models.size());
+	for (int i = 0; i < static_cast<int>(models.size()); ++i)
+	{
+		if (models[i])
+		{
+			models[i]->SetVisible(i == m_activeSkinnedModelIndex);
+		}
+	}
+
+	char buf[128];
+	sprintf_s(buf, "[ModelToggle] Switched to SkinnedModel [%d] (Root Motion: %s)\n",
+		m_activeSkinnedModelIndex,
+		models[m_activeSkinnedModelIndex]->IsRootMotionEnabled() ? "ENABLED" : "DISABLED");
+	OutputDebugStringA(buf);
+}
+
+template <>
+HEIN::SkinnedModelComponent* HEIN::Actor::GetComponent<HEIN::SkinnedModelComponent>()
+{
+	return GetActiveSkinnedModel();
 }
