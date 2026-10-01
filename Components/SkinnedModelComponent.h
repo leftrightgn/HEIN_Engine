@@ -45,6 +45,35 @@ namespace HEIN
 		
 		bool m_needsReload = false;
 
+		// Root Motion Settings & State
+		bool m_enableRootMotion = false;
+		bool m_rootMotionExtractY = false;
+		std::wstring m_rootBoneName = L"";
+		DirectX::SimpleMath::Vector3 m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+		DirectX::SimpleMath::Vector3 m_initialRootTranslation = DirectX::SimpleMath::Vector3::Zero;
+		bool m_hasPrevRootTranslation = false;
+		double m_prevAnimTime = 0.0;
+
+		// Target animation root motion tracking during crossfades
+		DirectX::SimpleMath::Vector3 m_targetInitialRootTranslation = DirectX::SimpleMath::Vector3::Zero;
+		bool m_targetHasPrevRootTranslation = false;
+		double m_targetPrevAnimTime = 0.0;
+
+		DirectX::SimpleMath::Vector3 ExtractClipRootMotionDelta(
+			DX::AnimationSDKMESH* anim,
+			int rootIdx,
+			double& inOutPrevTime,
+			bool& inOutHasPrev
+		);
+
+		void LockRootBone(
+			DirectX::XMMATRIX* localBones,
+			int rootIdx,
+			const DirectX::SimpleMath::Vector3& initialPos
+		);
+
+		void ApplyRootMotionDeltaToWorld(const DirectX::SimpleMath::Vector3& localDelta, float deltaTime);
+
 		Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
 		Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pixelShader;
 		Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout; // For CustomSkinned.hlsl
@@ -109,9 +138,37 @@ namespace HEIN
 		void RemoveAnimation(const std::string& name);
 		void ChangeAnimation(const std::string& name);
 		void CrossfadeAnimation(const std::string& name, float duration, bool forceRestart = false);
+		float GetAnimationDuration(const std::string& name) const;
+		bool HasAnimation(const std::string& name) const;
 
 		void SetVisible(bool visible) { m_isVisible = visible; }
 		bool IsVisible() const { return m_isVisible; }
+
+		// Root Motion API
+		bool IsRootMotionEnabled() const { return m_enableRootMotion; }
+		void SetEnableRootMotion(bool enable)
+		{
+			m_enableRootMotion = enable;
+			ResetRootMotionTracking();
+		}
+
+		bool IsRootMotionExtractY() const { return m_rootMotionExtractY; }
+		void SetRootMotionExtractY(bool extractY) { m_rootMotionExtractY = extractY; }
+
+		const std::wstring& GetRootBoneName() const { return m_rootBoneName; }
+		void SetRootBoneName(const std::wstring& name) { m_rootBoneName = name; }
+
+		DirectX::SimpleMath::Vector3 GetRootMotionDelta() const { return m_rootMotionDelta; }
+		int GetRootBoneIndex() const;
+
+		void ResetRootMotionTracking()
+		{
+			m_hasPrevRootTranslation = false;
+			m_targetHasPrevRootTranslation = false;
+			m_prevAnimTime = 0.0;
+			m_targetPrevAnimTime = 0.0;
+			m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+		}
 
 		const DirectX::SimpleMath::Matrix* GetCurrentLocalBones() const
 		{

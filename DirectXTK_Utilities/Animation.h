@@ -11,6 +11,7 @@
 
 #include <DirectXMath.h>
 #include <Model.h>
+#include <SimpleMath.h>
 
 #include <memory>
 #include <utility>
@@ -41,6 +42,13 @@ namespace DX
         DirectX::XMMATRIX* GetBoneTransforms() { return m_boneTransforms; }
 
         const DirectX::XMMATRIX* GetLocalBones() const { return m_animBones.get(); }
+        DirectX::XMMATRIX* GetLocalBones() { return m_animBones.get(); }
+
+        // Root Motion extraction helpers
+        DirectX::SimpleMath::Vector3 GetRootTranslationAtKey(int boneIndex, uint32_t key) const;
+        DirectX::SimpleMath::Vector3 GetRootTranslationAtTime(int boneIndex, double time) const;
+        uint32_t GetNumAnimationKeys() const;
+        uint32_t GetAnimationFPS() const;
 
     public:
         // Constructor

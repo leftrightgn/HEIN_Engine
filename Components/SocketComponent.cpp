@@ -200,13 +200,16 @@ HEIN::Socket* HEIN::SocketComponent::GetSocket(const std::wstring& socketName)
 
 DirectX::SimpleMath::Matrix HEIN::SocketComponent::GetSocketWorldMatrix(const std::wstring& socketName)
 {
-    if (m_model == nullptr && m_staticModel == nullptr)
+    // Always bind to the owner's currently active skinned model (for switching models)
+    SkinnedModelComponent* activeModel = m_owner ? m_owner->GetComponent<SkinnedModelComponent>() : m_model;
+    if (!activeModel) activeModel = m_model;
+
+    if (activeModel == nullptr && m_staticModel == nullptr && m_owner != nullptr)
     {
-        m_model = m_owner->GetComponent<SkinnedModelComponent>();
-        if (!m_model) m_staticModel = m_owner->GetComponent<StaticModelComponent>();
+        m_staticModel = m_owner->GetComponent<StaticModelComponent>();
     }
 
-    if (!HasSocket(socketName) || (m_model == nullptr && m_staticModel == nullptr) || m_transform == nullptr)
+    if (!HasSocket(socketName) || (activeModel == nullptr && m_staticModel == nullptr) || m_transform == nullptr)
     {
         if (m_transform != nullptr)
         {
@@ -218,8 +221,8 @@ DirectX::SimpleMath::Matrix HEIN::SocketComponent::GetSocketWorldMatrix(const st
     const Socket& socket = m_sockets[socketName];
 
     DirectX::SimpleMath::Matrix ownerWorld = m_transform->GetWorldMatrix();
-    DirectX::SimpleMath::Matrix boneWorld = m_model ? 
-        m_model->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld) :
+    DirectX::SimpleMath::Matrix boneWorld = activeModel ? 
+        activeModel->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld) :
         (m_staticModel ? m_staticModel->GetBoneWorldMatrix(socket.boneName.c_str(), ownerWorld) : ownerWorld);
 
     DirectX::SimpleMath::Vector3 extractedScale;

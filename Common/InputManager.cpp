@@ -138,6 +138,11 @@ namespace HEIN
 		{
 			messenger->Notify(playerID, Message::PLAYER_STOP_BLOCK);
 		}
+
+		if (gameContext.keyboardTracker.pressed.M)
+		{
+			messenger->Notify(playerID, Message::PLAYER_TOGGLE_MODEL);
+		}
 	}
 	
 }

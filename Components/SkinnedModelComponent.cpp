@@ -16,6 +16,7 @@
 #include "LightComponent.h"
 #include "Camera/CameraController.h"
 #include "FogComponent.h"
+#include "../../../Dual/BlackBoard/CombatBlackBoard.h"
 
 
 std::shared_ptr<DirectX::EffectFactory> HEIN::SkinnedModelComponent::s_fxFactory = nullptr;
@@ -194,9 +195,229 @@ namespace HEIN
 
 	}
 
+	
+	int SkinnedModelComponent::GetRootBoneIndex() const
+	{
+		if (!m_model || m_model->bones.empty()) return -1;
+
+		// 1. Explicitly configured root bone name
+		if (!m_rootBoneName.empty())
+		{
+			for (size_t i = 0; i < m_model->bones.size(); ++i)
+			{
+				if (m_model->bones[i].name.find(m_rootBoneName) != std::wstring::npos)
+				{
+					return static_cast<int>(i);
+				}
+			}
+		}
+
+		// 2. Search common root bone naming conventions
+		const wchar_t* commonNames[] = {
+			L"mixamorig:Hips",
+			L"Hips",
+			L"hips",
+			L"Root",
+			L"root",
+			L"Pelvis",
+			L"pelvis",
+			L"Bip01"
+		};
+		for (const wchar_t* name : commonNames)
+		{
+			for (size_t i = 0; i < m_model->bones.size(); ++i)
+			{
+				if (m_model->bones[i].name.find(name) != std::wstring::npos)
+				{
+					return static_cast<int>(i);
+				}
+			}
+		}
+
+		// 3. Fallback: bone without parent (parentIndex == ModelBone::c_Invalid)
+		for (size_t i = 0; i < m_model->bones.size(); ++i)
+		{
+			if (m_model->bones[i].parentIndex == DirectX::ModelBone::c_Invalid)
+			{
+				return static_cast<int>(i);
+			}
+		}
+
+		// 4. Default fallback: bone 0
+		return 0;
+	}
+
+	DirectX::SimpleMath::Vector3 SkinnedModelComponent::ExtractClipRootMotionDelta(
+		DX::AnimationSDKMESH* anim,
+		int rootIdx,
+		double& inOutPrevTime,
+		bool& inOutHasPrev
+	)
+	{
+		if (!anim || rootIdx < 0) return DirectX::SimpleMath::Vector3::Zero;
+
+		double currentAnimTime = anim->GetAnimTime();
+		double clipDuration = anim->GetEndTime();
+
+		if (clipDuration <= 0.0001)
+		{
+			return DirectX::SimpleMath::Vector3::Zero;
+		}
+
+		uint32_t numKeys = anim->GetNumAnimationKeys();
+		if (numKeys == 0) return DirectX::SimpleMath::Vector3::Zero;
+
+		if (!inOutHasPrev)
+		{
+			inOutHasPrev = true;
+			inOutPrevTime = currentAnimTime;
+			return DirectX::SimpleMath::Vector3::Zero;
+		}
+
+		double prevAnimTime = inOutPrevTime;
+		inOutPrevTime = currentAnimTime;
+
+		DirectX::SimpleMath::Vector3 startPos = anim->GetRootTranslationAtKey(rootIdx, 0);
+		DirectX::SimpleMath::Vector3 endPos = anim->GetRootTranslationAtKey(rootIdx, numKeys - 1);
+		DirectX::SimpleMath::Vector3 cycleDisplacement = endPos - startPos;
+
+		int prevCycle = static_cast<int>(std::floor(prevAnimTime / clipDuration));
+		int currentCycle = static_cast<int>(std::floor(currentAnimTime / clipDuration));
+
+		DirectX::SimpleMath::Vector3 rawDelta = DirectX::SimpleMath::Vector3::Zero;
+
+		if (currentCycle == prevCycle)
+		{
+			double tPrev = prevAnimTime - prevCycle * clipDuration;
+			double tCurr = currentAnimTime - currentCycle * clipDuration;
+			DirectX::SimpleMath::Vector3 pPrev = anim->GetRootTranslationAtTime(rootIdx, tPrev);
+			DirectX::SimpleMath::Vector3 pCurr = anim->GetRootTranslationAtTime(rootIdx, tCurr);
+			rawDelta = pCurr - pPrev;
+		}
+		else if (currentCycle > prevCycle)
+		{
+			double tPrev = prevAnimTime - prevCycle * clipDuration;
+			double tCurr = currentAnimTime - currentCycle * clipDuration;
+
+			DirectX::SimpleMath::Vector3 pPrev = anim->GetRootTranslationAtTime(rootIdx, tPrev);
+			DirectX::SimpleMath::Vector3 pCurr = anim->GetRootTranslationAtTime(rootIdx, tCurr);
+
+			DirectX::SimpleMath::Vector3 deltaFromPrevToEnd = endPos - pPrev;
+			int fullCycles = (currentCycle - prevCycle) - 1;
+			DirectX::SimpleMath::Vector3 fullCyclesDelta = cycleDisplacement * static_cast<float>(fullCycles > 0 ? fullCycles : 0);
+			DirectX::SimpleMath::Vector3 deltaFromStartToCurr = pCurr - startPos;
+
+			rawDelta = deltaFromPrevToEnd + fullCyclesDelta + deltaFromStartToCurr;
+		}
+		else
+		{
+			// animTime jumped backwards (e.g. animation restarted)
+			double tCurr = currentAnimTime - currentCycle * clipDuration;
+			DirectX::SimpleMath::Vector3 pCurr = anim->GetRootTranslationAtTime(rootIdx, tCurr);
+			rawDelta = pCurr - startPos;
+		}
+
+		if (!m_rootMotionExtractY)
+		{
+			rawDelta.y = 0.0f;
+		}
+
+		return rawDelta;
+	}
+
+	void SkinnedModelComponent::LockRootBone(
+		DirectX::XMMATRIX* localBones,
+		int rootIdx,
+		const DirectX::SimpleMath::Vector3& initialPos
+	)
+	{
+		if (!localBones || rootIdx < 0) return;
+
+		DirectX::XMVECTOR scale, rot, trans;
+		if (!DirectX::XMMatrixDecompose(&scale, &rot, &trans, localBones[rootIdx])) return;
+
+		DirectX::SimpleMath::Vector3 currentPos = trans;
+		DirectX::SimpleMath::Vector3 lockedTrans;
+		if (m_rootMotionExtractY)
+		{
+			lockedTrans = initialPos;
+		}
+		else
+		{
+			// Preserve vertical Y translation so hip bobbing / dips stay on the mesh
+			lockedTrans = DirectX::SimpleMath::Vector3(initialPos.x, currentPos.y, initialPos.z);
+		}
+
+		localBones[rootIdx] = DirectX::XMMatrixScalingFromVector(scale) *
+		                      DirectX::XMMatrixRotationQuaternion(rot) *
+		                      DirectX::XMMatrixTranslationFromVector(DirectX::SimpleMath::Vector3(lockedTrans));
+	}
+
+	void SkinnedModelComponent::ApplyRootMotionDeltaToWorld(const DirectX::SimpleMath::Vector3& localDelta, float deltaTime)
+	{
+		DirectX::SimpleMath::Vector3 worldDelta = DirectX::SimpleMath::Vector3::Zero;
+		if (m_owner != nullptr)
+		{
+			auto* transform = m_owner->GetComponent<TransformComponent>();
+			if (transform != nullptr)
+			{
+				DirectX::SimpleMath::Vector3 scaledDelta = localDelta * transform->GetScale();
+				worldDelta = DirectX::SimpleMath::Vector3::Transform(scaledDelta, transform->GetRotation());
+			}
+		}
+		m_rootMotionDelta = worldDelta;
+
+		if (m_isVisible && m_owner != nullptr)
+		{
+			auto* bb = m_owner->GetComponent<CombatBlackBoard>();
+			auto* transform = m_owner->GetComponent<TransformComponent>();
+
+			if (bb != nullptr)
+			{
+				// Deadzone (0.01 units) prevents microscopic in-place hip bobbing from triggering movement
+				if (worldDelta.LengthSquared() > 0.0001f)
+				{
+					bb->hasRootMotion = true;
+					float safeDt = (deltaTime > 0.0001f) ? deltaTime : 0.016f;
+					DirectX::SimpleMath::Vector3 computedVel = worldDelta / safeDt;
+					float speedSq = computedVel.LengthSquared();
+					constexpr float MAX_ROOT_SPEED = 60.0f; // Sane limit prevents velocity explosions
+					if (speedSq > MAX_ROOT_SPEED * MAX_ROOT_SPEED)
+					{
+						computedVel = (computedVel / std::sqrt(speedSq)) * MAX_ROOT_SPEED;
+					}
+					bb->rootMotionVelocity = computedVel;
+					bb->rootMotionDelta = worldDelta;
+				}
+				else
+				{
+					bb->hasRootMotion = false;
+					bb->rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
+					bb->rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+				}
+			}
+			else if (transform != nullptr && worldDelta.LengthSquared() > 0.0001f)
+			{
+				// If no CombatBlackBoard on actor, directly move transform
+				transform->SetPosition(transform->GetPosition() + worldDelta);
+			}
+		}
+	}
+
 	void SkinnedModelComponent::Update(float deltaTime)
 	{
 		if (!m_model) return;
+
+		int rootIdx = m_enableRootMotion ? GetRootBoneIndex() : -1;
+
+		if (m_isBlending)
+		{
+			if (m_currentAnimation == m_targetAnimation || m_targetAnimation == nullptr)
+			{
+				m_isBlending = false;
+				m_targetAnimation = nullptr;
+			}
+		}
 
 		if (m_isBlending && m_currentAnimation != nullptr &&
 			m_targetAnimation != nullptr)
@@ -210,34 +431,62 @@ namespace HEIN
 				m_targetAnimation = nullptr;
 				m_isBlending = false;
 
+				// Transfer target tracking state to active tracking state
+				m_prevAnimTime = m_targetPrevAnimTime;
+				m_initialRootTranslation = m_targetInitialRootTranslation;
+				m_hasPrevRootTranslation = m_targetHasPrevRootTranslation;
+				m_targetHasPrevRootTranslation = false;
+
 				m_currentAnimation->Update(deltaTime);
 				m_currentAnimation->Apply(*m_model, m_model->bones.size(), m_drawBones.get());
+
+				if (m_enableRootMotion && rootIdx >= 0)
+				{
+					DirectX::SimpleMath::Vector3 localDelta = ExtractClipRootMotionDelta(
+						m_currentAnimation, rootIdx,
+						m_prevAnimTime, m_hasPrevRootTranslation
+					);
+					LockRootBone(m_currentAnimation->GetLocalBones(), rootIdx, m_initialRootTranslation);
+					m_model->CopyAbsoluteBoneTransforms(m_model->bones.size(), m_currentAnimation->GetLocalBones(), m_drawBones.get());
+					ApplyRootMotionDeltaToWorld(localDelta, deltaTime);
+				}
 			}
 			else
 			{
-				//Live Dynamic Blending
-				// Update Both Animation
+				// Live Dynamic Blending
 				m_currentAnimation->Update(deltaTime);
 				m_targetAnimation->Update(deltaTime);
 
-				float stopTime = m_currentAnimation->GetEndTime() - 0.05f;
-
-				if (m_currentAnimation->GetAnimTime() >= stopTime)
-				{
-					m_currentAnimation->SetAnimTime(stopTime);
-				}
-
 				m_currentAnimation->Apply(*m_model, m_model->bones.size(), m_shapShotBones.get());
 				m_targetAnimation->Apply(*m_model, m_model->bones.size(), m_targetBones.get());
-				
+
+				if (m_enableRootMotion && rootIdx >= 0)
+				{
+					DirectX::SimpleMath::Vector3 deltaA = ExtractClipRootMotionDelta(
+						m_currentAnimation, rootIdx,
+						m_prevAnimTime, m_hasPrevRootTranslation
+					);
+					DirectX::SimpleMath::Vector3 deltaB = ExtractClipRootMotionDelta(
+						m_targetAnimation, rootIdx,
+						m_targetPrevAnimTime, m_targetHasPrevRootTranslation
+					);
+
+					// Blend the displacement: (1 - blendFactor) * A + blendFactor * B
+					DirectX::SimpleMath::Vector3 blendedDelta = DirectX::SimpleMath::Vector3::Lerp(deltaA, deltaB, blendFactor);
+
+					// Lock root bones in both clips so blended bones remain anchored
+					LockRootBone(m_currentAnimation->GetLocalBones(), rootIdx, m_initialRootTranslation);
+					LockRootBone(m_targetAnimation->GetLocalBones(), rootIdx, m_targetInitialRootTranslation);
+
+					ApplyRootMotionDeltaToWorld(blendedDelta, deltaTime);
+				}
+
 				// Get the Live raw Bones
 				const DirectX::XMMATRIX* sourceLocalBones = m_currentAnimation->GetLocalBones();
 				const DirectX::XMMATRIX* targetLocalBones = m_targetAnimation->GetLocalBones();
 
-				
 				for (size_t i = 0; i < m_model->bones.size(); ++i)
 				{
-
 					DirectX::XMVECTOR scaleA, rotA, transA;
 					DirectX::XMVECTOR scaleB, rotB, transB;
 
@@ -256,11 +505,10 @@ namespace HEIN
 					}
 					else
 					{
-						// Fallback if decompose fails
-						// Cannot easily blend quaternions of reflected matrices, so just snap to the source animation.
 						m_blendedLocalBones[i] = sourceLocalBones[i];
 					}
 				}
+
 				m_model->CopyAbsoluteBoneTransforms(m_model->bones.size(), m_blendedLocalBones.get(), m_drawBones.get());
 			}
 		}
@@ -268,7 +516,27 @@ namespace HEIN
 		{
 			m_currentAnimation->Update(deltaTime);
 			m_currentAnimation->Apply(*m_model, m_model->bones.size(), m_drawBones.get());
+
+			if (m_enableRootMotion && rootIdx >= 0)
+			{
+				if (!m_hasPrevRootTranslation)
+				{
+					m_initialRootTranslation = m_currentAnimation->GetRootTranslationAtKey(rootIdx, 0);
+				}
+				DirectX::SimpleMath::Vector3 localDelta = ExtractClipRootMotionDelta(
+					m_currentAnimation, rootIdx,
+					m_prevAnimTime, m_hasPrevRootTranslation
+				);
+				LockRootBone(m_currentAnimation->GetLocalBones(), rootIdx, m_initialRootTranslation);
+				m_model->CopyAbsoluteBoneTransforms(m_model->bones.size(), m_currentAnimation->GetLocalBones(), m_drawBones.get());
+				ApplyRootMotionDeltaToWorld(localDelta, deltaTime);
+			}
 		}
+		else
+		{
+			m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+		}
+
 		if (m_currentAnimation != nullptr)
 		{
 			for (size_t i = 0; i < m_model->bones.size(); i++)
@@ -797,6 +1065,17 @@ namespace HEIN
 		if (it != m_animations.end())
 		{
 			m_currentAnimation = it->second.get();
+			m_targetAnimation = nullptr;
+			m_isBlending = false;
+			ResetRootMotionTracking();
+			if (m_enableRootMotion && m_currentAnimation)
+			{
+				int rootIdx = GetRootBoneIndex();
+				if (rootIdx >= 0)
+				{
+					m_initialRootTranslation = m_currentAnimation->GetRootTranslationAtKey(rootIdx, 0);
+				}
+			}
 		}
 	}
 
@@ -807,13 +1086,50 @@ namespace HEIN
 
 		if (it == m_animations.end()) return;
 
+		DX::AnimationSDKMESH* requestedAnim = it->second.get();
+
 		if (m_currentAnimation == nullptr)
 		{
-			m_currentAnimation = it->second.get();
+			m_currentAnimation = requestedAnim;
+			ResetRootMotionTracking();
+			if (m_enableRootMotion && m_currentAnimation)
+			{
+				int rootIdx = GetRootBoneIndex();
+				if (rootIdx >= 0)
+				{
+					m_initialRootTranslation = m_currentAnimation->GetRootTranslationAtKey(rootIdx, 0);
+				}
+			}
 			return;
 		}
 
-		if (m_isBlending && m_targetAnimation == it->second.get()) return;
+		// Prevent crossfading into the exact same animation clip (which would cause double-speed updates)
+		if (m_currentAnimation == requestedAnim)
+		{
+			if (!m_isBlending)
+			{
+				if (forceRestart)
+				{
+					m_currentAnimation->SetAnimTime(0.0f);
+					m_prevAnimTime = 0.0;
+					m_hasPrevRootTranslation = false;
+				}
+				return;
+			}
+			else if (m_targetAnimation == requestedAnim)
+			{
+				return;
+			}
+			else
+			{
+				// Currently blending away, but requested to stay on current: cancel the blend
+				m_targetAnimation = nullptr;
+				m_isBlending = false;
+				return;
+			}
+		}
+
+		if (m_isBlending && m_targetAnimation == requestedAnim) return;
 
 		if (m_model)
 		{
@@ -840,13 +1156,37 @@ namespace HEIN
 		m_blendDuration = duration;
 
 		m_targetAnimation = it->second.get();
-
 		if (forceRestart)
 		{
 			m_targetAnimation->SetAnimTime(0.0f);
 		}
+
+		m_targetHasPrevRootTranslation = false;
+		m_targetPrevAnimTime = m_targetAnimation->GetAnimTime();
+		if (m_enableRootMotion && m_targetAnimation)
+		{
+			int rootIdx = GetRootBoneIndex();
+			if (rootIdx >= 0)
+			{
+				m_targetInitialRootTranslation = m_targetAnimation->GetRootTranslationAtKey(rootIdx, 0);
+			}
+		}
 	}
 
+	float SkinnedModelComponent::GetAnimationDuration(const std::string& name) const
+	{
+		auto it = m_animations.find(name);
+		if (it != m_animations.end() && it->second)
+		{
+			return static_cast<float>(it->second->GetEndTime());
+		}
+		return 0.0f;
+	}
+
+	bool SkinnedModelComponent::HasAnimation(const std::string& name) const
+	{
+		return m_animations.find(name) != m_animations.end();
+	}
 		
 	void SkinnedModelComponent::OnInspectorGUI(GameContext& gameContext)
 	{
@@ -856,6 +1196,45 @@ namespace HEIN
 			HWND windowHandle = gameContext.deviceResources.GetWindow();
 			if (!m_lastError.empty()) ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", m_lastError.c_str());
 			ImGui::Checkbox("Visible", &m_isVisible);
+
+			ImGui::Separator();
+			ImGui::Text("Root Motion Settings:");
+			ImGui::Checkbox("Enable Root Motion", &m_enableRootMotion);
+			ImGui::Checkbox("Extract Vertical (Y) Motion", &m_rootMotionExtractY);
+
+			char rootBoneBuf[128] = { 0 };
+			std::string narrowRootBone(m_rootBoneName.begin(), m_rootBoneName.end());
+			strncpy_s(rootBoneBuf, narrowRootBone.c_str(), sizeof(rootBoneBuf) - 1);
+			if (ImGui::InputText("Root Bone Name", rootBoneBuf, sizeof(rootBoneBuf)))
+			{
+				std::string s(rootBoneBuf);
+				m_rootBoneName = std::wstring(s.begin(), s.end());
+			}
+
+			int rootIndex = GetRootBoneIndex();
+			std::string detectedName = GetBoneName(rootIndex);
+			ImGui::Text("Detected Root Bone: [%d] %s", rootIndex, detectedName.c_str());
+			ImGui::Text("Root Motion Delta: (%.3f, %.3f, %.3f)", m_rootMotionDelta.x, m_rootMotionDelta.y, m_rootMotionDelta.z);
+
+			if (m_owner != nullptr)
+			{
+				std::vector<SkinnedModelComponent*> allModels = m_owner->GetComponents<SkinnedModelComponent>();
+				if (allModels.size() > 1)
+				{
+					ImGui::Text("Attached Skinned Models: %zu (Active: %d)", allModels.size(), m_owner->GetActiveSkinnedModelIndex());
+					if (ImGui::Button("Toggle Active Model (Key: M)"))
+					{
+						m_owner->ToggleSkinnedModel();
+					}
+				}
+				else
+				{
+					if (ImGui::Button("Toggle Root Motion (Key: M)"))
+					{
+						m_owner->ToggleSkinnedModel();
+					}
+				}
+			}
 
 			// Model Path Editor
 			std::string modelPathStr = std::string(m_modelPath.begin(), m_modelPath.end());
@@ -957,6 +1336,11 @@ nlohmann::json HEIN::SkinnedModelComponent::Serialize()
     std::string narrowTextureDir(m_textureDir.begin(), m_textureDir.end());
     data["ModelPath"] = narrowModelPath;
     data["TextureDir"] = narrowTextureDir;
+    data["EnableRootMotion"] = m_enableRootMotion;
+    data["RootMotionExtractY"] = m_rootMotionExtractY;
+    std::string narrowRootBone(m_rootBoneName.begin(), m_rootBoneName.end());
+    data["RootBoneName"] = narrowRootBone;
+    data["IsVisible"] = m_isVisible;
 
     nlohmann::json animsArray = nlohmann::json::array();
     for (const auto& pair : m_animationPaths)
@@ -975,6 +1359,14 @@ nlohmann::json HEIN::SkinnedModelComponent::Serialize()
 void HEIN::SkinnedModelComponent::Deserialize(const nlohmann::json& data)
 {
     IComponent::Deserialize(data);
+    if (data.contains("EnableRootMotion")) m_enableRootMotion = data["EnableRootMotion"];
+    if (data.contains("RootMotionExtractY")) m_rootMotionExtractY = data["RootMotionExtractY"];
+    if (data.contains("RootBoneName"))
+    {
+        std::string narrowRootBone = data["RootBoneName"];
+        m_rootBoneName = std::wstring(narrowRootBone.begin(), narrowRootBone.end());
+    }
+    if (data.contains("IsVisible")) m_isVisible = data["IsVisible"];
     if (data.contains("ModelPath"))
     {
         std::string narrowModelPath = data["ModelPath"];
