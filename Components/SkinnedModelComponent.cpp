@@ -9,6 +9,7 @@
 #include <string>
 #include <filesystem>
 #include <d3dcompiler.h>
+#include "Effect/ReadData.h"
 #include "TransformComponent.h"
 #include "Common/ShadowSystem.h"
 #include "Entities/ActorManager.h"
@@ -99,37 +100,81 @@ namespace HEIN
 		}
 
 
-		// Compile Shaders
-		Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
-		HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
-		if (FAILED(hr))
+		// Load Shaders (Precompiled CSO first, then runtime fallback)
+		std::vector<uint8_t> vsData;
+		std::vector<uint8_t> psData;
+		bool loadedCso = false;
+		try
 		{
-			hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+			vsData = DX::ReadData(L"Resources/Shaders/CustomSkinned_VS.cso");
+			psData = DX::ReadData(L"Resources/Shaders/CustomSkinned_PS.cso");
+			loadedCso = true;
 		}
-		if (FAILED(hr))
+		catch (...)
 		{
-			if (errorBlob) {
-				FILE* f;
-				if (fopen_s(&f, "ShaderError.txt", "w") == 0) {
-					fprintf(f, "%s", (char*)errorBlob->GetBufferPointer());
-					fclose(f);
-				}
+			try
+			{
+				vsData = DX::ReadData(L"CustomSkinned_VS.cso");
+				psData = DX::ReadData(L"CustomSkinned_PS.cso");
+				loadedCso = true;
 			}
-			return; // Gracefully fail
+			catch (...)
+			{
+				loadedCso = false;
+			}
 		}
-		device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, m_vertexShader.ReleaseAndGetAddressOf());
 
-		hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", 0, 0, &psBlob, &errorBlob);
-		if (FAILED(hr))
+		Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
+		const void* vsBytecode = nullptr;
+		size_t vsBytecodeSize = 0;
+		const void* psBytecode = nullptr;
+		size_t psBytecodeSize = 0;
+
+		if (loadedCso)
 		{
-			hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+			vsBytecode = vsData.data();
+			vsBytecodeSize = vsData.size();
+			psBytecode = psData.data();
+			psBytecodeSize = psData.size();
 		}
-		if (FAILED(hr))
+		else
 		{
-			if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-			return; // Gracefully fail
+			HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+			if (FAILED(hr))
+			{
+				hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+			}
+			if (FAILED(hr))
+			{
+				if (errorBlob) {
+					FILE* f;
+					if (fopen_s(&f, "ShaderError.txt", "w") == 0) {
+						fprintf(f, "%s", (char*)errorBlob->GetBufferPointer());
+						fclose(f);
+					}
+				}
+				return; // Gracefully fail
+			}
+
+			hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+			if (FAILED(hr))
+			{
+				hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+			}
+			if (FAILED(hr))
+			{
+				if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+				return; // Gracefully fail
+			}
+
+			vsBytecode = vsBlob->GetBufferPointer();
+			vsBytecodeSize = vsBlob->GetBufferSize();
+			psBytecode = psBlob->GetBufferPointer();
+			psBytecodeSize = psBlob->GetBufferSize();
 		}
-		device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, m_pixelShader.ReleaseAndGetAddressOf());
+
+		device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, m_vertexShader.ReleaseAndGetAddressOf());
+		device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, m_pixelShader.ReleaseAndGetAddressOf());
 
 		// Create Constant Buffers 
 		D3D11_BUFFER_DESC cbDesc = {};
@@ -168,8 +213,8 @@ namespace HEIN
 							HRESULT hrLayout = device->CreateInputLayout(
 								modifiedDecl.data(),
 								(UINT)modifiedDecl.size(),
-								vsBlob->GetBufferPointer(),
-								vsBlob->GetBufferSize(),
+								vsBytecode,
+								vsBytecodeSize,
 								m_inputLayout.ReleaseAndGetAddressOf()
 							);
 							if (SUCCEEDED(hrLayout))

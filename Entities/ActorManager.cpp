@@ -113,6 +113,8 @@ void HEIN::ActorManager::DrawAllShadows(GameContext& gameContext, const DirectX:
 {
     for (auto& pair : m_actors)
     {
+        if (!pair.second->IsVisible() || !pair.second->IsActive()) continue;
+
         auto components = pair.second->GetComponents<IComponent>();
         for (auto* comp : components)
         {
