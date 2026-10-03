@@ -46,6 +46,10 @@ namespace HEIN
 		// Active SkinnedModel tracking for toggling between models (e.g. root motion vs non-root motion)
 		int m_activeSkinnedModelIndex = 0;
 
+		// Unity-style Visibility and Active state
+		bool m_isVisible = true;
+		bool m_isActive = true;
+
 		// Memory safe Array of Components
 		std::vector<std::unique_ptr<HEIN::IComponent>> m_components;
 		std::wstring m_tag;
@@ -88,6 +92,12 @@ namespace HEIN
 
 		void SetActorType(ActorType type) { m_type = type; }
 		ActorType GetActorType() const { return m_type; }
+
+		// Unity-style Visibility & Active controls
+		bool IsVisible() const { return m_isVisible; }
+		void SetVisible(bool visible) { m_isVisible = visible; }
+		bool IsActive() const { return m_isActive; }
+		void SetActive(bool active) { m_isActive = active; }
 
 		/// <summary>
 		/// Adds a child to this actor's scene graph hierarchy.

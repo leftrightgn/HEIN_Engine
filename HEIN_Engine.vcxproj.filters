@@ -55,6 +55,7 @@
     <ClCompile Include="Common\ShadowSystem.cpp">
       <Filter>Common</Filter>
     </ClCompile>
+    <ClCompile Include="Components\GaugeComponent.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -127,6 +128,7 @@
     <ClInclude Include="Common\ShadowSystem.h">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="Components\GaugeComponent.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -134,6 +136,9 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="Shaders\Foliage_Common.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\SkyboxEffect_PS.hlsl">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>
@@ -144,7 +149,10 @@
     <FxCompile Include="Shaders\Terrain_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\CustomSkinned.hlsl">
+    <FxCompile Include="Shaders\CustomSkinned_VS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\CustomSkinned_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\Foliage_PS.hlsl">
@@ -624,9 +632,6 @@
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="Shaders\SkyboxEffect_Common.hlsli">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="Shaders\SkyboxEffect_PS.hlsl">
       <Filter>Shaders</Filter>
     </None>
     <None Include="Shaders\SkyboxEffect_VS.hlsl">

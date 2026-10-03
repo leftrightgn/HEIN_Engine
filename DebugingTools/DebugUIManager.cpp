@@ -108,6 +108,7 @@ namespace HEIN
 				for (const std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : actorManager.GetAllActors())
 				{
 					HEIN::Actor* actor = pair.second.get();
+					if (!actor || !actor->IsVisible()) continue;
 					float actorClosestHit = FLT_MAX;
 					bool hit = false;
 
@@ -289,7 +290,31 @@ namespace HEIN
 
 		ImGui::PushID(static_cast<int>(actor->GetID()));
 
+		bool isVisible = actor->IsVisible();
+		ImGui::PushStyleColor(ImGuiCol_Button, isVisible ? ImVec4(0.2f, 0.45f, 0.2f, 0.6f) : ImVec4(0.35f, 0.35f, 0.35f, 0.6f));
+		ImGui::PushStyleColor(ImGuiCol_Text, isVisible ? ImVec4(0.9f, 0.9f, 0.9f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 0.7f));
+		if (ImGui::SmallButton(isVisible ? "V" : "-"))
+		{
+			actor->SetVisible(!isVisible);
+		}
+		ImGui::PopStyleColor(2);
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip(isVisible ? "Visible (Click to hide)" : "Hidden (Click to show)");
+		}
+		ImGui::SameLine();
+
+		if (!actor->IsVisible())
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.55f, 0.7f));
+		}
+
 		bool nodeOpen = ImGui::TreeNodeEx((void*)(intptr_t)actor->GetID(), nodeFlags, "%s", narrowTag.c_str());
+
+		if (!actor->IsVisible())
+		{
+			ImGui::PopStyleColor();
+		}
 
 		// Left-click to select
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
@@ -343,6 +368,11 @@ namespace HEIN
 			}
 
 			ImGui::Separator();
+
+			if (ImGui::MenuItem(actor->IsVisible() ? "Hide Actor" : "Show Actor"))
+			{
+				actor->SetVisible(!actor->IsVisible());
+			}
 
 			if (ImGui::MenuItem("Duplicate Actor", "Ctrl+D"))
 			{
@@ -458,6 +488,18 @@ namespace HEIN
 			ImGui::PopStyleColor(3);
 			ImGui::Separator();
 
+			bool isVis = m_selectedActor->IsVisible();
+			if (ImGui::Checkbox("Visible", &isVis))
+			{
+				m_selectedActor->SetVisible(isVis);
+			}
+			ImGui::SameLine();
+			bool isAct = m_selectedActor->IsActive();
+			if (ImGui::Checkbox("Active", &isAct))
+			{
+				m_selectedActor->SetActive(isAct);
+			}
+
 			std::wstring wtag = m_selectedActor ? m_selectedActor->GetTag() : L"";
 			std::string narrowTag(wtag.begin(), wtag.end());
 
@@ -524,7 +566,6 @@ namespace HEIN
 
 		ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
 
-		
 		float hierarchyWidth = screenW * 0.12f;
 		float toolbarWidth = inspectorPos.x - hierarchyWidth;
 		if (toolbarWidth < 10.0f) toolbarWidth = 10.0f; // Ensure a minimum width

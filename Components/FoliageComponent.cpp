@@ -11,6 +11,7 @@
 #include <DDSTextureLoader.h>
 #include <WICTextureLoader.h>
 #include <d3dcompiler.h>
+#include "Effect/ReadData.h"
 #include <ImGui/imgui.h>
 #include <cmath>
 #include <random>
@@ -201,52 +202,95 @@ namespace HEIN
 	{
 		if (m_isInitialized) return true;
 
-		// Compile Vertex and Pixel Shaders dynamically
-		Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
-		HRESULT hr = D3DCompileFromFile(
-			L"../External/Engine/Shaders/Foliage_VS.hlsl",
-			nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
-			"main", "vs_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
-			&vsBlob, &errorBlob
-		);
-		if (FAILED(hr))
+		// Load precompiled CSO shaders if available, falling back to dynamic compilation
+		std::vector<uint8_t> vsData;
+		std::vector<uint8_t> psData;
+		bool loadedCso = false;
+		try
 		{
-			hr = D3DCompileFromFile(
-				L"External/Engine/Shaders/Foliage_VS.hlsl",
+			vsData = DX::ReadData(L"Resources/Shaders/Foliage_VS.cso");
+			psData = DX::ReadData(L"Resources/Shaders/Foliage_PS.cso");
+			loadedCso = true;
+		}
+		catch (...)
+		{
+			try
+			{
+				vsData = DX::ReadData(L"Foliage_VS.cso");
+				psData = DX::ReadData(L"Foliage_PS.cso");
+				loadedCso = true;
+			}
+			catch (...)
+			{
+				loadedCso = false;
+			}
+		}
+
+		Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
+		const void* vsBytecode = nullptr;
+		size_t vsBytecodeSize = 0;
+		const void* psBytecode = nullptr;
+		size_t psBytecodeSize = 0;
+
+		if (loadedCso)
+		{
+			vsBytecode = vsData.data();
+			vsBytecodeSize = vsData.size();
+			psBytecode = psData.data();
+			psBytecodeSize = psData.size();
+		}
+		else
+		{
+			HRESULT hr = D3DCompileFromFile(
+				L"../External/Engine/Shaders/Foliage_VS.hlsl",
 				nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
 				"main", "vs_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
 				&vsBlob, &errorBlob
 			);
-		}
-		if (FAILED(hr))
-		{
-			if (errorBlob) OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
-			return false;
-		}
+			if (FAILED(hr))
+			{
+				hr = D3DCompileFromFile(
+					L"External/Engine/Shaders/Foliage_VS.hlsl",
+					nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+					"main", "vs_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
+					&vsBlob, &errorBlob
+				);
+			}
+			if (FAILED(hr))
+			{
+				if (errorBlob) OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
+				return false;
+			}
 
-		hr = D3DCompileFromFile(
-			L"../External/Engine/Shaders/Foliage_PS.hlsl",
-			nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
-			"main", "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
-			&psBlob, &errorBlob
-		);
-		if (FAILED(hr))
-		{
 			hr = D3DCompileFromFile(
-				L"External/Engine/Shaders/Foliage_PS.hlsl",
+				L"../External/Engine/Shaders/Foliage_PS.hlsl",
 				nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
 				"main", "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
 				&psBlob, &errorBlob
 			);
-		}
-		if (FAILED(hr))
-		{
-			if (errorBlob) OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
-			return false;
+			if (FAILED(hr))
+			{
+				hr = D3DCompileFromFile(
+					L"External/Engine/Shaders/Foliage_PS.hlsl",
+					nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+					"main", "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
+					&psBlob, &errorBlob
+				);
+			}
+			if (FAILED(hr))
+			{
+				if (errorBlob) OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
+				return false;
+			}
+
+			vsBytecode = vsBlob->GetBufferPointer();
+			vsBytecodeSize = vsBlob->GetBufferSize();
+			psBytecode = psBlob->GetBufferPointer();
+			psBytecodeSize = psBlob->GetBufferSize();
 		}
 
-		DX::ThrowIfFailed(device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, m_vertexShader.ReleaseAndGetAddressOf()));
-		DX::ThrowIfFailed(device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, m_pixelShader.ReleaseAndGetAddressOf()));
+		DX::ThrowIfFailed(device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, m_vertexShader.ReleaseAndGetAddressOf()));
+		DX::ThrowIfFailed(device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, m_pixelShader.ReleaseAndGetAddressOf()));
 
 		// Specify Input Layout bridging the static geometry (Slot 0) and dynamic instance data (Slot 1)
 		D3D11_INPUT_ELEMENT_DESC layoutDesc[] =
@@ -262,7 +306,7 @@ namespace HEIN
 			{ "INST_TYPE",   0, DXGI_FORMAT_R32_UINT,           1, offsetof(FoliageInstanceData, type),     D3D11_INPUT_PER_INSTANCE_DATA, 1 }
 		};
 
-		DX::ThrowIfFailed(device->CreateInputLayout(layoutDesc, _countof(layoutDesc), vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), m_inputLayout.ReleaseAndGetAddressOf()));
+		DX::ThrowIfFailed(device->CreateInputLayout(layoutDesc, _countof(layoutDesc), vsBytecode, vsBytecodeSize, m_inputLayout.ReleaseAndGetAddressOf()));
 
 		// Allocate Constant Buffers
 		D3D11_BUFFER_DESC cbDesc = {};

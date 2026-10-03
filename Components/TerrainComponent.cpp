@@ -12,6 +12,7 @@
 #include <ImGui/imgui_stdlib.h>
 #include <cstdio>
 #include <d3dcompiler.h>
+#include "Effect/ReadData.h"
 #include "Camera/CameraController.h"
 
 HEIN::TerrainComponent::TerrainComponent(Actor* owner)
@@ -131,27 +132,50 @@ bool HEIN::TerrainComponent::Initialize(
 		}
 	}
 
-	// Compile and load Custom shaders
+	// Load precompiled CSO shaders if available, falling back to dynamic compilation
+	std::vector<uint8_t> vsData;
+	std::vector<uint8_t> psData;
+	bool loadedCso = false;
+	try
+	{
+		vsData = DX::ReadData(L"Resources/Shaders/Terrain_VS.cso");
+		psData = DX::ReadData(L"Resources/Shaders/Terrain_PS.cso");
+		loadedCso = true;
+	}
+	catch (...)
+	{
+		try
+		{
+			vsData = DX::ReadData(L"Terrain_VS.cso");
+			psData = DX::ReadData(L"Terrain_PS.cso");
+			loadedCso = true;
+		}
+		catch (...)
+		{
+			loadedCso = false;
+		}
+	}
+
 	Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderBlob;
 	Microsoft::WRL::ComPtr<ID3DBlob> pixelShaderBlob;
 	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+	const void* vsBytecode = nullptr;
+	size_t vsBytecodeSize = 0;
+	const void* psBytecode = nullptr;
+	size_t psBytecodeSize = 0;
 
-	// Compile Vertex Shader
-	HRESULT hr = D3DCompileFromFile(
-		L"../External/Engine/Shaders/Terrain_VS.hlsl",
-		nullptr,
-		D3D_COMPILE_STANDARD_FILE_INCLUDE,
-		"main",
-		"vs_5_0",
-		D3DCOMPILE_ENABLE_STRICTNESS,
-		0,
-		&vertexShaderBlob,
-		&errorBlob
-	);
-	if (FAILED(hr))
+	if (loadedCso)
 	{
-		hr = D3DCompileFromFile(
-			L"External/Engine/Shaders/Terrain_VS.hlsl",
+		vsBytecode = vsData.data();
+		vsBytecodeSize = vsData.size();
+		psBytecode = psData.data();
+		psBytecodeSize = psData.size();
+	}
+	else
+	{
+		// Compile Vertex Shader
+		HRESULT hr = D3DCompileFromFile(
+			L"../External/Engine/Shaders/Terrain_VS.hlsl",
 			nullptr,
 			D3D_COMPILE_STANDARD_FILE_INCLUDE,
 			"main",
@@ -161,29 +185,29 @@ bool HEIN::TerrainComponent::Initialize(
 			&vertexShaderBlob,
 			&errorBlob
 		);
-	}
-	if (FAILED(hr))
-	{
-		if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-		return false;
-	}
+		if (FAILED(hr))
+		{
+			hr = D3DCompileFromFile(
+				L"External/Engine/Shaders/Terrain_VS.hlsl",
+				nullptr,
+				D3D_COMPILE_STANDARD_FILE_INCLUDE,
+				"main",
+				"vs_5_0",
+				D3DCOMPILE_ENABLE_STRICTNESS,
+				0,
+				&vertexShaderBlob,
+				&errorBlob
+			);
+		}
+		if (FAILED(hr))
+		{
+			if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+			return false;
+		}
 
-	// Compile Pixel Shader
-	hr = D3DCompileFromFile(
-		L"../External/Engine/Shaders/Terrain_PS.hlsl",
-		nullptr,
-		D3D_COMPILE_STANDARD_FILE_INCLUDE,
-		"main",
-		"ps_5_0",
-		D3DCOMPILE_ENABLE_STRICTNESS,
-		0,
-		&pixelShaderBlob,
-		&errorBlob
-	);
-	if (FAILED(hr))
-	{
+		// Compile Pixel Shader
 		hr = D3DCompileFromFile(
-			L"External/Engine/Shaders/Terrain_PS.hlsl",
+			L"../External/Engine/Shaders/Terrain_PS.hlsl",
 			nullptr,
 			D3D_COMPILE_STANDARD_FILE_INCLUDE,
 			"main",
@@ -193,22 +217,41 @@ bool HEIN::TerrainComponent::Initialize(
 			&pixelShaderBlob,
 			&errorBlob
 		);
-	}
-	if (FAILED(hr))
-	{
-		if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-		return false;
+		if (FAILED(hr))
+		{
+			hr = D3DCompileFromFile(
+				L"External/Engine/Shaders/Terrain_PS.hlsl",
+				nullptr,
+				D3D_COMPILE_STANDARD_FILE_INCLUDE,
+				"main",
+				"ps_5_0",
+				D3DCOMPILE_ENABLE_STRICTNESS,
+				0,
+				&pixelShaderBlob,
+				&errorBlob
+			);
+		}
+		if (FAILED(hr))
+		{
+			if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+			return false;
+		}
+
+		vsBytecode = vertexShaderBlob->GetBufferPointer();
+		vsBytecodeSize = vertexShaderBlob->GetBufferSize();
+		psBytecode = pixelShaderBlob->GetBufferPointer();
+		psBytecodeSize = pixelShaderBlob->GetBufferSize();
 	}
 
 	device->CreateVertexShader(
-		vertexShaderBlob->GetBufferPointer(),
-		vertexShaderBlob->GetBufferSize(),
+		vsBytecode,
+		vsBytecodeSize,
 		nullptr,
 		m_vertexShader.ReleaseAndGetAddressOf()
 	);
 	device->CreatePixelShader(
-		pixelShaderBlob->GetBufferPointer(),
-		pixelShaderBlob->GetBufferSize(),
+		psBytecode,
+		psBytecodeSize,
 		nullptr,
 		m_pixelShader.ReleaseAndGetAddressOf()
 	);
@@ -229,8 +272,8 @@ bool HEIN::TerrainComponent::Initialize(
 		device->CreateInputLayout(
 			polygonLayout,
 			numElements,
-			vertexShaderBlob->GetBufferPointer(),
-			vertexShaderBlob->GetBufferSize(),
+			vsBytecode,
+			vsBytecodeSize,
 			m_inputLayout.ReleaseAndGetAddressOf()
 		)
 	);

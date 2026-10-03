@@ -17,6 +17,8 @@ HEIN::Actor::Actor(ActorID id, const std::wstring& tag)
 
 void HEIN::Actor::Update(float deltaTime)
 {
+	if (!m_isActive) return;
+
 	// Route update tick to all attached components sequentially
 	for (auto& comp : m_components)
 	{
@@ -26,6 +28,8 @@ void HEIN::Actor::Update(float deltaTime)
 
 void HEIN::Actor::LateUpdate(float deltaTime)
 {
+	if (!m_isActive) return;
+
 	for (auto& comp : m_components)
 	{
 		comp->LateUpdate(deltaTime);
@@ -36,6 +40,8 @@ void HEIN::Actor::LateUpdate(float deltaTime)
 
 void HEIN::Actor::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
 {
+	if (!m_isVisible || !m_isActive) return;
+
 	TransformComponent* transform = GetComponent<TransformComponent>();
 	if (!transform) return;
 
@@ -52,6 +58,8 @@ void HEIN::Actor::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matr
 
 void HEIN::Actor::Draw2D(GameContext& gameContext)
 {
+	if (!m_isVisible || !m_isActive) return;
+
 	for (auto& component : m_components)
 	{
 		if (component->Is2D())
@@ -117,6 +125,8 @@ nlohmann::json HEIN::Actor::Serialize(ActorManager* manager)
 
 	std::string narrowTag(m_tag.begin(), m_tag.end());
 	actorData["Name"] = narrowTag;
+	actorData["IsVisible"] = m_isVisible;
+	actorData["IsActive"] = m_isActive;
 
 	nlohmann::json componentArray = nlohmann::json::array();
 
@@ -163,25 +173,34 @@ void HEIN::Actor::Deserialize(const nlohmann::json& actorData, ActorManager* man
 		m_tag = std::wstring(loadedName.begin(), loadedName.end());
 	}
 
+	if (actorData.contains("IsVisible"))
+	{
+		m_isVisible = actorData["IsVisible"].get<bool>();
+	}
+
+	if (actorData.contains("IsActive"))
+	{
+		m_isActive = actorData["IsActive"].get<bool>();
+	}
+
 	if (actorData.contains("Components"))
 	{
-		size_t existingCompIndex = 0;
+		std::vector<bool> matched(m_components.size(), false);
 		for (const auto& compData : actorData["Components"])
 		{
 			std::string compType = compData["Type"];
 
 			HEIN::IComponent* targetComp = nullptr;
 
-			// Sequential matching allows multiple components of the same type to map correctly
-			while (existingCompIndex < m_components.size())
+			// Find first unmatched component of matching type
+			for (size_t i = 0; i < m_components.size(); ++i)
 			{
-				if (m_components[existingCompIndex]->GetComponentName() == compType)
+				if (!matched[i] && m_components[i]->GetComponentName() == compType)
 				{
-					targetComp = m_components[existingCompIndex].get();
-					existingCompIndex++; // Advance for next component match
+					targetComp = m_components[i].get();
+					matched[i] = true;
 					break;
 				}
-				existingCompIndex++;
 			}
 
 			if (targetComp != nullptr)
@@ -197,6 +216,7 @@ void HEIN::Actor::Deserialize(const nlohmann::json& actorData, ActorManager* man
 
 				if (newComp != nullptr)
 				{
+					matched.push_back(true);
 					if (compData.contains("Data") && !compData["Data"].is_null())
 					{
 						newComp->Deserialize(compData["Data"]);
