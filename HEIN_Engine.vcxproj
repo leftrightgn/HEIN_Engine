@@ -373,23 +373,16 @@
     <ClInclude Include="Framework\Game.h" />
     <ClInclude Include="Framework\GameContext.h" />
     <ClInclude Include="ImaseLib\GridFloor.h" />
-    <ClInclude Include="ImGui\GraphEditor.h" />
     <ClInclude Include="ImGui\imconfig.h" />
-    <ClInclude Include="ImGui\ImCurveEdit.h" />
-    <ClInclude Include="ImGui\ImGradient.h" />
     <ClInclude Include="ImGui\imgui.h" />
     <ClInclude Include="ImGui\imgui_stdlib.h" />
     <ClInclude Include="ImGui\ImGuizmo.h" />
     <ClInclude Include="ImGui\imgui_impl_dx11.h" />
     <ClInclude Include="ImGui\imgui_impl_win32.h" />
     <ClInclude Include="ImGui\imgui_internal.h" />
-    <ClInclude Include="ImGui\ImLightRig.h" />
-    <ClInclude Include="ImGui\ImSequencer.h" />
     <ClInclude Include="ImGui\imstb_rectpack.h" />
     <ClInclude Include="ImGui\imstb_textedit.h" />
     <ClInclude Include="ImGui\imstb_truetype.h" />
-    <ClInclude Include="ImGui\ImVectorEditor.h" />
-    <ClInclude Include="ImGui\ImZoomSlider.h" />
     <ClInclude Include="Message\IObserver.h" />
     <ClInclude Include="Message\Message.h" />
     <ClInclude Include="Message\Messenger.h" />
@@ -441,15 +434,6 @@
     <ClCompile Include="ImaseLib\GridFloor.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="ImGui\GraphEditor.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="ImGui\ImCurveEdit.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="ImGui\ImGradient.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="ImGui\imgui.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -457,9 +441,6 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="ImGui\ImGuizmo.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="ImGui\imgui_demo.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="ImGui\imgui_draw.cpp">
@@ -475,12 +456,6 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="ImGui\imgui_widgets.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="ImGui\ImSequencer.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="ImGui\ImVectorEditor.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Message\Messenger.cpp" />

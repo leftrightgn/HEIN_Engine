@@ -395,16 +395,7 @@
     <ClInclude Include="ImaseLib\GridFloor.h">
       <Filter>ImaseLib</Filter>
     </ClInclude>
-    <ClInclude Include="ImGui\GraphEditor.h">
-      <Filter>ImGui</Filter>
-    </ClInclude>
     <ClInclude Include="ImGui\imconfig.h">
-      <Filter>ImGui</Filter>
-    </ClInclude>
-    <ClInclude Include="ImGui\ImCurveEdit.h">
-      <Filter>ImGui</Filter>
-    </ClInclude>
-    <ClInclude Include="ImGui\ImGradient.h">
       <Filter>ImGui</Filter>
     </ClInclude>
     <ClInclude Include="ImGui\imgui.h">
@@ -422,12 +413,6 @@
     <ClInclude Include="ImGui\imgui_internal.h">
       <Filter>ImGui</Filter>
     </ClInclude>
-    <ClInclude Include="ImGui\ImLightRig.h">
-      <Filter>ImGui</Filter>
-    </ClInclude>
-    <ClInclude Include="ImGui\ImSequencer.h">
-      <Filter>ImGui</Filter>
-    </ClInclude>
     <ClInclude Include="ImGui\imstb_rectpack.h">
       <Filter>ImGui</Filter>
     </ClInclude>
@@ -435,12 +420,6 @@
       <Filter>ImGui</Filter>
     </ClInclude>
     <ClInclude Include="ImGui\imstb_truetype.h">
-      <Filter>ImGui</Filter>
-    </ClInclude>
-    <ClInclude Include="ImGui\ImVectorEditor.h">
-      <Filter>ImGui</Filter>
-    </ClInclude>
-    <ClInclude Include="ImGui\ImZoomSlider.h">
       <Filter>ImGui</Filter>
     </ClInclude>
     <ClInclude Include="Message\IObserver.h">
@@ -586,22 +565,10 @@
     <ClCompile Include="ImaseLib\GridFloor.cpp">
       <Filter>ImaseLib</Filter>
     </ClCompile>
-    <ClCompile Include="ImGui\GraphEditor.cpp">
-      <Filter>ImGui</Filter>
-    </ClCompile>
-    <ClCompile Include="ImGui\ImCurveEdit.cpp">
-      <Filter>ImGui</Filter>
-    </ClCompile>
-    <ClCompile Include="ImGui\ImGradient.cpp">
-      <Filter>ImGui</Filter>
-    </ClCompile>
     <ClCompile Include="ImGui\imgui.cpp">
       <Filter>ImGui</Filter>
     </ClCompile>
     <ClCompile Include="ImGui\ImGuizmo.cpp">
-      <Filter>ImGui</Filter>
-    </ClCompile>
-    <ClCompile Include="ImGui\imgui_demo.cpp">
       <Filter>ImGui</Filter>
     </ClCompile>
     <ClCompile Include="ImGui\imgui_draw.cpp">
@@ -617,12 +584,6 @@
       <Filter>ImGui</Filter>
     </ClCompile>
     <ClCompile Include="ImGui\imgui_widgets.cpp">
-      <Filter>ImGui</Filter>
-    </ClCompile>
-    <ClCompile Include="ImGui\ImSequencer.cpp">
-      <Filter>ImGui</Filter>
-    </ClCompile>
-    <ClCompile Include="ImGui\ImVectorEditor.cpp">
       <Filter>ImGui</Filter>
     </ClCompile>
     <ClCompile Include="Message\Messenger.cpp">
