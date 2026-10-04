@@ -16,7 +16,7 @@ namespace HEIN
 		static constexpr float DEFAULT_FOLLOW_DISTANCE = 40.0f;
 		static constexpr float DEFAULT_HEIGHT_OFFSET = 0.0f;
 		static constexpr float DEFAULT_SHOULDER_OFFSET = 0.0f;
-		static constexpr float MIN_DISTANCE = 2.0f;
+		static constexpr float MIN_DISTANCE = 8.0f;
 		static constexpr float CAMERA_RADIUS = 1.0f;
 		static constexpr float PIVOT_SMOOTH_SPEED = 18.0f;
 		static constexpr float ROTATION_SMOOTH_SPEED = 25.0f;
@@ -42,6 +42,7 @@ namespace HEIN
 		float m_followDistance;
 		float m_heightOffset;
 		float m_shoulderOffset;
+		float m_standingHeight;
 		bool  m_isInitialized;
 
 	public:

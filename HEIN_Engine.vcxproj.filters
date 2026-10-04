@@ -132,6 +132,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="Shaders\CustomSkinned_Common.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
     <None Include="Shaders\Terrain_Common.hlsli">
       <Filter>Shaders</Filter>
     </None>

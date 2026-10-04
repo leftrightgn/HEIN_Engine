@@ -139,10 +139,10 @@ namespace HEIN
 		}
 		else
 		{
-			HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+			HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned_VS.hlsl", nullptr, nullptr, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
 			if (FAILED(hr))
 			{
-				hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+				hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned_VS.hlsl", nullptr, nullptr, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
 			}
 			if (FAILED(hr))
 			{
@@ -156,10 +156,10 @@ namespace HEIN
 				return; // Gracefully fail
 			}
 
-			hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+			hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned_PS.hlsl", nullptr, nullptr, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
 			if (FAILED(hr))
 			{
-				hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+				hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned_PS.hlsl", nullptr, nullptr, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
 			}
 			if (FAILED(hr))
 			{
@@ -188,7 +188,7 @@ namespace HEIN
 		cbDesc.ByteWidth = sizeof(CB_Lighting);
 		device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
 
-		// Create Input Layout explicitly to match CustomSkinned.hlsl shader using the actual vertex declaration from the model!
+		// Create Input Layout explicitly to match CustomSkinned_VS.hlsl shader using the actual vertex declaration from the model!
 		bool layoutCreated = false;
 		if (!m_model->meshes.empty())
 		{

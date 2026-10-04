@@ -47,7 +47,7 @@ namespace HEIN
 						DirectX::SimpleMath::Vector3 hitNormal;
 						if (CollisionMath::IntersectRayTriangle(rayOrigin, rayDir, tri, hitDist, hitNormal))
 						{
-							if (hitDist >= 0.0f)
+							if (hitDist >= minDistance)
 							{
 								float safeDist = std::max(minDistance, hitDist - cameraRadius);
 								if (safeDist < closestHit)
@@ -68,9 +68,9 @@ namespace HEIN
 					float hitDist = 0.0f;
 					if (CollisionMath::SweepSphereVsAABB(rayOrigin, rayDir, cameraRadius, aabb->GetWorldAABB(), hitDist))
 					{
-						if (hitDist >= 0.0f)
+						if (hitDist >= minDistance)
 						{
-							float safeDist = std::max(minDistance, hitDist);
+							float safeDist = std::max(minDistance, hitDist - cameraRadius);
 							if (safeDist < closestHit)
 							{
 								closestHit = safeDist;
@@ -88,9 +88,9 @@ namespace HEIN
 					float hitDist = 0.0f;
 					if (CollisionMath::SweepSphereVSOBB(rayOrigin, rayDir, cameraRadius, obb->GetWorldOBB(), hitDist))
 					{
-						if (hitDist >= 0.0f)
+						if (hitDist >= minDistance)
 						{
-							float safeDist = std::max(minDistance, hitDist);
+							float safeDist = std::max(minDistance, hitDist - cameraRadius);
 							if (safeDist < closestHit)
 							{
 								closestHit = safeDist;
@@ -106,7 +106,7 @@ namespace HEIN
 					if (terrain == nullptr) continue;
 					
 					float stepSize = 0.5f; // half meter steps
-					float t = 0.0f;
+					float t = minDistance; // Start test at minDistance to avoid false self-occlusion at feet/ground
 					while (t <= maxDistance)
 					{
 						DirectX::SimpleMath::Vector3 p = rayOrigin + rayDir * t;
@@ -116,7 +116,7 @@ namespace HEIN
 						{
 							if (p.y - cameraRadius < terrainHeight)
 							{
-								float safeDist = std::max(minDistance, t);
+								float safeDist = std::max(minDistance, t - cameraRadius);
 								if (safeDist < closestHit)
 								{
 									closestHit = safeDist;
