@@ -76,7 +76,7 @@ namespace HEIN
 
 		Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;
 		Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pixelShader;
-		Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout; // For CustomSkinned.hlsl
+		Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout; // For CustomSkinned_VS.hlsl
 		std::map<void*, Microsoft::WRL::ComPtr<ID3D11InputLayout>> m_staticInputLayouts; // For non-skinned parts (uses void* to avoid missing includes)
 		Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbMatrices;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbLighting;

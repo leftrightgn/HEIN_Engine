@@ -488,7 +488,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="Shaders\CustomSkinned.hlsl" />
+    <None Include="Shaders\CustomSkinned_Common.hlsli" />
     <None Include="Shaders\Foliage_Common.hlsli" />
     <None Include="Shaders\SkyboxEffect_Common.hlsli" />
     <None Include="Shaders\SkyboxEffect_PS.hlsl">

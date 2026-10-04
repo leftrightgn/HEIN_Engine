@@ -28,6 +28,7 @@ HEIN::SpringCameraMode::SpringCameraMode(
 	, m_followDistance(followDistance)
 	, m_heightOffset(heightOffset)
 	, m_shoulderOffset(DEFAULT_SHOULDER_OFFSET)
+	, m_standingHeight(15.0f)
 	, m_isInitialized(false)
 {
 }
@@ -69,6 +70,26 @@ void HEIN::SpringCameraMode::Update(CameraData& outData, float deltaTime, ICamer
 	deltaTime = std::clamp(deltaTime, 0.0001f, 0.1f);
 
 	DirectX::SimpleMath::Vector3 rawTarget = *m_desiredTarget;
+
+	// Prevent camera from diving into the floor when player dodges / rolls
+	Actor* targetActor = m_manager ? m_manager->GetActor(m_targetID) : nullptr;
+	if (targetActor != nullptr)
+	{
+		TransformComponent* transform = targetActor->GetComponent<TransformComponent>();
+		if (transform != nullptr)
+		{
+			float heightAboveFeet = rawTarget.y - transform->GetPosition().y;
+			if (heightAboveFeet > 8.0f)
+			{
+				m_standingHeight = heightAboveFeet;
+			}
+			else if (heightAboveFeet < 6.0f)
+			{
+				// Character is rolling or diving down - maintain stable focus above root
+				rawTarget.y = transform->GetPosition().y + m_standingHeight;
+			}
+		}
+	}
 
 	if (!m_isInitialized)
 	{
