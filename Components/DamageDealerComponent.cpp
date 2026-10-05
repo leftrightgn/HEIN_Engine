@@ -14,9 +14,14 @@ HEIN::DamageDealerComponent::DamageDealerComponent(Actor* owner)
 
 void HEIN::DamageDealerComponent::Start()
 {
-	if (m_owner->GetOwnerID() != INVALID_ACTOR_ID)
+	ActorID listenID = m_owner->GetOwnerID();
+	if (listenID == INVALID_ACTOR_ID)
 	{
-		Messenger::GetInstance()->Register(m_owner->GetOwnerID(), this);
+		listenID = m_owner->GetParentID();
+	}
+	if (listenID != INVALID_ACTOR_ID)
+	{
+		Messenger::GetInstance()->Register(listenID, this);
 	}
 }
 
