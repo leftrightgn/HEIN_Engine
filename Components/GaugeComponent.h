@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
 #include <SimpleMath.h>
 #include "SpriteBatch.h"
 
@@ -149,6 +150,9 @@ namespace HEIN
         float m_lastVpY = 0.0f;
 
         // Internal helpers
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_whiteTex;
+        void EnsureWhiteTexture(ID3D11Device* device);
+
         void DrawBar(GameContext& gameContext, const GaugeBarDef& bar, 
                      float anchorX, float anchorY, float scaleX, float scaleY);
         void LoadBarTextures(ID3D11Device* device, GaugeBarDef& bar);
@@ -225,6 +229,11 @@ namespace HEIN
 
         /** @brief Convenience: Sets the current value of a bar by name. */
         void SetValue(const std::string& name, float current, float max = -1.0f);
+
+        /** @brief Extensible sync delegate allowing game-specific components to feed data (Block, Dodge, etc.) to GaugeComponent. */
+        using GaugeExternalSyncFunc = std::function<bool(Actor* target, GaugeType type, float& outCurrent, float& outMax)>;
+        inline static GaugeExternalSyncFunc s_externalSyncHandler = nullptr;
+        static void SetExternalSyncHandler(GaugeExternalSyncFunc handler) { s_externalSyncHandler = std::move(handler); }
 
         // Anchor mode
         GaugeAnchorMode GetAnchorMode() const { return m_anchorMode; }

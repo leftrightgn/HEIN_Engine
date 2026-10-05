@@ -22,11 +22,25 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 
 	if (dealerA != nullptr && victimB != nullptr)
 	{
-		if (actorA->GetOwnerID() != actorB->GetID())
+		ActorID ownerA = actorA->GetOwnerID();
+		if (ownerA == INVALID_ACTOR_ID) ownerA = actorA->GetParentID();
+
+		if (ownerA != actorB->GetID())
 		{
 			if (dealerA->IsActive() && !victimB->IsInvincible())
 			{
-				victimB->ApplyDamage(dealerA->GetDamageAmount());
+				float damage = dealerA->GetDamageAmount();
+				bool applyDamage = true;
+				if (s_damageInterceptor)
+				{
+					Actor* attacker = actorManager.GetActor(ownerA);
+					if (!attacker) attacker = actorA;
+					applyDamage = s_damageInterceptor(attacker, actorB, damage);
+				}
+				if (applyDamage)
+				{
+					victimB->ApplyDamage(damage);
+				}
 			}
 		}
 	}
@@ -36,11 +50,25 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 
 	if (dealerB != nullptr && victimA != nullptr)
 	{
-		if (actorB->GetOwnerID() != actorA->GetID())
+		ActorID ownerB = actorB->GetOwnerID();
+		if (ownerB == INVALID_ACTOR_ID) ownerB = actorB->GetParentID();
+
+		if (ownerB != actorA->GetID())
 		{
 			if (dealerB->IsActive() && !victimA->IsInvincible())
 			{
-				victimA->ApplyDamage(dealerB->GetDamageAmount());
+				float damage = dealerB->GetDamageAmount();
+				bool applyDamage = true;
+				if (s_damageInterceptor)
+				{
+					Actor* attacker = actorManager.GetActor(ownerB);
+					if (!attacker) attacker = actorB;
+					applyDamage = s_damageInterceptor(attacker, actorA, damage);
+				}
+				if (applyDamage)
+				{
+					victimA->ApplyDamage(damage);
+				}
 			}
 		}
 	}

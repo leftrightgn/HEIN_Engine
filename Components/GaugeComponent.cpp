@@ -93,6 +93,36 @@ HEIN::GaugeComponent::GaugeComponent(Actor* owner)
 }
 
 // ============================================================================
+// EnsureWhiteTexture: Cache a persistent 1x1 white texture for solid color drawing
+// ============================================================================
+void HEIN::GaugeComponent::EnsureWhiteTexture(ID3D11Device* device)
+{
+    if (m_whiteTex || !device) return;
+
+    uint32_t whitePixel = 0xFFFFFFFF;
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = 1;
+    desc.Height = 1;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_IMMUTABLE;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA initData = {};
+    initData.pSysMem = &whitePixel;
+    initData.SysMemPitch = sizeof(uint32_t);
+
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
+    HRESULT hr = device->CreateTexture2D(&desc, &initData, tex.GetAddressOf());
+    if (SUCCEEDED(hr))
+    {
+        device->CreateShaderResourceView(tex.Get(), nullptr, m_whiteTex.GetAddressOf());
+    }
+}
+
+// ============================================================================
 // Initialize: Create SpriteBatch and load textures for all bars
 // ============================================================================
 void HEIN::GaugeComponent::Initialize(GameContext& gameContext)
@@ -100,10 +130,12 @@ void HEIN::GaugeComponent::Initialize(GameContext& gameContext)
     ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
     ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
 
-    if (!m_spriteBatch)
+    if (!m_spriteBatch && context)
     {
         m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(context);
     }
+
+    EnsureWhiteTexture(device);
 
     for (auto& bar : m_bars)
     {
@@ -236,16 +268,16 @@ void HEIN::GaugeComponent::Update(float /*deltaTime*/)
 // ============================================================================
 void HEIN::GaugeComponent::SyncBoundBars(GameContext& gameContext)
 {
+    Actor* target = GetParentActor(gameContext);
+    if (!target) target = m_owner;
+    if (!target) return;
+
     for (auto& bar : m_bars)
     {
         if (!bar.autoBind) continue;
 
         if (bar.gaugeType == GaugeType::HP)
         {
-            // Look for HealthComponent on parent actor first, then owner
-            Actor* target = GetParentActor(gameContext);
-            if (!target) target = m_owner;
-
             HealthComponent* health = target->GetComponent<HealthComponent>();
             if (health)
             {
@@ -253,9 +285,10 @@ void HEIN::GaugeComponent::SyncBoundBars(GameContext& gameContext)
                 bar.maxValue = health->GetMaxHealth();
             }
         }
-        // GaugeType::Dodge and GaugeType::Block are pushed by game-side 
-        // CombatBlackBoard::Update() — no engine-side pull needed.
-        // GaugeType::Custom is always manual via SetValue().
+        else if (s_externalSyncHandler)
+        {
+            s_externalSyncHandler(target, bar.gaugeType, bar.currentValue, bar.maxValue);
+        }
     }
 }
 
@@ -388,6 +421,12 @@ void HEIN::GaugeComponent::DrawBar(
     ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
     ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
 
+    if (!m_spriteBatch && context)
+    {
+        m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(context);
+    }
+    EnsureWhiteTexture(device);
+
     // UI overlay uses DepthNone so it draws on top of 3D
     context->OMSetDepthStencilState(gameContext.commonStates.DepthNone(), 0);
 
@@ -403,14 +442,7 @@ void HEIN::GaugeComponent::DrawBar(
             bgRect.right = static_cast<LONG>(barX + barW);
             bgRect.bottom = static_cast<LONG>(barY + barH);
 
-            ID3D11ShaderResourceView* bgTex = bar.backgroundTex.Get();
-            Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> fallbackBg;
-            if (!bgTex)
-            {
-                fallbackBg = CreateSolidTex(device, Vec4ToABGR(bar.bgColor));
-                bgTex = fallbackBg.Get();
-            }
-
+            ID3D11ShaderResourceView* bgTex = bar.backgroundTex ? bar.backgroundTex.Get() : m_whiteTex.Get();
             if (bgTex)
             {
                 m_spriteBatch->Draw(bgTex, bgRect, nullptr,
@@ -443,14 +475,7 @@ void HEIN::GaugeComponent::DrawBar(
             fillRect.top = static_cast<LONG>(barY);
             fillRect.bottom = static_cast<LONG>(barY + barH);
 
-            ID3D11ShaderResourceView* fTex = bar.fillTex.Get();
-            Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> fallbackFill;
-            if (!fTex)
-            {
-                fallbackFill = CreateSolidTex(device, Vec4ToABGR(currentFillColor));
-                fTex = fallbackFill.Get();
-            }
-
+            ID3D11ShaderResourceView* fTex = bar.fillTex ? bar.fillTex.Get() : m_whiteTex.Get();
             if (fTex && fillW > 0.0f)
             {
                 m_spriteBatch->Draw(fTex, fillRect, nullptr, currentFillColor);
@@ -509,11 +534,11 @@ void HEIN::GaugeComponent::DrawBar(
             char valBuf[64];
             sprintf_s(valBuf, "%.0f/%.0f", bar.currentValue, bar.maxValue);
 
-            ImVec2 valSize = ImGui::CalcTextSize(valBuf);
-            valSize.x *= (bar.fontSize * scaleY / ImGui::GetFontSize() * ImGui::GetFontSize() / ImGui::GetFontSize());
+            ImVec2 baseValSize = ImGui::CalcTextSize(valBuf);
+            float scaledValWidth = baseValSize.x * (fontSize / ImGui::GetFontSize());
 
             ImVec2 valPos(
-                m_lastVpX + barX + barW - valSize.x * bar.fontSize * scaleY / ImGui::GetFontSize() - 4.0f,
+                m_lastVpX + barX + barW - scaledValWidth - 4.0f,
                 m_lastVpY + barY + (barH - fontSize) * 0.5f
             );
 
