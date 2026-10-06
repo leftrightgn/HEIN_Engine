@@ -4,6 +4,7 @@
 #include "Entities/ActorManager.h"
 #include "Components/TransformComponent.h"
 #include "Components/TerrainComponent.h"
+#include "FogComponent.h"
 #include "Framework/GameContext.h"
 #include "Common/ShadowSystem.h"
 #include "Camera/CameraController.h"
@@ -59,6 +60,12 @@ namespace HEIN
 		float maxGrassWidth;
 		float tilt;
 		float bend;
+
+		// Fog parameters
+		DirectX::SimpleMath::Vector4 fogColor;
+		float fogStart;
+		float fogEnd;
+		DirectX::SimpleMath::Vector2 paddingFog;
 	};
 
 	// ==================================================================================
@@ -881,6 +888,31 @@ namespace HEIN
 			cb->maxGrassWidth = m_maxGrassWidth;
 			cb->tilt = m_tilt;
 			cb->bend = m_bend;
+
+			// Fog Settings (retrieved from FogComponent on this Actor or anywhere in the scene)
+			FogComponent* fogComp = m_owner ? m_owner->GetComponent<FogComponent>() : nullptr;
+			if (!fogComp && gameContext.actorManager)
+			{
+				for (auto& pair : gameContext.actorManager->GetAllActors())
+				{
+					fogComp = pair.second->GetComponent<FogComponent>();
+					if (fogComp) break;
+				}
+			}
+
+			if (fogComp)
+			{
+				cb->fogStart = fogComp->m_fogStart;
+				cb->fogEnd = fogComp->m_fogEnd;
+				cb->fogColor = fogComp->m_fogColor;
+			}
+			else
+			{
+				cb->fogStart = 100000.0f;
+				cb->fogEnd = 200000.0f;
+				cb->fogColor = DirectX::SimpleMath::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
+			}
+			cb->paddingFog = DirectX::SimpleMath::Vector2::Zero;
 
 			context->Unmap(m_settingsBuffer.Get(), 0);
 		}

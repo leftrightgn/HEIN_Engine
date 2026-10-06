@@ -18,12 +18,12 @@ float4 main(FoliagePixelInput input) : SV_Target
         texColor = g_foliageTexture.Sample(g_samplerWrap, input.texCoord);
     }
 
-    // 2. Alpha Discard / Depth Handling ("think about the depth so it don't look weird")
+    // Alpha Discard / Depth Handling ("think about the depth so it don't look weird")
     // Discard low-alpha pixels so opaque leaves/blades write solid depth to the Z-buffer.
     // This completely eliminates transparent sorting artifacts, flicker, and back-to-front sorting bugs!
     clip(texColor.a - alphaCutoff);
 
-    // 3. Color Map Sampling (Color blending across terrain surface)
+    // Color Map Sampling (Color blending across terrain surface)
     float4 terrainColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
     if (flags.x > 0.5f && terrainWidth > 0.0f && terrainHeight > 0.0f)
     {
@@ -34,7 +34,7 @@ float4 main(FoliagePixelInput input) : SV_Target
         terrainColor = g_colorMapTexture.Sample(g_samplerClamp, terrainUV);
     }
 
-    // 4. Stylized Color Palette Tinting based on Foliage Type
+    // Stylized Color Palette Tinting based on Foliage Type
     float3 baseColor = texColor.rgb;
 
     if (input.foliageType == 0) // Grass
@@ -67,7 +67,7 @@ float4 main(FoliagePixelInput input) : SV_Target
     // Multiply by vertex color tint if present
     baseColor *= input.vertexColor.rgb;
 
-    // 5. Lighting: Stylized Directional Light + Translucent Leaf Backlight
+    // Lighting: Stylized Directional Light + Translucent Leaf Backlight
     float3 N = normalize(input.normal);
     float3 L = normalize(-lightDirection.xyz);
     float NdotL = max(dot(N, L), 0.0f);
@@ -75,7 +75,7 @@ float4 main(FoliagePixelInput input) : SV_Target
     float backlight = max(dot(-N, L), 0.0f) * 0.35f;
     float diffuse = saturate(NdotL + backlight);
 
-    // 6. Shadow Map
+    // Shadow Map
     float shadow = 1.0f;
     if (flags.z > 0.5f)
     {
@@ -95,6 +95,10 @@ float4 main(FoliagePixelInput input) : SV_Target
 
     float3 finalLighting = ambientColor.rgb + lightColor.rgb * diffuse * shadow;
     float3 finalColor = baseColor * finalLighting;
+
+    // Fog Calculation (blends foliage seamlessly with terrain fog)
+    float fogFactor = saturate((input.viewZ - fogStart) / (fogEnd - fogStart));
+    finalColor = lerp(finalColor, fogColor.rgb, fogFactor);
 
     return float4(finalColor, 1.0f);
 }
