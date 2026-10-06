@@ -63,6 +63,21 @@ namespace HEIN
         // Fill direction: false = left-to-right, true = right-to-left
         bool fillRightToLeft = false;
 
+        // Fill range (normalized 0.0 to 1.0 relative to bar size)
+        // Controls where the active meter starts and ends within decorative border frames.
+        // fillStartPoint: where 0% fill starts (default 0.0f = left edge)
+        // fillEndPoint: where 100% fill ends (default 1.0f = right edge)
+        float fillStartPoint = 0.0f;
+        float fillEndPoint = 1.0f;
+
+        // Texture clipping: when true, crops texture UVs instead of squashing/stretching
+        bool clipTexture = true;
+
+        // When true, texture UVs map to [fillStartPoint, fillEndPoint] (ideal when fill texture
+        // has the same canvas/padding as the border frame). When false, texture UVs map [0.0, 1.0]
+        // across the active fill area (ideal for trimmed/standalone fill textures).
+        bool fillTexMatchesFrame = true;
+
         // Auto-bind: when true, values are automatically synced from data source components.
         // HP reads from HealthComponent; Dodge/Block are pushed by game-side CombatBlackBoard.
         // Custom type always requires manual SetValue().

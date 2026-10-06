@@ -162,6 +162,7 @@ FoliagePixelInput main(FoliageVertexInput input)
     // ==========================================================
     float4 viewPos = mul(float4(worldPos, 1.0f), viewMatrix);
     output.position = mul(viewPos, projectionMatrix);
+    output.viewZ = abs(viewPos.z);
     
     output.normal = finalNormal;
     output.texCoord = input.texCoord;

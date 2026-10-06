@@ -37,6 +37,12 @@ cbuffer FoliageSettingsBuffer : register(b1)
     float maxGrassWidth;
     float tilt;
     float bend;
+
+    // Fog Parameters
+    float4 fogColor;
+    float  fogStart;
+    float  fogEnd;
+    float2 paddingFog;
 };
 
 struct FoliageVertexInput
@@ -65,4 +71,5 @@ struct FoliagePixelInput
     uint   foliageType : BLENDINDICES;
     float4 shadowPos   : TEXCOORD2;
     float4 vertexColor : COLOR;
+    float  viewZ       : TEXCOORD3;
 };

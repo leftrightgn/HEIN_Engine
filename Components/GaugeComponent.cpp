@@ -82,6 +82,26 @@ namespace
             default: return "Unknown";
         }
     }
+
+    void GetTextureDimensions(ID3D11ShaderResourceView* srv, UINT& width, UINT& height)
+    {
+        width = 0;
+        height = 0;
+        if (!srv) return;
+
+        Microsoft::WRL::ComPtr<ID3D11Resource> res;
+        srv->GetResource(res.GetAddressOf());
+        if (!res) return;
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> tex2D;
+        if (SUCCEEDED(res.As(&tex2D)) && tex2D)
+        {
+            D3D11_TEXTURE2D_DESC desc;
+            tex2D->GetDesc(&desc);
+            width = desc.Width;
+            height = desc.Height;
+        }
+    }
 }
 
 // ============================================================================
@@ -458,27 +478,71 @@ void HEIN::GaugeComponent::DrawBar(
                 currentFillColor = bar.lowColor;
             }
 
-            float fillW = barW * ratio;
+            // Calculate active fill span from normalized start and end points
+            float startRatio = std::clamp(bar.fillStartPoint, 0.0f, 1.0f);
+            float endRatio = std::clamp(bar.fillEndPoint, 0.0f, 1.0f);
+            if (endRatio < startRatio) std::swap(startRatio, endRatio);
+
+            float startX = barX + barW * startRatio;
+            float endX = barX + barW * endRatio;
+            float activeW = std::max(0.0f, endX - startX);
+            float fillW = activeW * ratio;
+
             RECT fillRect;
+            fillRect.top = static_cast<LONG>(barY);
+            fillRect.bottom = static_cast<LONG>(barY + barH);
 
             if (bar.fillRightToLeft)
             {
-                fillRect.left = static_cast<LONG>(barX + barW - fillW);
-                fillRect.right = static_cast<LONG>(barX + barW);
+                fillRect.left = static_cast<LONG>(endX - fillW);
+                fillRect.right = static_cast<LONG>(endX);
             }
             else
             {
-                fillRect.left = static_cast<LONG>(barX);
-                fillRect.right = static_cast<LONG>(barX + fillW);
+                fillRect.left = static_cast<LONG>(startX);
+                fillRect.right = static_cast<LONG>(startX + fillW);
             }
-
-            fillRect.top = static_cast<LONG>(barY);
-            fillRect.bottom = static_cast<LONG>(barY + barH);
 
             ID3D11ShaderResourceView* fTex = bar.fillTex ? bar.fillTex.Get() : m_whiteTex.Get();
             if (fTex && fillW > 0.0f)
             {
-                m_spriteBatch->Draw(fTex, fillRect, nullptr, currentFillColor);
+                if (bar.clipTexture && bar.fillTex)
+                {
+                    UINT texW = 0, texH = 0;
+                    GetTextureDimensions(bar.fillTex.Get(), texW, texH);
+                    if (texW > 0 && texH > 0)
+                    {
+                        float texStartX = bar.fillTexMatchesFrame ? (static_cast<float>(texW) * startRatio) : 0.0f;
+                        float texEndX = bar.fillTexMatchesFrame ? (static_cast<float>(texW) * endRatio) : static_cast<float>(texW);
+                        float texActiveW = std::max(0.0f, texEndX - texStartX);
+                        float texFillW = texActiveW * ratio;
+
+                        RECT srcRect;
+                        srcRect.top = 0;
+                        srcRect.bottom = static_cast<LONG>(texH);
+
+                        if (bar.fillRightToLeft)
+                        {
+                            srcRect.left = static_cast<LONG>(texEndX - texFillW);
+                            srcRect.right = static_cast<LONG>(texEndX);
+                        }
+                        else
+                        {
+                            srcRect.left = static_cast<LONG>(texStartX);
+                            srcRect.right = static_cast<LONG>(texStartX + texFillW);
+                        }
+
+                        m_spriteBatch->Draw(fTex, fillRect, &srcRect, currentFillColor);
+                    }
+                    else
+                    {
+                        m_spriteBatch->Draw(fTex, fillRect, nullptr, currentFillColor);
+                    }
+                }
+                else
+                {
+                    m_spriteBatch->Draw(fTex, fillRect, nullptr, currentFillColor);
+                }
             }
         }
 
@@ -656,6 +720,10 @@ nlohmann::json HEIN::GaugeComponent::Serialize()
         b["SizeX"] = bar.size.x;
         b["SizeY"] = bar.size.y;
         b["FillRightToLeft"] = bar.fillRightToLeft;
+        b["FillStartPoint"] = bar.fillStartPoint;
+        b["FillEndPoint"] = bar.fillEndPoint;
+        b["ClipTexture"] = bar.clipTexture;
+        b["FillTexMatchesFrame"] = bar.fillTexMatchesFrame;
         b["AutoBind"] = bar.autoBind;
 
         b["FillColorR"] = bar.fillColor.x;
@@ -731,6 +799,10 @@ void HEIN::GaugeComponent::Deserialize(const nlohmann::json& data)
             if (b.contains("SizeX")) bar.size.x = b["SizeX"];
             if (b.contains("SizeY")) bar.size.y = b["SizeY"];
             if (b.contains("FillRightToLeft")) bar.fillRightToLeft = b["FillRightToLeft"];
+            if (b.contains("FillStartPoint")) bar.fillStartPoint = b["FillStartPoint"];
+            if (b.contains("FillEndPoint")) bar.fillEndPoint = b["FillEndPoint"];
+            if (b.contains("ClipTexture")) bar.clipTexture = b["ClipTexture"];
+            if (b.contains("FillTexMatchesFrame")) bar.fillTexMatchesFrame = b["FillTexMatchesFrame"];
             if (b.contains("AutoBind")) bar.autoBind = b["AutoBind"];
 
             if (b.contains("FillColorR"))
@@ -1010,6 +1082,54 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                             LoadBarTextures(gameContext.deviceResources.GetD3DDevice(), bar);
                         }
                     }
+
+                    // Fill Range / End Point controls
+                    ImGui::Indent(10.0f);
+                    ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.3f, 1.0f), "Fill Range / End Point (0.0 - 1.0):");
+
+                    ImGui::DragFloatRange2("Range (Start / End)##FillRange",
+                        &bar.fillStartPoint, &bar.fillEndPoint, 0.002f, 0.0f, 1.0f, "Start: %.4f", "End: %.4f");
+                    ImGui::SliderFloat("Fill Start Point##Start", &bar.fillStartPoint, 0.0f, 1.0f, "%.4f");
+                    ImGui::SliderFloat("Fill End Point##End", &bar.fillEndPoint, 0.0f, 1.0f, "%.4f");
+
+                    ImGui::Checkbox("Clip Texture (Do Not Squash)", &bar.clipTexture);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Share Frame Canvas UVs", &bar.fillTexMatchesFrame);
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip(
+                            "Enabled: Texture UVs align with the full border frame canvas (e.g., fill.dds matching border.dds).\n"
+                            "Disabled: Texture UVs span 0.0-1.0 across the active fill area (e.g., trimmed fill textures)."
+                        );
+                    }
+
+                    // Live pixel readout
+                    if (bar.fillTex)
+                    {
+                        UINT tw = 0, th = 0;
+                        GetTextureDimensions(bar.fillTex.Get(), tw, th);
+                        if (tw > 0 && th > 0)
+                        {
+                            float pxStart = static_cast<float>(tw) * bar.fillStartPoint;
+                            float pxEnd = static_cast<float>(tw) * bar.fillEndPoint;
+                            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f),
+                                "Tex %ux%u -> Active Pixels: [%.0f - %.0f] px (W: %.0f px)",
+                                tw, th, pxStart, pxEnd, pxEnd - pxStart);
+                        }
+                    }
+
+                    float scrStart = bar.size.x * bar.fillStartPoint;
+                    float scrEnd = bar.size.x * bar.fillEndPoint;
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                        "Bar Width %.0f -> Active Range: [%.1f - %.1f] px (W: %.1f px)",
+                        bar.size.x, scrStart, scrEnd, scrEnd - scrStart);
+
+                    if (ImGui::SmallButton("Reset Range to Full (0.0 - 1.0)"))
+                    {
+                        bar.fillStartPoint = 0.0f;
+                        bar.fillEndPoint = 1.0f;
+                    }
+                    ImGui::Unindent(10.0f);
                 }
 
                 // Border/Frame Texture
