@@ -506,6 +506,10 @@ void HEIN::TerrainComponent::Draw(
 		DirectX::BoundingOrientedBox worldOBB;
 		localOBB.Transform(worldOBB, finalworld);
 
+		DirectX::XMVECTOR qBox = DirectX::XMLoadFloat4(&worldOBB.Orientation);
+		qBox = DirectX::XMQuaternionNormalize(qBox);
+		DirectX::XMStoreFloat4(&worldOBB.Orientation, qBox);
+
 		// Queue Cell Bounding Box for debug rendering if enabled
 		if (m_showCellBounds && gameContext.debugCollisionRenderer)
 		{

@@ -55,7 +55,9 @@
     <ClCompile Include="Common\ShadowSystem.cpp">
       <Filter>Common</Filter>
     </ClCompile>
-    <ClCompile Include="Components\GaugeComponent.cpp" />
+    <ClCompile Include="Components\GaugeComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -128,7 +130,9 @@
     <ClInclude Include="Common\ShadowSystem.h">
       <Filter>Common</Filter>
     </ClInclude>
-    <ClInclude Include="Components\GaugeComponent.h" />
+    <ClInclude Include="Components\GaugeComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -653,6 +653,10 @@ namespace HEIN
 				DirectX::BoundingOrientedBox::CreateFromBoundingBox(worldOBB, expandedBox);
 				worldOBB.Transform(worldOBB, world);
 
+				DirectX::XMVECTOR qBox = DirectX::XMLoadFloat4(&worldOBB.Orientation);
+				qBox = DirectX::XMQuaternionNormalize(qBox);
+				DirectX::XMStoreFloat4(&worldOBB.Orientation, qBox);
+
 				if (worldFrustum.Intersects(worldOBB))
 				{
 					isVisible = true;
