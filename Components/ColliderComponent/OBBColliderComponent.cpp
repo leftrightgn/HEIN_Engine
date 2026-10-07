@@ -74,6 +74,7 @@ void HEIN::OBBColliderComponent::SyncColliderState()
     worldMatrix._31 = forward.x; worldMatrix._32 = forward.y; worldMatrix._33 = forward.z;
 
     DirectX::SimpleMath::Quaternion rotation = DirectX::SimpleMath::Quaternion::CreateFromRotationMatrix(worldMatrix);
+    rotation.Normalize();
 
     DirectX::SimpleMath::Vector3 scaledExtents = m_extents * scale;
 

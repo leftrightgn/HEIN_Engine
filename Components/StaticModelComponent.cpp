@@ -394,6 +394,10 @@ void HEIN::StaticModelComponent::Draw(
         DirectX::BoundingOrientedBox::CreateFromBoundingBox(worldOBB, masterBox);
         worldOBB.Transform(worldOBB, world);
 
+        DirectX::XMVECTOR qBox = DirectX::XMLoadFloat4(&worldOBB.Orientation);
+        qBox = DirectX::XMQuaternionNormalize(qBox);
+        DirectX::XMStoreFloat4(&worldOBB.Orientation, qBox);
+
         // Abort drawing if the entire merged model is completely off-screen
         if (!worldFrustum.Intersects(worldOBB))
         {

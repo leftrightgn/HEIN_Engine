@@ -125,6 +125,8 @@ nlohmann::json HEIN::Actor::Serialize(ActorManager* manager)
 
 	std::string narrowTag(m_tag.begin(), m_tag.end());
 	actorData["Name"] = narrowTag;
+	actorData["ActorType"] = static_cast<int>(m_type);
+	actorData["OwnerID"] = m_ownerID;
 	actorData["IsVisible"] = m_isVisible;
 	actorData["IsActive"] = m_isActive;
 
@@ -171,6 +173,16 @@ void HEIN::Actor::Deserialize(const nlohmann::json& actorData, ActorManager* man
 		std::string loadedName = actorData["Name"];
 
 		m_tag = std::wstring(loadedName.begin(), loadedName.end());
+	}
+
+	if (actorData.contains("ActorType"))
+	{
+		m_type = static_cast<ActorType>(actorData["ActorType"].get<int>());
+	}
+
+	if (actorData.contains("OwnerID"))
+	{
+		m_ownerID = actorData["OwnerID"].get<ActorID>();
 	}
 
 	if (actorData.contains("IsVisible"))

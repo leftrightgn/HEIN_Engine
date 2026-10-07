@@ -5,6 +5,7 @@
 #include <Components/ColliderComponent/ColliderComponent.h>
 #include <Entities/ActorManager.h>
 #include <Entities/Actor.h>
+#include <Message/Messenger.h>
 
 // Validates and applies combat damage from Trigger Hitboxes.
 // This is intentionally decoupled from Solid Pushbox collision resolution.
@@ -40,6 +41,7 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 				if (applyDamage)
 				{
 					victimB->ApplyDamage(damage);
+					Messenger::GetInstance()->Notify(ownerA, Message::ATTACK_HIT_CONFIRMED);
 				}
 			}
 		}
@@ -68,6 +70,7 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 				if (applyDamage)
 				{
 					victimA->ApplyDamage(damage);
+					Messenger::GetInstance()->Notify(ownerB, Message::ATTACK_HIT_CONFIRMED);
 				}
 			}
 		}
