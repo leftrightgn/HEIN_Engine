@@ -91,6 +91,7 @@ namespace HEIN
 		// Fog controls are now separated into FogComponent
 
 		bool m_isVisible = true;
+		bool m_castShadows = true;
 		bool m_isWireFrame = false;
 		bool m_needsReload = false;
 
@@ -127,6 +128,14 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj
 		) override;
+
+		void DrawShadow(
+			GameContext& gameContext,
+			const DirectX::SimpleMath::Matrix& lightViewProj
+		) override;
+
+		void SetCastShadows(bool castShadows) { m_castShadows = castShadows; }
+		bool CastsShadows() const { return m_castShadows; }
 
 		std::string GetComponentName() const override { return "TerrainComponent"; }
 		nlohmann::json Serialize() override;

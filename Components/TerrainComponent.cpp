@@ -542,6 +542,98 @@ void HEIN::TerrainComponent::Draw(
 		context->PSSetSamplers(1, 1, &nullSampler);
 	}
 }
+
+void HEIN::TerrainComponent::DrawShadow(
+	GameContext& gameContext,
+	const DirectX::SimpleMath::Matrix& lightViewProj
+)
+{
+	if (!m_isVisible || !m_castShadows || m_cells.empty() || !m_vertexShader || !m_matrixBuffer)
+	{
+		return;
+	}
+
+	ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
+
+	DirectX::SimpleMath::Matrix world = DirectX::SimpleMath::Matrix::Identity;
+	if (TransformComponent* trans = m_owner->GetComponent<TransformComponent>())
+	{
+		world = trans->GetWorldMatrix();
+	}
+
+	// Update Matrix Buffer for light space projection
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	if (SUCCEEDED(context->Map(m_matrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource)))
+	{
+		MatrixBufferType* dataPtr = (MatrixBufferType*)mappedResource.pData;
+		dataPtr->world = world.Transpose();
+		dataPtr->view = lightViewProj.Transpose();
+		dataPtr->projection = DirectX::XMMatrixIdentity();
+		dataPtr->lightViewProj = DirectX::XMMatrixIdentity();
+		context->Unmap(m_matrixBuffer.Get(), 0);
+	}
+
+	// Set depth-only rendering pipeline for shadow map pass
+	context->IASetInputLayout(m_inputLayout.Get());
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+	context->VSSetConstantBuffers(0, 1, m_matrixBuffer.GetAddressOf());
+	context->PSSetShader(nullptr, nullptr, 0); // No pixel shader needed for depth write
+
+	context->RSSetState(gameContext.commonStates.CullCounterClockwise());
+	context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+	context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+
+	// Extract 6 clipping planes from world * lightViewProj for light frustum culling
+	DirectX::SimpleMath::Matrix M = world * lightViewProj;
+	DirectX::SimpleMath::Vector4 planes[6] = {
+		DirectX::SimpleMath::Vector4(M._14 + M._11, M._24 + M._21, M._34 + M._31, M._44 + M._41), // Left
+		DirectX::SimpleMath::Vector4(M._14 - M._11, M._24 - M._21, M._34 - M._31, M._44 - M._41), // Right
+		DirectX::SimpleMath::Vector4(M._14 + M._12, M._24 + M._22, M._34 + M._32, M._44 + M._42), // Bottom
+		DirectX::SimpleMath::Vector4(M._14 - M._12, M._24 - M._22, M._34 - M._32, M._44 - M._42), // Top
+		DirectX::SimpleMath::Vector4(M._13,         M._23,         M._33,         M._43),         // Near (D3D [0, 1])
+		DirectX::SimpleMath::Vector4(M._14 - M._13, M._24 - M._23, M._34 - M._33, M._44 - M._43)  // Far
+	};
+
+	for (int i = 0; i < 6; ++i)
+	{
+		float len = std::sqrt(planes[i].x * planes[i].x + planes[i].y * planes[i].y + planes[i].z * planes[i].z);
+		if (len > 1e-6f)
+		{
+			planes[i] /= len;
+		}
+	}
+
+	for (const auto& cell : m_cells)
+	{
+		if (m_enableFrustumCulling)
+		{
+			DirectX::BoundingBox box = cell->GetBoundingBox();
+			DirectX::SimpleMath::Vector3 corners[8];
+			box.GetCorners(corners);
+
+			bool culled = false;
+			for (int p = 0; p < 6; ++p)
+			{
+				int outsideCount = 0;
+				for (int c = 0; c < 8; ++c)
+				{
+					float dist = planes[p].x * corners[c].x + planes[p].y * corners[c].y + planes[p].z * corners[c].z + planes[p].w;
+					if (dist < 0.0f) outsideCount++;
+				}
+				if (outsideCount == 8)
+				{
+					culled = true;
+					break;
+				}
+			}
+			if (culled) continue;
+		}
+
+		cell->Draw(context);
+	}
+}
+
 nlohmann::json HEIN::TerrainComponent::Serialize()
 {
 	nlohmann::json data = IComponent::Serialize();
@@ -561,8 +653,9 @@ nlohmann::json HEIN::TerrainComponent::Serialize()
 	data["isWiredFrame"] = m_isWireFrame;
 	data["TextureTiling"] = m_texutreTiling;
 	
-	// Added Light and Visibility Saving
+	// Added Light, Visibility, and Shadow Saving
 	data["IsVisible"] = m_isVisible;
+	data["CastShadows"] = m_castShadows;
 	data["LightDirection"] = nlohmann::json::array({ m_lightDirection.x, m_lightDirection.y, m_lightDirection.z });
 	data["DiffuseColor"] = nlohmann::json::array({ m_diffuseColor.x, m_diffuseColor.y, m_diffuseColor.z });
 
@@ -632,6 +725,7 @@ void HEIN::TerrainComponent::Deserialize(const nlohmann::json& data)
 	
 	// Added Light and Visibility Loading
 	if (data.contains("IsVisible")) m_isVisible = data["IsVisible"];
+	if (data.contains("CastShadows")) m_castShadows = data["CastShadows"];
 	if (data.contains("LightDirection")) m_lightDirection = DirectX::SimpleMath::Vector3(data["LightDirection"][0], data["LightDirection"][1], data["LightDirection"][2]);
 	if (data.contains("DiffuseColor"))
 	{
@@ -665,6 +759,8 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 	{
 		HWND windowHandle = gameContext.deviceResources.GetWindow();
 		ImGui::Checkbox("Visible", &m_isVisible);
+		ImGui::SameLine();
+		ImGui::Checkbox("Cast Shadows", &m_castShadows);
 		ImGui::Checkbox("WireFrame Mode", &m_isWireFrame);
 
 		ImGui::Separator();
