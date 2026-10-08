@@ -48,7 +48,7 @@ namespace HEIN
 		) override;
 
 		void RegisterCamera(CameraType key, CameraFactory factory);
-		
+		void ClearRegisteredCameras() { m_factories.clear(); }
 
 		// Sets the initial camera instantly
 		void SetFirstCamera(CameraType key);

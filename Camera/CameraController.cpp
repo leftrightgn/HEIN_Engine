@@ -195,10 +195,10 @@ void HEIN::CameraController::ApplyRequest()
 
 	if (m_nextCommand == Command::Switch)
 	{
-		if (!m_cameraStack.empty()) m_cameraStack.back()->OnExit(m_data);
-
 		if (m_nextCameraKey.has_value() && m_factories.find(*m_nextCameraKey) != m_factories.end())
 		{
+			if (!m_cameraStack.empty()) m_cameraStack.back()->OnExit(m_data);
+
 			std::unique_ptr<ICameraMode> newCam = m_factories[*m_nextCameraKey]();
 			if (m_cameraStack.empty())
 			{
@@ -209,20 +209,20 @@ void HEIN::CameraController::ApplyRequest()
 				m_cameraStack.back() = std::move(newCam);
 			}
 			m_cameraStack.back()->OnEnter(m_data);
+			UpdateMouseMode();
 		}
-		UpdateMouseMode();
 	}
 	else if (m_nextCommand == Command::Push)
 	{
-		if (!m_cameraStack.empty()) m_cameraStack.back()->OnSuspend(m_data);
-
 		if (m_nextCameraKey.has_value() && m_factories.find(*m_nextCameraKey) != m_factories.end())
 		{
+			if (!m_cameraStack.empty()) m_cameraStack.back()->OnSuspend(m_data);
+
 			std::unique_ptr<ICameraMode> newCam = m_factories[*m_nextCameraKey]();
 			m_cameraStack.push_back(std::move(newCam));
 			m_cameraStack.back()->OnEnter(m_data);
+			UpdateMouseMode();
 		}
-		UpdateMouseMode();
 	}
 	else if (m_nextCommand == Command::Pop)
 	{
@@ -394,9 +394,16 @@ void HEIN::CameraController::OnInspectorGUI(GameContext& gameContext)
 		}
 		ImGui::Text("Active Mode: %s", currentTypeName.c_str());
 
-		if (ImGui::Button("Manual (Unity Style)")) RequestSwitch(CameraType::Manual);
-		ImGui::SameLine();
-		if (ImGui::Button("Debug (Orbit)")) RequestSwitch(CameraType::Debug);
+		if (m_factories.find(CameraType::Manual) != m_factories.end())
+		{
+			if (ImGui::Button("Manual (Unity Style)")) RequestSwitch(CameraType::Manual);
+			ImGui::SameLine();
+		}
+		if (m_factories.find(CameraType::Debug) != m_factories.end())
+		{
+			if (ImGui::Button("Debug (Orbit)")) RequestSwitch(CameraType::Debug);
+			ImGui::SameLine();
+		}
 
 		if (m_factories.find(CameraType::Spring) != m_factories.end())
 		{
