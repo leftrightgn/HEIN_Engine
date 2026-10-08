@@ -10,6 +10,7 @@ namespace HEIN
     class SkinnedModelComponent;
     class TerrainColliderComponent;
     class MeshColliderComponent;
+    class AABBColliderComponent;
 
     struct IKChain
     {
@@ -33,6 +34,7 @@ namespace HEIN
         SkinnedModelComponent* m_skinnedModel = nullptr;
         TerrainColliderComponent* m_terrain = nullptr;
         MeshColliderComponent* m_meshCollider = nullptr;
+        std::vector<AABBColliderComponent*> m_environmentAABBs;
 
         bool m_enabled = true;
         float m_globalIKWeight = 1.0f;

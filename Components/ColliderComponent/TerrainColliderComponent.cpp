@@ -99,11 +99,11 @@ namespace HEIN
 		float gridX = localPos.x + halfWidth;
 		float gridZ = localPos.z + halfDepth;
 
-		// Boundary Clamping: prevent index overflow beyond the valid heightmap grid extent
-		if (gridX < 0.0f) gridX = 0.0f;
-		if (gridZ < 0.0f) gridZ = 0.0f;
-		if (gridX >= (width - 1.001f)) gridX = (float)width - 1.001f;
-		if (gridZ >= (height - 1.001f)) gridZ = (float)height - 1.001f;
+		// Boundary Check: return false if outside valid heightmap extent
+		if (gridX < 0.0f || gridZ < 0.0f || gridX >= (width - 1.001f) || gridZ >= (height - 1.001f))
+		{
+			return false;
+		}
 
 		// Integer grid cell index (bottom-left corner of the active quad)
 		int col = static_cast<int>(std::floor(gridX));

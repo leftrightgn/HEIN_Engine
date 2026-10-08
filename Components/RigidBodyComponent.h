@@ -63,6 +63,7 @@ namespace HEIN
 		 
 		bool isKinematic() const { return m_isKinematic; }
 		bool UsesGravity() const { return m_useGravity; }
+		bool IsGrounded() const { return m_isGrounded; }
 	};
 
 }

@@ -148,6 +148,7 @@ namespace HEIN
 		std::wstring m_noiseTexturePath = L"Dual/Resources/Textures/waternoise.dds";
 		std::wstring m_colorMapTexturePath = L"Dual/Resources/Textures/colormap.bmp";
 		std::wstring m_grassMaskTexturePath = L"Dual/Resources/Textures/grass_mask.dds";
+		std::string m_binaryDataPath = "Resources/Data/FoliageData.bin";
 
 		// Wind & Animation Controls (Stylized Wind Breezing via scrolling noise)
 		DirectX::SimpleMath::Vector2 m_windDirection = DirectX::SimpleMath::Vector2(1.0f, 0.35f);
@@ -220,6 +221,13 @@ namespace HEIN
 		void ClearAll();
 		size_t GetInstanceCount(FoliageType type) const;
 		size_t GetTotalInstanceCount() const;
+
+		// Binary Storage API
+		bool SaveInstancesToBinary(const std::string& path);
+		bool LoadInstancesFromBinary(const std::string& path);
+		std::string ResolveBinaryPath(const std::string& path, bool forWriting) const;
+		const std::string& GetBinaryDataPath() const { return m_binaryDataPath; }
+		void SetBinaryDataPath(const std::string& path) { m_binaryDataPath = path; }
 
 	private:
 		bool InitializeResources(ID3D11Device* device);
