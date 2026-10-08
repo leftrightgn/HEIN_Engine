@@ -12,6 +12,13 @@ namespace HEIN
         DirectX::SimpleMath::Matrix BoneTransforms[256]; // Max 256 bones for modern models
     };
 
+    __declspec(align(16)) struct CB_StaticMatrices
+    {
+        DirectX::SimpleMath::Matrix WorldViewProj;
+        DirectX::SimpleMath::Matrix World;
+        DirectX::SimpleMath::Matrix LightViewProj; // Used to project vertices into the shadow map
+    };
+
     __declspec(align(16)) struct CB_Lighting
     {
         // 16 bytes: Vector3 (12 bytes) + int (4 bytes)
