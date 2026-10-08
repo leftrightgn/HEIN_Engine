@@ -145,7 +145,7 @@
     <None Include="Shaders\Foliage_Common.hlsli">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="Shaders\SkyboxEffect_PS.hlsl">
+    <None Include="Shaders\StaticModel_Common.hlsli">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>
@@ -166,6 +166,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\Foliage_VS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\StaticModel_VS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\StaticModel_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

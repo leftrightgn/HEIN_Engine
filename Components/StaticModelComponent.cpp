@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Framework/GameContext.h"
 #include "StaticModelComponent.h"
 #include "Entities/Actor.h"
 #include <Effects.h>
@@ -11,7 +12,12 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <d3dcompiler.h>
+#include "Effect/ReadData.h"
 #include "TransformComponent.h"
+#include "Common/ShadowSystem.h"
+#include "Common/ShaderStructures.h"
+#include "LightComponent.h"
 #include "FogComponent.h"
 #include "Entities/ActorManager.h"
 #include "Camera/CameraController.h"
@@ -206,6 +212,119 @@ HEIN::StaticModelComponent::StaticModelComponent(Actor* owner)
 {
 }
 
+void HEIN::StaticModelComponent::InitializeShaders(ID3D11Device* device)
+{
+    if (m_vertexShader && m_pixelShader && m_cbMatrices && m_cbLighting) return;
+
+    bool loadedCso = false;
+    std::vector<uint8_t> vsData, psData;
+    try
+    {
+        vsData = DX::ReadData(L"Resources/Shaders/StaticModel_VS.cso");
+        psData = DX::ReadData(L"Resources/Shaders/StaticModel_PS.cso");
+        loadedCso = true;
+    }
+    catch (...)
+    {
+        try
+        {
+            vsData = DX::ReadData(L"StaticModel_VS.cso");
+            psData = DX::ReadData(L"StaticModel_PS.cso");
+            loadedCso = true;
+        }
+        catch (...)
+        {
+            loadedCso = false;
+        }
+    }
+
+    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
+    const void* vsBytecode = nullptr;
+    size_t vsBytecodeSize = 0;
+    const void* psBytecode = nullptr;
+    size_t psBytecodeSize = 0;
+
+    if (loadedCso)
+    {
+        vsBytecode = vsData.data();
+        vsBytecodeSize = vsData.size();
+        psBytecode = psData.data();
+        psBytecodeSize = psData.size();
+    }
+    else
+    {
+        HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/StaticModel_VS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+        if (FAILED(hr))
+        {
+            hr = D3DCompileFromFile(L"External/Engine/Shaders/StaticModel_VS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+        }
+        if (FAILED(hr))
+        {
+            if (errorBlob)
+            {
+                OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+                FILE* f;
+                if (fopen_s(&f, "ShaderError_StaticVS.txt", "w") == 0)
+                {
+                    fprintf(f, "%s", (char*)errorBlob->GetBufferPointer());
+                    fclose(f);
+                }
+            }
+            return;
+        }
+
+        hr = D3DCompileFromFile(L"../External/Engine/Shaders/StaticModel_PS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+        if (FAILED(hr))
+        {
+            hr = D3DCompileFromFile(L"External/Engine/Shaders/StaticModel_PS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+        }
+        if (FAILED(hr))
+        {
+            if (errorBlob)
+            {
+                OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+                FILE* f;
+                if (fopen_s(&f, "ShaderError_StaticPS.txt", "w") == 0)
+                {
+                    fprintf(f, "%s", (char*)errorBlob->GetBufferPointer());
+                    fclose(f);
+                }
+            }
+            return;
+        }
+
+        vsBytecode = vsBlob->GetBufferPointer();
+        vsBytecodeSize = vsBlob->GetBufferSize();
+        psBytecode = psBlob->GetBufferPointer();
+        psBytecodeSize = psBlob->GetBufferSize();
+    }
+
+    m_vsBytecode.assign((const uint8_t*)vsBytecode, (const uint8_t*)vsBytecode + vsBytecodeSize);
+
+    device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, m_vertexShader.ReleaseAndGetAddressOf());
+    device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, m_pixelShader.ReleaseAndGetAddressOf());
+
+    // Create Constant Buffers
+    D3D11_BUFFER_DESC cbDesc = {};
+    cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+    cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    cbDesc.ByteWidth = sizeof(CB_StaticMatrices);
+    device->CreateBuffer(&cbDesc, nullptr, m_cbMatrices.ReleaseAndGetAddressOf());
+
+    cbDesc.ByteWidth = sizeof(CB_Lighting);
+    device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
+
+    // Create Sampler State (Linear Wrap)
+    D3D11_SAMPLER_DESC sampDesc = {};
+    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    device->CreateSamplerState(&sampDesc, m_samplerState.ReleaseAndGetAddressOf());
+}
+
 void HEIN::StaticModelComponent::Initialize(
     GameContext& gameContext, 
     const wchar_t* modelPath,
@@ -313,6 +432,8 @@ void HEIN::StaticModelComponent::Initialize(
     {
         m_drawBones.reset();
     }
+
+    InitializeShaders(device);
 }
 
 void HEIN::StaticModelComponent::Update(float)
@@ -405,52 +526,219 @@ void HEIN::StaticModelComponent::Draw(
         }
     }
 
+    ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
     ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
     DirectX::DX11::CommonStates& states = gameContext.commonStates;
 
-    // Find global FogComponent (same pattern as LightComponent search)
+    if (!m_vertexShader || !m_pixelShader || !m_cbMatrices || !m_cbLighting)
+    {
+        InitializeShaders(device);
+    }
+
+    if (!m_vertexShader || !m_pixelShader)
+    {
+        // Fallback to DirectXTK standard drawing if custom shaders failed to compile
+        if (!m_model->bones.empty() && m_drawBones)
+        {
+            m_model->Draw(context, states, m_model->bones.size(), m_drawBones.get(), world, view, proj);
+        }
+        else
+        {
+            m_model->Draw(context, states, world, view, proj);
+        }
+        return;
+    }
+
+    // Find active LightComponent and FogComponent
+    HEIN::LightComponent* activeLight = nullptr;
     HEIN::FogComponent* fogComp = nullptr;
     for (auto& pair : gameContext.actorManager->GetAllActors())
     {
-        fogComp = pair.second->GetComponent<HEIN::FogComponent>();
-        if (fogComp) break;
+        if (!activeLight) activeLight = pair.second->GetComponent<HEIN::LightComponent>();
+        if (!fogComp) fogComp = pair.second->GetComponent<HEIN::FogComponent>();
+        if (activeLight && fogComp) break;
     }
 
-    // Apply fog to DirectXTK built-in effects (BasicEffect, SkinnedEffect, etc.)
+    // Update Lighting & Fog Constant Buffer (b1)
+    if (m_cbLighting)
+    {
+        D3D11_MAPPED_SUBRESOURCE mapped;
+        if (SUCCEEDED(context->Map(m_cbLighting.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+        {
+            CB_Lighting* cbLight = (CB_Lighting*)mapped.pData;
+            if (activeLight)
+            {
+                HEIN::TransformComponent* lightTrans = activeLight->GetOwner()->GetComponent<HEIN::TransformComponent>();
+                cbLight->LightPos = lightTrans->GetPosition();
+                cbLight->LightDir = lightTrans->GetWorldMatrix().Forward();
+                if (cbLight->LightDir.LengthSquared() < 0.0001f) cbLight->LightDir = DirectX::SimpleMath::Vector3(0, -1, 0);
+
+                cbLight->LightType = static_cast<int>(activeLight->GetLightType());
+                cbLight->LightColor = activeLight->GetColor();
+                cbLight->LightIntensity = activeLight->GetIntensity();
+                cbLight->LightRange = activeLight->GetRange();
+                cbLight->LightSpotAngle = DirectX::XMConvertToRadians(activeLight->GetSpotAngle());
+            }
+            else
+            {
+                cbLight->LightPos = DirectX::SimpleMath::Vector3(0, 10, 0);
+                cbLight->LightDir = DirectX::SimpleMath::Vector3(0, -1, 1);
+                cbLight->LightType = 0; // Directional
+                cbLight->LightColor = DirectX::SimpleMath::Color(1, 1, 1, 1);
+                cbLight->LightIntensity = 1.0f;
+                cbLight->LightRange = 100.0f;
+                cbLight->LightSpotAngle = 0.785f;
+            }
+
+            if (fogComp)
+            {
+                cbLight->FogStart = fogComp->m_fogStart;
+                cbLight->FogEnd = fogComp->m_fogEnd;
+                cbLight->FogColor = fogComp->m_fogColor;
+            }
+            else
+            {
+                cbLight->FogStart = 100000.0f;
+                cbLight->FogEnd = 200000.0f;
+                cbLight->FogColor = DirectX::SimpleMath::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
+            }
+
+            DirectX::SimpleMath::Matrix viewInv = view.Invert();
+            cbLight->CameraPos = viewInv.Translation();
+            cbLight->FogPadding = 0.0f;
+
+            context->Unmap(m_cbLighting.Get(), 0);
+        }
+    }
+
+    // Render each mesh using custom shaders
     for (const auto& mesh : m_model->meshes)
     {
-        for (const auto& part : mesh->meshParts)
+        DirectX::SimpleMath::Matrix meshWorld = world;
+        if (!m_model->bones.empty() && m_drawBones && mesh->boneIndex != DirectX::ModelBone::c_Invalid && mesh->boneIndex < m_model->bones.size())
         {
-            auto fogEffect = dynamic_cast<DirectX::IEffectFog*>(part->effect.get());
-            if (fogEffect)
+            DirectX::SimpleMath::Matrix boneMat(m_drawBones[mesh->boneIndex]);
+            meshWorld = boneMat * world;
+        }
+
+        // Update Matrix Buffer (b0) for this mesh
+        if (m_cbMatrices)
+        {
+            D3D11_MAPPED_SUBRESOURCE mapped;
+            if (SUCCEEDED(context->Map(m_cbMatrices.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
             {
-                if (fogComp)
+                CB_StaticMatrices* cb = (CB_StaticMatrices*)mapped.pData;
+                cb->World = DirectX::XMMatrixTranspose(meshWorld);
+                cb->WorldViewProj = DirectX::XMMatrixTranspose(meshWorld * view * proj);
+                if (gameContext.shadowSystem)
                 {
-                    fogEffect->SetFogEnabled(true);
-                    fogEffect->SetFogStart(fogComp->m_fogStart);
-                    fogEffect->SetFogEnd(fogComp->m_fogEnd);
-                    fogEffect->SetFogColor(DirectX::XMVectorSet(
-                        fogComp->m_fogColor.x,
-                        fogComp->m_fogColor.y,
-                        fogComp->m_fogColor.z,
-                        1.0f
-                    ));
+                    cb->LightViewProj = DirectX::XMMatrixTranspose(gameContext.shadowSystem->GetLightViewProj());
                 }
                 else
                 {
-                    fogEffect->SetFogEnabled(false);
+                    cb->LightViewProj = DirectX::XMMatrixIdentity();
                 }
+                context->Unmap(m_cbMatrices.Get(), 0);
+            }
+        }
+
+        for (const auto& part : mesh->meshParts)
+        {
+            UINT stride = part->vertexStride;
+            UINT offset = 0;
+            context->IASetVertexBuffers(0, 1, part->vertexBuffer.GetAddressOf(), &stride, &offset);
+            context->IASetIndexBuffer(part->indexBuffer.Get(), part->indexFormat, 0);
+            context->IASetPrimitiveTopology(part->primitiveType);
+
+            // Apply the part's effect first so textures (DiffuseMap at t0) are bound
+            if (part->effect)
+            {
+                part->effect->Apply(context);
+            }
+
+            // Create input layout for this mesh part if not cached
+            if (!m_inputLayouts[part.get()])
+            {
+                auto& decl = part->vbDecl;
+                if (decl && !m_vsBytecode.empty())
+                {
+                    std::vector<D3D11_INPUT_ELEMENT_DESC> modifiedDecl = *decl;
+                    for (auto& element : modifiedDecl)
+                    {
+                        if (_stricmp(element.SemanticName, "SV_Position") == 0)
+                        {
+                            element.SemanticName = "POSITION";
+                        }
+                    }
+
+                    device->CreateInputLayout(
+                        modifiedDecl.data(),
+                        (UINT)modifiedDecl.size(),
+                        m_vsBytecode.data(),
+                        m_vsBytecode.size(),
+                        m_inputLayouts[part.get()].ReleaseAndGetAddressOf()
+                    );
+                }
+
+                if (!m_inputLayouts[part.get()] && !m_vsBytecode.empty())
+                {
+                    static const D3D11_INPUT_ELEMENT_DESC defaultLayout[] = {
+                        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+                        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+                        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+                    };
+                    device->CreateInputLayout(
+                        defaultLayout,
+                        (UINT)_countof(defaultLayout),
+                        m_vsBytecode.data(),
+                        m_vsBytecode.size(),
+                        m_inputLayouts[part.get()].ReleaseAndGetAddressOf()
+                    );
+                }
+            }
+
+            if (m_inputLayouts[part.get()])
+            {
+                context->IASetInputLayout(m_inputLayouts[part.get()].Get());
+                context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+                context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+                context->VSSetConstantBuffers(0, 1, m_cbMatrices.GetAddressOf());
+                context->PSSetConstantBuffers(1, 1, m_cbLighting.GetAddressOf());
+
+                ID3D11SamplerState* samplers[] = { m_samplerState.Get() };
+                context->PSSetSamplers(0, 1, samplers);
+
+                if (gameContext.shadowSystem)
+                {
+                    ID3D11ShaderResourceView* shadowSRV = gameContext.shadowSystem->GetShadowMapSRV();
+                    context->PSSetShaderResources(4, 1, &shadowSRV);
+
+                    ID3D11SamplerState* shadowSampler = gameContext.shadowSystem->GetShadowSampler();
+                    context->PSSetSamplers(1, 1, &shadowSampler);
+                }
+
+                context->RSSetState(gameContext.commonStates.CullNone());
+                context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+                context->OMSetBlendState(part->isAlpha ? gameContext.commonStates.AlphaBlend() : gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+
+                context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
+            }
+            else
+            {
+                // Fallback to basic part draw if layout creation failed
+                context->RSSetState(gameContext.commonStates.CullNone());
+                context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+                context->OMSetBlendState(part->isAlpha ? gameContext.commonStates.AlphaBlend() : gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+                context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
             }
         }
     }
 
-    if (!m_model->bones.empty() && m_drawBones)
+    // Unbind shadow SRV to avoid D3D11 resource hazards when shadow depth is written next frame
+    if (gameContext.shadowSystem)
     {
-        m_model->Draw(context, states, m_model->bones.size(), m_drawBones.get(), world, view, proj);
-    }
-    else
-    {
-        m_model->Draw(context, states, world, view, proj);
+        ID3D11ShaderResourceView* nullSRV = nullptr;
+        context->PSSetShaderResources(4, 1, &nullSRV);
     }
 }
 
@@ -663,6 +951,13 @@ void HEIN::StaticModelComponent::OnInspectorGUI(GameContext& gameContext)
                 m_needsReload = true;
             }
         }
+    }
+
+    if (m_needsReload)
+    {
+        m_needsReload = false;
+        m_inputLayouts.clear();
+        Initialize(gameContext, m_modelPath.c_str(), m_textureDir.empty() ? nullptr : m_textureDir.c_str());
     }
 }
 
