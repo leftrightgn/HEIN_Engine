@@ -1370,28 +1370,28 @@ namespace HEIN
 		ImGui::Checkbox("Freeze Culling Frustum", &m_freezeFrustum);
 
 		ImGui::Separator();
-		ImGui::Text("Binary Storage (Fast I/O)");
+		ImGui::Text("Foliage Data Storage (Separate JSON File)");
 		char pathBuf[256];
-		strncpy_s(pathBuf, m_binaryDataPath.c_str(), sizeof(pathBuf));
-		if (ImGui::InputText("Storage Path", pathBuf, sizeof(pathBuf)))
+		strncpy_s(pathBuf, m_foliageDataPath.c_str(), sizeof(pathBuf));
+		if (ImGui::InputText("Storage Path (.json)", pathBuf, sizeof(pathBuf)))
 		{
-			m_binaryDataPath = pathBuf;
+			m_foliageDataPath = pathBuf;
 		}
 		ImGui::Text("Instances: %zu (Grass: %zu, Flower: %zu, Tree: %zu)",
 			GetTotalInstanceCount(),
 			GetInstanceCount(FoliageType::Grass),
 			GetInstanceCount(FoliageType::Flower),
 			GetInstanceCount(FoliageType::Tree));
-		if (ImGui::Button("Save Foliage Binary Now"))
+		if (ImGui::Button("Save Foliage JSON Now"))
 		{
-			SaveInstancesToBinary(m_binaryDataPath);
+			SaveInstancesToJson(m_foliageDataPath);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Reload Foliage Binary Now"))
+		if (ImGui::Button("Reload Foliage JSON Now"))
 		{
 			ClearAll();
 			m_tempLoadedInstances.clear();
-			if (LoadInstancesFromBinary(m_binaryDataPath))
+			if (LoadInstancesFromJson(m_foliageDataPath))
 			{
 				TerrainComponent* t = FindTerrain(gameContext);
 				for (const auto& inst : m_tempLoadedInstances)
@@ -1648,11 +1648,178 @@ namespace HEIN
 		j["Tilt"] = m_tilt;
 		j["Bend"] = m_bend;
 
-		// High-performance binary storage for foliage instances to prevent JSON bloat and game freezes
-		j["BinaryDataPath"] = m_binaryDataPath;
-		SaveInstancesToBinary(m_binaryDataPath);
+		// High-performance separate JSON storage for foliage instances
+		j["FoliageDataPath"] = m_foliageDataPath;
+		SaveInstancesToJson(m_foliageDataPath);
 
 		return j;
+	}
+
+	std::string FoliageComponent::ResolveDataPath(const std::string& path, bool forWriting) const
+	{
+		namespace fs = std::filesystem;
+		std::error_code ec;
+
+		if (!forWriting)
+		{
+			std::vector<std::string> candidates = {
+				path,
+				"Dual/Resources/Data/" + fs::path(path).filename().string(),
+				"Resources/Data/" + fs::path(path).filename().string(),
+				"Dual/" + path,
+				"../Dual/Resources/Data/" + fs::path(path).filename().string(),
+				"../" + path,
+				"../../" + path
+			};
+
+			for (const auto& testPath : candidates)
+			{
+				if (fs::exists(testPath, ec))
+				{
+					return testPath;
+				}
+			}
+			return path;
+		}
+		else
+		{
+			std::vector<std::string> candidates = {
+				path,
+				"Dual/Resources/Data/" + fs::path(path).filename().string(),
+				"Resources/Data/" + fs::path(path).filename().string(),
+				"Dual/" + path,
+				"../Dual/Resources/Data/" + fs::path(path).filename().string()
+			};
+
+			for (const auto& testPath : candidates)
+			{
+				fs::path p(testPath);
+				fs::path parent = p.parent_path();
+				if (!parent.empty() && fs::exists(parent, ec))
+				{
+					return testPath;
+				}
+			}
+			return path;
+		}
+	}
+
+	bool FoliageComponent::SaveInstancesToJson(const std::string& path)
+	{
+		namespace fs = std::filesystem;
+		std::string resolvedPath = ResolveDataPath(path, true);
+
+		std::error_code ec;
+		fs::path parentDir = fs::path(resolvedPath).parent_path();
+		if (!parentDir.empty())
+		{
+			fs::create_directories(parentDir, ec);
+		}
+
+		std::ofstream file(resolvedPath);
+		if (!file.is_open())
+		{
+			char msg[256];
+			snprintf(msg, sizeof(msg), "[FoliageComponent] Failed to open JSON file for writing: %s\n", resolvedPath.c_str());
+			OutputDebugStringA(msg);
+			return false;
+		}
+
+		nlohmann::json j;
+		j["Version"] = 1;
+		j["Count"] = GetTotalInstanceCount();
+
+		nlohmann::json instancesArr = nlohmann::json::array();
+		for (const auto& pair : m_cells)
+		{
+			for (size_t t = 0; t < static_cast<size_t>(FoliageType::Count); ++t)
+			{
+				for (const auto& inst : pair.second->instances[t])
+				{
+					instancesArr.push_back({
+						inst.worldPos.x,
+						inst.worldPos.y,
+						inst.worldPos.z,
+						inst.rotation,
+						inst.scale,
+						inst.type
+					});
+				}
+			}
+		}
+		j["Instances"] = std::move(instancesArr);
+
+		file << j.dump(2);
+		file.close();
+		return true;
+	}
+
+	bool FoliageComponent::LoadInstancesFromJson(const std::string& path)
+	{
+		std::string resolvedPath = ResolveDataPath(path, false);
+
+		std::ifstream file(resolvedPath);
+		if (!file.is_open())
+		{
+			return false;
+		}
+
+		nlohmann::json j;
+		try
+		{
+			file >> j;
+		}
+		catch (...)
+		{
+			OutputDebugStringA("[FoliageComponent] Failed to parse foliage JSON file.\n");
+			return false;
+		}
+
+		if (!j.contains("Instances") || !j["Instances"].is_array())
+		{
+			return false;
+		}
+
+		m_tempLoadedInstances.clear();
+		const auto& arr = j["Instances"];
+		m_tempLoadedInstances.reserve(arr.size());
+
+		for (const auto& item : arr)
+		{
+			if (item.is_array() && item.size() >= 6)
+			{
+				FoliageInstanceData inst;
+				inst.worldPos.x = item[0].get<float>();
+				inst.worldPos.y = item[1].get<float>();
+				inst.worldPos.z = item[2].get<float>();
+				inst.rotation = item[3].get<float>();
+				inst.scale = item[4].get<float>();
+				inst.type = item[5].get<uint32_t>();
+				m_tempLoadedInstances.push_back(inst);
+			}
+			else if (item.is_object())
+			{
+				FoliageInstanceData inst;
+				if (item.contains("Pos") && item["Pos"].is_array() && item["Pos"].size() >= 3)
+				{
+					inst.worldPos.x = item["Pos"][0].get<float>();
+					inst.worldPos.y = item["Pos"][1].get<float>();
+					inst.worldPos.z = item["Pos"][2].get<float>();
+				}
+				else if (item.contains("Position") && item["Position"].is_array() && item["Position"].size() >= 3)
+				{
+					inst.worldPos.x = item["Position"][0].get<float>();
+					inst.worldPos.y = item["Position"][1].get<float>();
+					inst.worldPos.z = item["Position"][2].get<float>();
+				}
+				inst.rotation = item.value("Rot", item.value("Rotation", 0.0f));
+				inst.scale = item.value("Scale", 1.0f);
+				inst.type = item.value("Type", 0u);
+				m_tempLoadedInstances.push_back(inst);
+			}
+		}
+
+		return true;
 	}
 
 	std::string FoliageComponent::ResolveBinaryPath(const std::string& path, bool forWriting) const
@@ -1846,19 +2013,37 @@ namespace HEIN
 		ClearAll();
 		m_tempLoadedInstances.clear();
 
-		if (data.contains("BinaryDataPath"))
+		if (data.contains("FoliageDataPath"))
+		{
+			m_foliageDataPath = data["FoliageDataPath"].get<std::string>();
+		}
+		else if (data.contains("BinaryDataPath"))
 		{
 			m_binaryDataPath = data["BinaryDataPath"].get<std::string>();
+			std::string binPath = m_binaryDataPath;
+			if (binPath.length() >= 4 && binPath.substr(binPath.length() - 4) == ".bin")
+			{
+				m_foliageDataPath = binPath.substr(0, binPath.length() - 4) + ".json";
+			}
+			else
+			{
+				m_foliageDataPath = binPath;
+			}
 		}
 
-		bool loadedBinary = false;
-		if (!m_binaryDataPath.empty())
+		bool loaded = false;
+		if (!m_foliageDataPath.empty())
 		{
-			loadedBinary = LoadInstancesFromBinary(m_binaryDataPath);
+			loaded = LoadInstancesFromJson(m_foliageDataPath);
+		}
+
+		if (!loaded && !m_binaryDataPath.empty())
+		{
+			loaded = LoadInstancesFromBinary(m_binaryDataPath);
 		}
 
 		// Fallback for legacy scene files where instances were embedded directly in JSON
-		if (!loadedBinary && data.contains("Instances") && data["Instances"].is_array())
+		if (!loaded && data.contains("Instances") && data["Instances"].is_array())
 		{
 			for (const auto& item : data["Instances"])
 			{

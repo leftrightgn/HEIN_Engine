@@ -148,6 +148,7 @@ namespace HEIN
 		std::wstring m_noiseTexturePath = L"Dual/Resources/Textures/waternoise.dds";
 		std::wstring m_colorMapTexturePath = L"Dual/Resources/Textures/colormap.bmp";
 		std::wstring m_grassMaskTexturePath = L"Dual/Resources/Textures/grass_mask.dds";
+		std::string m_foliageDataPath = "Resources/Data/FoliageData.json";
 		std::string m_binaryDataPath = "Resources/Data/FoliageData.bin";
 
 		// Wind & Animation Controls (Stylized Wind Breezing via scrolling noise)
@@ -222,10 +223,15 @@ namespace HEIN
 		size_t GetInstanceCount(FoliageType type) const;
 		size_t GetTotalInstanceCount() const;
 
-		// Binary Storage API
+		// Data Storage API (Separate JSON & Binary fallback)
+		bool SaveInstancesToJson(const std::string& path);
+		bool LoadInstancesFromJson(const std::string& path);
 		bool SaveInstancesToBinary(const std::string& path);
 		bool LoadInstancesFromBinary(const std::string& path);
+		std::string ResolveDataPath(const std::string& path, bool forWriting) const;
 		std::string ResolveBinaryPath(const std::string& path, bool forWriting) const;
+		const std::string& GetFoliageDataPath() const { return m_foliageDataPath; }
+		void SetFoliageDataPath(const std::string& path) { m_foliageDataPath = path; }
 		const std::string& GetBinaryDataPath() const { return m_binaryDataPath; }
 		void SetBinaryDataPath(const std::string& path) { m_binaryDataPath = path; }
 
