@@ -3,6 +3,8 @@
 #include "Components/SkinnedModelComponent.h"
 #include "Components/ColliderComponent/TerrainColliderComponent.h"
 #include "Components/ColliderComponent/MeshColliderComponent.h"
+#include "Components/ColliderComponent/AABBColliderComponent.h"
+#include "Components/RigidBodyComponent.h"
 #include "Common/CollisionMath.h"
 #include "Components/TransformComponent.h"
 #include "Entities/ActorManager.h"
@@ -159,19 +161,25 @@ namespace HEIN
             return;
         }
 
-        if (!m_terrain && !m_meshCollider)
+        if (!m_terrain && !m_meshCollider && m_environmentAABBs.empty())
         {
             if (m_actorManager)
             {
                 for (auto& pair : m_actorManager->GetAllActors())
                 {
-                    if (!m_terrain)
-                        m_terrain = pair.second->GetComponent<TerrainColliderComponent>();
-                    if (!m_meshCollider)
-                        m_meshCollider = pair.second->GetComponent<MeshColliderComponent>();
+                    Actor* act = pair.second.get();
+                    if (!act || act == m_owner) continue;
 
-                    if (m_terrain && m_meshCollider)
-                        break;
+                    if (!m_terrain)
+                        m_terrain = act->GetComponent<TerrainColliderComponent>();
+                    if (!m_meshCollider)
+                        m_meshCollider = act->GetComponent<MeshColliderComponent>();
+
+                    auto aabb = act->GetComponent<AABBColliderComponent>();
+                    if (aabb && !aabb->IsTrigger() && (aabb->GetCollisionLayer() & CollisionLayer::Layer_Environment))
+                    {
+                        m_environmentAABBs.push_back(aabb);
+                    }
                 }
             }
             else
@@ -327,17 +335,36 @@ namespace HEIN
         }
         float activeWeight = weight * swingMask;
 
-        if (alignToTerrain && (m_terrain || m_meshCollider))
+        // Grounded State Check:
+        // If the actor is airborne (falling, jumping, or off a ledge), disable Foot IK
+        // so feet return to the natural falling/jump animation instead of reaching for the floor.
+        bool isGrounded = true;
+        if (m_owner)
+        {
+            auto* rb = m_owner->GetComponent<RigidBodyComponent>();
+            if (rb && !rb->IsGrounded())
+            {
+                isGrounded = false;
+            }
+        }
+
+        if (!isGrounded)
+        {
+            activeWeight = 0.0f;
+        }
+
+        if (alignToTerrain && isGrounded && (m_terrain || m_meshCollider || !m_environmentAABBs.empty()))
         {
             const DirectX::SimpleMath::Vector3 actorPos = worldMatrix.Translation();
             float groundAtFoot = 0.0f, groundAtActor = 0.0f;
 
-            // Multi-surface raycast: queries heightmap and static mesh triangle BVH for highest contact
+            // Multi-surface raycast: queries heightmap, static stage AABBs, and static mesh triangle BVH for highest contact
             auto getGroundHeight = [&](const DirectX::SimpleMath::Vector3& pos, float& outHeight, DirectX::SimpleMath::Vector3* outNormal = nullptr) -> bool {
                 bool hitAny = false;
                 float bestHeight = -FLT_MAX;
                 DirectX::SimpleMath::Vector3 bestNorm = DirectX::SimpleMath::Vector3::Up;
 
+                // 1. Query Terrain Heightmap
                 if (m_terrain)
                 {
                     DirectX::SimpleMath::Vector3 n;
@@ -350,6 +377,31 @@ namespace HEIN
                     }
                 }
 
+                // 2. Query Static Environment AABBs (e.g. Stage floor)
+                for (auto* aabbComp : m_environmentAABBs)
+                {
+                    if (!aabbComp) continue;
+                    const auto& aabb = aabbComp->GetWorldAABB();
+                    float minX = aabb.Center.x - aabb.Extents.x;
+                    float maxX = aabb.Center.x + aabb.Extents.x;
+                    float minZ = aabb.Center.z - aabb.Extents.z;
+                    float maxZ = aabb.Center.z + aabb.Extents.z;
+                    float topY = aabb.Center.y + aabb.Extents.y;
+                    float botY = aabb.Center.y - aabb.Extents.y;
+
+                    // If position is horizontally inside the AABB and within vertical reach
+                    if (pos.x >= minX && pos.x <= maxX && pos.z >= minZ && pos.z <= maxZ && pos.y >= (botY - 2.0f))
+                    {
+                        if (!hitAny || topY > bestHeight)
+                        {
+                            bestHeight = topY;
+                            bestNorm = DirectX::SimpleMath::Vector3::Up;
+                            hitAny = true;
+                        }
+                    }
+                }
+
+                // 3. Query Mesh Colliders
                 if (m_meshCollider)
                 {
                     DirectX::SimpleMath::Vector3 rayOrigin(pos.x, pos.y + 10.0f, pos.z);
@@ -447,6 +499,15 @@ namespace HEIN
         currentOffset = currentOffset + (targetOffset - currentOffset) * lerpSpeed;
         currentNormal = DirectX::SimpleMath::Vector3::Lerp(currentNormal, m_footNormal, lerpSpeed);
         currentNormal.Normalize();
+
+        // Flat-Surface & Zero-Offset Optimization (Early Exit):
+        // If the ground is flat (normal is Up) and the offset delta is negligible,
+        // the modified pose matches the original animation pose. Skip all trigonometry!
+        if (std::abs(currentOffset) < 0.005f && std::abs(targetOffset) < 0.005f &&
+            currentNormal.y > 0.99f && std::abs(heightOffset) < 0.001f)
+        {
+            return;
+        }
 
         targetPos.y += currentOffset * activeWeight;
         targetPos.y += heightOffset;

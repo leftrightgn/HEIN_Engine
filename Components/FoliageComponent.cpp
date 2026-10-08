@@ -17,6 +17,8 @@
 #include <cmath>
 #include <random>
 #include <algorithm>
+#include <fstream>
+#include <filesystem>
 
 namespace HEIN
 {
@@ -1366,6 +1368,40 @@ namespace HEIN
 		ImGui::Text("Cell Management & Debugging");
 		ImGui::Checkbox("Enable Frustum Culling", &m_enableFrustumCulling);
 		ImGui::Checkbox("Freeze Culling Frustum", &m_freezeFrustum);
+
+		ImGui::Separator();
+		ImGui::Text("Binary Storage (Fast I/O)");
+		char pathBuf[256];
+		strncpy_s(pathBuf, m_binaryDataPath.c_str(), sizeof(pathBuf));
+		if (ImGui::InputText("Storage Path", pathBuf, sizeof(pathBuf)))
+		{
+			m_binaryDataPath = pathBuf;
+		}
+		ImGui::Text("Instances: %zu (Grass: %zu, Flower: %zu, Tree: %zu)",
+			GetTotalInstanceCount(),
+			GetInstanceCount(FoliageType::Grass),
+			GetInstanceCount(FoliageType::Flower),
+			GetInstanceCount(FoliageType::Tree));
+		if (ImGui::Button("Save Foliage Binary Now"))
+		{
+			SaveInstancesToBinary(m_binaryDataPath);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Reload Foliage Binary Now"))
+		{
+			ClearAll();
+			m_tempLoadedInstances.clear();
+			if (LoadInstancesFromBinary(m_binaryDataPath))
+			{
+				TerrainComponent* t = FindTerrain(gameContext);
+				for (const auto& inst : m_tempLoadedInstances)
+				{
+					AddInstance(static_cast<FoliageType>(inst.type), inst.worldPos, inst.rotation, inst.scale, t);
+				}
+				m_tempLoadedInstances.clear();
+				m_tempLoadedInstances.shrink_to_fit();
+			}
+		}
 		ImGui::Separator();
 
 		if (m_brushActive)
@@ -1612,24 +1648,154 @@ namespace HEIN
 		j["Tilt"] = m_tilt;
 		j["Bend"] = m_bend;
 
-		// Compresses instance structures into flat arrays limiting file bloat
-		nlohmann::json instancesJson = nlohmann::json::array();
+		// High-performance binary storage for foliage instances to prevent JSON bloat and game freezes
+		j["BinaryDataPath"] = m_binaryDataPath;
+		SaveInstancesToBinary(m_binaryDataPath);
+
+		return j;
+	}
+
+	std::string FoliageComponent::ResolveBinaryPath(const std::string& path, bool forWriting) const
+	{
+		namespace fs = std::filesystem;
+		std::error_code ec;
+
+		if (!forWriting)
+		{
+			std::vector<std::string> candidates = {
+				path,
+				"Dual/Resources/Data/" + path,
+				"../Dual/Resources/Data/" + path,
+				"../" + path,
+				"../../" + path
+			};
+
+			for (const auto& testPath : candidates)
+			{
+				if (fs::exists(testPath, ec))
+				{
+					return testPath;
+				}
+			}
+			return path;
+		}
+		else
+		{
+			std::vector<std::string> candidates = {
+				path,
+				"Dual/Resources/Data/" + path,
+				"../Dual/Resources/Data/" + path
+			};
+
+			for (const auto& testPath : candidates)
+			{
+				fs::path p(testPath);
+				fs::path parent = p.parent_path();
+				if (parent.empty() || fs::exists(parent, ec))
+				{
+					return testPath;
+				}
+			}
+			return path;
+		}
+	}
+
+	bool FoliageComponent::SaveInstancesToBinary(const std::string& path)
+	{
+		namespace fs = std::filesystem;
+		std::string resolvedPath = ResolveBinaryPath(path, true);
+
+		std::error_code ec;
+		fs::path parentDir = fs::path(resolvedPath).parent_path();
+		if (!parentDir.empty())
+		{
+			fs::create_directories(parentDir, ec);
+		}
+
+		std::ofstream file(resolvedPath, std::ios::binary | std::ios::trunc);
+		if (!file.is_open())
+		{
+			char msg[256];
+			snprintf(msg, sizeof(msg), "[FoliageComponent] Failed to open binary file for writing: %s\n", resolvedPath.c_str());
+			OutputDebugStringA(msg);
+			return false;
+		}
+
+		// Collect all instances across all cells
+		std::vector<FoliageInstanceData> allInstances;
+		size_t total = GetTotalInstanceCount();
+		allInstances.reserve(total);
+
 		for (const auto& pair : m_cells)
 		{
 			for (size_t t = 0; t < static_cast<size_t>(FoliageType::Count); ++t)
 			{
-				for (const auto& inst : pair.second->instances[t])
-				{
-					instancesJson.push_back({
-						inst.worldPos.x, inst.worldPos.y, inst.worldPos.z,
-						inst.rotation, inst.scale, inst.type
-						});
-				}
+				allInstances.insert(allInstances.end(), pair.second->instances[t].begin(), pair.second->instances[t].end());
 			}
 		}
-		j["Instances"] = instancesJson;
 
-		return j;
+		// Write header: 4-byte magic, version, count, reserved
+		char magic[4] = { 'F', 'O', 'L', 'I' };
+		uint32_t version = 1;
+		uint32_t count = static_cast<uint32_t>(allInstances.size());
+		uint32_t reserved = 0;
+
+		file.write(magic, 4);
+		file.write(reinterpret_cast<const char*>(&version), sizeof(version));
+		file.write(reinterpret_cast<const char*>(&count), sizeof(count));
+		file.write(reinterpret_cast<const char*>(&reserved), sizeof(reserved));
+
+		if (count > 0)
+		{
+			file.write(reinterpret_cast<const char*>(allInstances.data()), count * sizeof(FoliageInstanceData));
+		}
+
+		file.close();
+		return true;
+	}
+
+	bool FoliageComponent::LoadInstancesFromBinary(const std::string& path)
+	{
+		std::string resolvedPath = ResolveBinaryPath(path, false);
+
+		std::ifstream file(resolvedPath, std::ios::binary);
+		if (!file.is_open())
+		{
+			char msg[256];
+			snprintf(msg, sizeof(msg), "[FoliageComponent] Could not open binary file: %s\n", resolvedPath.c_str());
+			OutputDebugStringA(msg);
+			return false;
+		}
+
+		char magic[4];
+		file.read(magic, 4);
+		if (file.gcount() != 4 || magic[0] != 'F' || magic[1] != 'O' || magic[2] != 'L' || magic[3] != 'I')
+		{
+			OutputDebugStringA("[FoliageComponent] Binary file corrupted or missing 'FOLI' magic.\n");
+			return false;
+		}
+
+		uint32_t version = 0;
+		file.read(reinterpret_cast<char*>(&version), sizeof(version));
+		if (version != 1)
+		{
+			OutputDebugStringA("[FoliageComponent] Unsupported foliage binary version.\n");
+			return false;
+		}
+
+		uint32_t count = 0;
+		file.read(reinterpret_cast<char*>(&count), sizeof(count));
+		uint32_t reserved = 0;
+		file.read(reinterpret_cast<char*>(&reserved), sizeof(reserved));
+
+		m_tempLoadedInstances.resize(count);
+		if (count > 0)
+		{
+			file.read(reinterpret_cast<char*>(m_tempLoadedInstances.data()), count * sizeof(FoliageInstanceData));
+		}
+
+		file.close();
+		return true;
 	}
 
 	void FoliageComponent::Deserialize(const nlohmann::json& data)
@@ -1680,9 +1846,19 @@ namespace HEIN
 		ClearAll();
 		m_tempLoadedInstances.clear();
 
-		// Accumulates elements in an intermediate array. Construction happens during 
-		// InitializeAfterDeserialize, ensuring Terrain dependency is accessible.
-		if (data.contains("Instances") && data["Instances"].is_array())
+		if (data.contains("BinaryDataPath"))
+		{
+			m_binaryDataPath = data["BinaryDataPath"].get<std::string>();
+		}
+
+		bool loadedBinary = false;
+		if (!m_binaryDataPath.empty())
+		{
+			loadedBinary = LoadInstancesFromBinary(m_binaryDataPath);
+		}
+
+		// Fallback for legacy scene files where instances were embedded directly in JSON
+		if (!loadedBinary && data.contains("Instances") && data["Instances"].is_array())
 		{
 			for (const auto& item : data["Instances"])
 			{

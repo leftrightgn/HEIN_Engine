@@ -10,7 +10,8 @@ namespace HEIN
 		Physical,
 		Magical,
 		Fire,
-		Posion
+		Posion,
+		Stun
 	};
 
 	class DamageDealerComponent : public IComponent, public IObserver
@@ -20,6 +21,7 @@ namespace HEIN
 		float m_damageAmount;
 		DamageType m_damageType;
 		bool m_isActive;
+		bool m_causesStun;
 
 	public:
 		
@@ -28,7 +30,7 @@ namespace HEIN
 		void Start() override;
 		void Update(float /*deltaTime*/) override{}
 
-		void Initialize(float damageAmount, DamageType damageType = DamageType::Physical);
+		void Initialize(float damageAmount, DamageType damageType = DamageType::Physical, bool causesStun = false);
 
 		std::string GetComponentName() const override { return "DamageDealerComponent"; }
 		void OnMessageAccepted(Message::MessageID messageID) override;
@@ -41,5 +43,8 @@ namespace HEIN
 		
 		bool IsActive() const { return m_isActive; }
 		void SetActive(bool active) { m_isActive = active; }
+
+		bool CausesStun() const { return m_causesStun || m_damageType == DamageType::Stun; }
+		void SetCausesStun(bool causesStun) { m_causesStun = causesStun; }
 	};
 }

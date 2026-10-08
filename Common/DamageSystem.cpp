@@ -42,6 +42,11 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 				{
 					victimB->ApplyDamage(damage);
 					Messenger::GetInstance()->Notify(ownerA, Message::ATTACK_HIT_CONFIRMED);
+
+					if (dealerA->CausesStun())
+					{
+						Messenger::GetInstance()->Notify(actorB->GetID(), Message::HIT_STUN);
+					}
 				}
 			}
 		}
@@ -71,6 +76,11 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 				{
 					victimA->ApplyDamage(damage);
 					Messenger::GetInstance()->Notify(ownerB, Message::ATTACK_HIT_CONFIRMED);
+
+					if (dealerB->CausesStun())
+					{
+						Messenger::GetInstance()->Notify(actorA->GetID(), Message::HIT_STUN);
+					}
 				}
 			}
 		}

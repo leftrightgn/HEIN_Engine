@@ -9,6 +9,7 @@ HEIN::DamageDealerComponent::DamageDealerComponent(Actor* owner)
 	, m_damageAmount(0.0f)
 	, m_damageType(DamageType::Physical)
 	, m_isActive(true)
+	, m_causesStun(false)
 {
 }
 
@@ -37,10 +38,11 @@ void HEIN::DamageDealerComponent::OnMessageAccepted(Message::MessageID messageID
 	}
 }
 
-void HEIN::DamageDealerComponent::Initialize(float damageAmount, DamageType damageType)
+void HEIN::DamageDealerComponent::Initialize(float damageAmount, DamageType damageType, bool causesStun)
 {
 	m_damageAmount = damageAmount;
 	m_damageType = damageType;
+	m_causesStun = causesStun;
 }
 
 nlohmann::json HEIN::DamageDealerComponent::Serialize()
@@ -49,6 +51,7 @@ nlohmann::json HEIN::DamageDealerComponent::Serialize()
     data["DamageAmount"] = m_damageAmount;
     data["DamageType"] = static_cast<int>(m_damageType);
     data["IsActive"] = m_isActive;
+    data["CausesStun"] = m_causesStun;
     return data;
 }
 
@@ -58,6 +61,7 @@ void HEIN::DamageDealerComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("DamageAmount")) m_damageAmount = data["DamageAmount"];
     if (data.contains("DamageType")) m_damageType = static_cast<DamageType>(data["DamageType"]);
     if (data.contains("IsActive")) m_isActive = data["IsActive"];
+    if (data.contains("CausesStun")) m_causesStun = data["CausesStun"];
 }
 
 void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& gameContext)
@@ -66,5 +70,16 @@ void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& gameContext)
     {
         ImGui::DragFloat("Damage Amount", &m_damageAmount, 0.5f);
         ImGui::Checkbox("Is Active", &m_isActive);
+        ImGui::Checkbox("Causes Stun", &m_causesStun);
+
+        const char* damageTypeNames[] = { "Physical", "Magical", "Fire", "Poison", "Stun" };
+        int currentType = static_cast<int>(m_damageType);
+        if (currentType >= 0 && currentType < static_cast<int>(IM_ARRAYSIZE(damageTypeNames)))
+        {
+            if (ImGui::Combo("Damage Type", &currentType, damageTypeNames, IM_ARRAYSIZE(damageTypeNames)))
+            {
+                m_damageType = static_cast<DamageType>(currentType);
+            }
+        }
     }
 }

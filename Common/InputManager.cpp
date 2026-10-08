@@ -143,6 +143,11 @@ namespace HEIN
 		{
 			messenger->Notify(playerID, Message::PLAYER_TOGGLE_MODEL);
 		}
+
+		if (gameContext.keyboardTracker.pressed.F)
+		{
+			messenger->Notify(playerID, Message::PLAYER_ACTION_JUMP);
+		}
 	}
 	
 }

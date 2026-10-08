@@ -486,79 +486,83 @@ namespace HEIN
 				manager.DestroyID(idToDelete);
 			}
 			ImGui::PopStyleColor(3);
-			ImGui::Separator();
 
-			bool isVis = m_selectedActor->IsVisible();
-			if (ImGui::Checkbox("Visible", &isVis))
+			if (m_selectedActor != nullptr)
 			{
-				m_selectedActor->SetVisible(isVis);
-			}
-			ImGui::SameLine();
-			bool isAct = m_selectedActor->IsActive();
-			if (ImGui::Checkbox("Active", &isAct))
-			{
-				m_selectedActor->SetActive(isAct);
-			}
+				ImGui::Separator();
 
-			std::wstring wtag = m_selectedActor ? m_selectedActor->GetTag() : L"";
-			std::string narrowTag(wtag.begin(), wtag.end());
-
-			char nameBuffer[256];
-			strncpy_s(nameBuffer, narrowTag.c_str(), sizeof(nameBuffer));
-			if (m_selectedActor && ImGui::InputText("Actor Name", nameBuffer, sizeof(nameBuffer)))
-			{
-				std::string newTag(nameBuffer);
-				std::wstring newWTag(newTag.begin(), newTag.end());
-				m_selectedActor->SetTag(newWTag);
-			}
-
-			ImGui::Separator();
-
-			// Draw gizmo mode toggles
-			if (ImGui::RadioButton("Local", m_currentGinzmo == ImGuizmo::LOCAL)) m_currentGinzmo = ImGuizmo::LOCAL;
-			ImGui::SameLine();
-			if (ImGui::RadioButton("World", m_currentGinzmo == ImGuizmo::WORLD)) m_currentGinzmo = ImGuizmo::WORLD;
-
-			ImGui::Separator();
-
-			if (m_selectedActor)
-			{
-				m_selectedActor->DrawInspector(gameContext);
-			}
-
-			ImGui::Separator();
-
-			// Add Component UI
-			std::vector<std::string> componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
-			if (componentNames.empty())
-			{
-				HEIN::ComponentFactory::Initialize();
-				componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
-			}
-
-			if (m_selectedActor && ImGui::BeginCombo("Add Component", "Select Component..."))
-			{
-				for (const std::string& compName : componentNames)
+				bool isVis = m_selectedActor->IsVisible();
+				if (ImGui::Checkbox("Visible", &isVis))
 				{
-					if (ImGui::Selectable(compName.c_str()))
+					m_selectedActor->SetVisible(isVis);
+				}
+				ImGui::SameLine();
+				bool isAct = m_selectedActor->IsActive();
+				if (ImGui::Checkbox("Active", &isAct))
+				{
+					m_selectedActor->SetActive(isAct);
+				}
+
+				std::wstring wtag = m_selectedActor ? m_selectedActor->GetTag() : L"";
+				std::string narrowTag(wtag.begin(), wtag.end());
+
+				char nameBuffer[256];
+				strncpy_s(nameBuffer, narrowTag.c_str(), sizeof(nameBuffer));
+				if (m_selectedActor && ImGui::InputText("Actor Name", nameBuffer, sizeof(nameBuffer)))
+				{
+					std::string newTag(nameBuffer);
+					std::wstring newWTag(newTag.begin(), newTag.end());
+					m_selectedActor->SetTag(newWTag);
+				}
+
+				ImGui::Separator();
+
+				// Draw gizmo mode toggles
+				if (ImGui::RadioButton("Local", m_currentGinzmo == ImGuizmo::LOCAL)) m_currentGinzmo = ImGuizmo::LOCAL;
+				ImGui::SameLine();
+				if (ImGui::RadioButton("World", m_currentGinzmo == ImGuizmo::WORLD)) m_currentGinzmo = ImGuizmo::WORLD;
+
+				ImGui::Separator();
+
+				if (m_selectedActor)
+				{
+					m_selectedActor->DrawInspector(gameContext);
+				}
+
+				ImGui::Separator();
+
+				// Add Component UI
+				std::vector<std::string> componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
+				if (componentNames.empty())
+				{
+					HEIN::ComponentFactory::Initialize();
+					componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
+				}
+
+				if (m_selectedActor && ImGui::BeginCombo("Add Component", "Select Component..."))
+				{
+					for (const std::string& compName : componentNames)
 					{
-						HEIN::IComponent* newComp = HEIN::ComponentFactory::CreateComponent(compName, m_selectedActor, &manager);
-						if (newComp)
+						if (ImGui::Selectable(compName.c_str()))
 						{
-							newComp->Start();
+							HEIN::IComponent* newComp = HEIN::ComponentFactory::CreateComponent(compName, m_selectedActor, &manager);
+							if (newComp)
+							{
+								newComp->Start();
+							}
 						}
 					}
+					ImGui::EndCombo();
 				}
-				ImGui::EndCombo();
-			}
 
-			// ImGuizmo 3D Viewport Controls Integration
-			// If a valid editable target is selected (e.g., TransformComponent, CameraController),
-			// this overlays interactive translation, rotation, or scaling handles directly onto 
-			// the D3D11 scene view. Interactions modify the component's underlying coordinate matrices.
-			if (g_ActiveGizmoTarget != nullptr)
-			{
-				g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
+				// ImGuizmo 3D Viewport Controls Integration
+				// If a valid editable target is selected (e.g., TransformComponent, CameraController),
+				// this overlays interactive translation, rotation, or scaling handles directly onto 
+				// the D3D11 scene view. Interactions modify the component's underlying coordinate matrices.
+				if (g_ActiveGizmoTarget != nullptr)
+				{
+					g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
+				}
 			}
 
 		}

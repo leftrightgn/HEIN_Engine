@@ -1078,7 +1078,8 @@ namespace HEIN
 		catch (const std::exception& e)
 		{
 			char buffer[512];
-			sprintf_s(buffer, "Failed to load animation: %s\n", e.what()); m_lastError = buffer;
+			sprintf_s(buffer, "Failed to load animation '%s' (%ls): %s\n", name.c_str(), animPath, e.what());
+			m_lastError = buffer;
 			OutputDebugStringA(buffer);
 		}
 	}
@@ -1451,6 +1452,11 @@ void HEIN::SkinnedModelComponent::InitializeAfterDeserialize(GameContext& gameCo
         for (const auto& pair : m_animationPaths)
         {
             LoadAnimation(pair.first, pair.second.c_str());
+        }
+
+        if (m_animations.find("Idle") != m_animations.end())
+        {
+            m_currentAnimation = m_animations["Idle"].get();
         }
     }
 }
