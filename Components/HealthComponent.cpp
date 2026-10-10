@@ -59,16 +59,30 @@ void HEIN::HealthComponent::OnInspectorGUI(GameContext& gameContext)
 	if (ImGui::CollapsingHeader("HealthComponent", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		float maxHealth = GetMaxHealth();
-		if (ImGui::DragFloat("MaxHealth", &maxHealth, 0.05f))
+		if (ImGui::DragFloat("Max Health", &maxHealth, 1.0f, 1.0f, 99999.0f, "%.0f"))
 		{
 			SetMaxHealth(maxHealth);
+			if (m_currentHealth > m_maxHealth)
+			{
+				m_currentHealth = m_maxHealth;
+			}
 		}
-        ImGui::DragFloat("Current Health", &m_currentHealth, 0.05f);
-		if (ImGui::Button("ResetHealth"))
+		if (ImGui::DragFloat("Current Health", &m_currentHealth, 1.0f, 0.0f, m_maxHealth, "%.0f"))
+		{
+			m_currentHealth = std::clamp(m_currentHealth, 0.0f, m_maxHealth);
+		}
+
+		// Visual Health Bar in Inspector
+		float ratio = (m_maxHealth > 0.0f) ? std::clamp(m_currentHealth / m_maxHealth, 0.0f, 1.0f) : 0.0f;
+		char hpOverlay[64];
+		sprintf_s(hpOverlay, "%.0f / %.0f (%.0f%%)", m_currentHealth, m_maxHealth, ratio * 100.0f);
+		ImGui::ProgressBar(ratio, ImVec2(-1, 0), hpOverlay);
+
+		if (ImGui::Button("Reset Health"))
 		{
 			m_currentHealth = m_maxHealth;
 		}
 		ImGui::Checkbox("UI Invincible", &m_isInvincible);
-        ImGui::Checkbox("Gameplay Invincible", &m_isGameplayInvincible);
+		ImGui::Checkbox("Gameplay Invincible", &m_isGameplayInvincible);
 	}
 }

@@ -515,6 +515,28 @@ namespace HEIN
 					m_selectedActor->SetTag(newWTag);
 				}
 
+				if (m_selectedActor)
+				{
+					const char* actorTypeNames[] = {
+						"Default",
+						"Player",
+						"Enemy",
+						"Items",
+						"Enviroment",
+						"Ghost"
+					};
+					int currentTypeIdx = static_cast<int>(m_selectedActor->GetActorType());
+					if (currentTypeIdx < 0 || currentTypeIdx >= IM_ARRAYSIZE(actorTypeNames))
+					{
+						currentTypeIdx = 0;
+					}
+
+					if (ImGui::Combo("Actor Type", &currentTypeIdx, actorTypeNames, IM_ARRAYSIZE(actorTypeNames)))
+					{
+						m_selectedActor->SetActorType(static_cast<HEIN::ActorType>(currentTypeIdx));
+					}
+				}
+
 				ImGui::Separator();
 
 				// Draw gizmo mode toggles

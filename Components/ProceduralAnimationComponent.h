@@ -56,6 +56,9 @@ namespace HEIN
         void LateUpdate(float deltaTime) override;
         void Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj) override;
 
+        void SetEnabled(bool enabled) { m_enabled = enabled; }
+        bool IsEnabled() const { return m_enabled; }
+
     private:
         struct DebugLine
         {

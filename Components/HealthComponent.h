@@ -35,6 +35,7 @@ namespace HEIN
 		float GetCurrentHealth() const { return m_currentHealth; }
 		float GetMaxHealth() const { return m_maxHealth; }
 		void SetMaxHealth(float maxHealth) { m_maxHealth = maxHealth; }
+		void SetCurrentHealth(float currentHealth) { m_currentHealth = currentHealth; }
 		bool isDead() const { return m_currentHealth <= 0.0f; }
 
 

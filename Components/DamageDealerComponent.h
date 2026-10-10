@@ -22,6 +22,7 @@ namespace HEIN
 		DamageType m_damageType;
 		bool m_isActive;
 		bool m_causesStun;
+		float m_knockbackForce;
 
 	public:
 		
@@ -30,7 +31,7 @@ namespace HEIN
 		void Start() override;
 		void Update(float /*deltaTime*/) override{}
 
-		void Initialize(float damageAmount, DamageType damageType = DamageType::Physical, bool causesStun = false);
+		void Initialize(float damageAmount, DamageType damageType = DamageType::Physical, bool causesStun = false, float knockbackForce = 20.0f);
 
 		std::string GetComponentName() const override { return "DamageDealerComponent"; }
 		void OnMessageAccepted(Message::MessageID messageID) override;
@@ -46,5 +47,8 @@ namespace HEIN
 
 		bool CausesStun() const { return m_causesStun || m_damageType == DamageType::Stun; }
 		void SetCausesStun(bool causesStun) { m_causesStun = causesStun; }
+
+		float GetKnockbackForce() const { return m_knockbackForce; }
+		void SetKnockbackForce(float knockbackForce) { m_knockbackForce = knockbackForce; }
 	};
 }

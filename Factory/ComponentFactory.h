@@ -31,6 +31,8 @@
 #include <Components/FoliageComponent.h>
 #include <Components/GaugeComponent.h>
 
+#include <algorithm>
+
 namespace HEIN
 {
 	/**
@@ -89,10 +91,12 @@ namespace HEIN
 		{
 			if (m_creators.empty()) Initialize();
 			std::vector<std::string> names;
+			names.reserve(m_creators.size());
 			for (const auto& pair : m_creators)
 			{
 				names.push_back(pair.first);
 			}
+			std::sort(names.begin(), names.end());
 			return names;
 		}
 

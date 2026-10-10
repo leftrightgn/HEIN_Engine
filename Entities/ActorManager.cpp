@@ -18,6 +18,11 @@ HEIN::Actor* HEIN::ActorManager::CreateActor(const std::wstring& tag)
 
 void HEIN::ActorManager::DestroyID(ActorID id)
 {
+    if (id == INVALID_ACTOR_ID)
+    {
+        return;
+    }
+
     // Check if it's already in the pending list to prevent infinite recursion
     if (std::find(m_pendingDestorys.begin(), m_pendingDestorys.end(), id) != m_pendingDestorys.end())
     {
@@ -30,7 +35,8 @@ void HEIN::ActorManager::DestroyID(ActorID id)
     // Cascade destroy to any actor that is owned by or a child of this actor
     for (const auto& pair : m_actors)
     {
-        if (pair.second->GetOwnerID() == id || pair.second->GetParentID() == id)
+        if ((pair.second->GetOwnerID() != INVALID_ACTOR_ID && pair.second->GetOwnerID() == id) ||
+            (pair.second->GetParentID() != INVALID_ACTOR_ID && pair.second->GetParentID() == id))
         {
             DestroyID(pair.second->GetID());
         }
@@ -96,10 +102,22 @@ void HEIN::ActorManager::DrawAll(
     const DirectX::SimpleMath::Matrix& proj
 )
 {
-    // Pass 1: Draw all 3D components for all actors
+    // Pass 1a: Draw all opaque 3D components for non-ghost actors
     for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
     {
-        pair.second->Draw(gameContext, view, proj);
+        if (pair.second && pair.second->GetActorType() != HEIN::ActorType::Ghost)
+        {
+            pair.second->Draw(gameContext, view, proj);
+        }
+    }
+
+    // Pass 1b: Draw transparent/ghost actors after opaque world geometry
+    for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
+    {
+        if (pair.second && pair.second->GetActorType() == HEIN::ActorType::Ghost)
+        {
+            pair.second->Draw(gameContext, view, proj);
+        }
     }
 
     // Pass 2: Draw all 2D UI components on top of 3D geometry
@@ -114,6 +132,7 @@ void HEIN::ActorManager::DrawAllShadows(GameContext& gameContext, const DirectX:
     for (auto& pair : m_actors)
     {
         if (!pair.second->IsVisible() || !pair.second->IsActive()) continue;
+        if (pair.second->GetActorType() == HEIN::ActorType::Ghost) continue; // Ghosts don't cast opaque shadows
 
         auto components = pair.second->GetComponents<IComponent>();
         for (auto* comp : components)
@@ -237,7 +256,7 @@ HEIN::Actor* HEIN::ActorManager::DuplicateActor(Actor* sourceActor, GameContext&
 
     newActor->Deserialize(actorJson, this);
 
-    // Parent assignment:
+    // Parent and Owner assignment:
     ActorID parentToSet = (newParentID != INVALID_ACTOR_ID) ? newParentID : sourceActor->GetParentID();
     if (parentToSet != INVALID_ACTOR_ID)
     {
@@ -246,6 +265,14 @@ HEIN::Actor* HEIN::ActorManager::DuplicateActor(Actor* sourceActor, GameContext&
         {
             newActor->SetParent(parent->GetID());
             parent->AddChild(newActor->GetID());
+            newActor->SetOwnerID(parent->GetID());
+
+            // If this child actor has a socket attachment, re-target to the new parent
+            if (auto* socketComp = newActor->GetComponent<SocketAttachmentComponent>())
+            {
+                socketComp->SetOwnerTag(parent->GetTag());
+                socketComp->Initialize(parent->GetID(), socketComp->GetSocketName());
+            }
         }
     }
 

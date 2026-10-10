@@ -103,7 +103,8 @@ void HEIN::Actor::DrawInspector(GameContext& gameContext)
 		// it is important to prevent removing TransformComponent since the engine relies heavily on it being there!
 		if (comp->GetComponentName() != "TransformComponent")
 		{
-			if (ImGui::Button("Remove Component", ImVec2(ImGui::GetContentRegionAvail().x, 0)))
+			std::string removeBtn = "Remove " + comp->GetComponentName();
+			if (ImGui::Button(removeBtn.c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 0)))
 			{
 				compToRemove = comp.get();
 			}

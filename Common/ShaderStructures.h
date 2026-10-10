@@ -44,5 +44,14 @@ namespace HEIN
         // 16 bytes: Vector3 (12 bytes) + float (4 bytes)
         DirectX::SimpleMath::Vector3 CameraPos;
         float FogPadding;
+
+        // 16 bytes: Ghost Tint and Alpha Multiplier (r, g, b, alpha)
+        DirectX::SimpleMath::Vector4 GhostColor;
+
+        // 16 bytes: Ghost effect controls
+        int IsGhost;
+        float GhostRimPower;
+        float GhostRimIntensity;
+        float GhostTime;
     };
 }

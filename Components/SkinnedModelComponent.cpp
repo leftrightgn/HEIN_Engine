@@ -451,6 +451,7 @@ namespace HEIN
 
 	void SkinnedModelComponent::Update(float deltaTime)
 	{
+		m_ghostTime += deltaTime;
 		if (!m_model) return;
 
 		int rootIdx = m_enableRootMotion ? GetRootBoneIndex() : -1;
@@ -735,6 +736,14 @@ namespace HEIN
 				cbLight->CameraPos = viewInv.Translation();
 				cbLight->FogPadding = 0.0f;
 
+				// Ghost effect parameters
+				bool isGhost = m_isGhostMode || (m_owner != nullptr && m_owner->GetActorType() == HEIN::ActorType::Ghost);
+				cbLight->IsGhost = isGhost ? 1 : 0;
+				cbLight->GhostColor = m_ghostColor;
+				cbLight->GhostRimPower = m_ghostRimPower;
+				cbLight->GhostRimIntensity = m_ghostRimIntensity;
+				cbLight->GhostTime = m_ghostTime;
+
 				context->Unmap(m_cbLighting.Get(), 0);
 			}
 		}
@@ -857,13 +866,26 @@ namespace HEIN
 				// Rasterizer state: CullNone ensures two-sided geometry remains visible
 				context->RSSetState(gameContext.commonStates.CullNone());
 
-				
-				context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
-				context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+				bool isGhost = m_isGhostMode || (m_owner != nullptr && m_owner->GetActorType() == HEIN::ActorType::Ghost);
+				if (isGhost)
+				{
+					context->OMSetDepthStencilState(gameContext.commonStates.DepthRead(), 0);
+					context->OMSetBlendState(gameContext.commonStates.AlphaBlend(), nullptr, 0xFFFFFFFF);
+				}
+				else
+				{
+					context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+					context->OMSetBlendState(part->isAlpha ? gameContext.commonStates.AlphaBlend() : gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+				}
 
 				context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
 			}
 		}
+
+		// Restore default pipeline states
+		context->RSSetState(gameContext.commonStates.CullCounterClockwise());
+		context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+		context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
 
 		if (gameContext.shadowSystem)
 		{
@@ -877,7 +899,8 @@ namespace HEIN
 
 	void SkinnedModelComponent::DrawShadow(GameContext& gameContext, const DirectX::SimpleMath::Matrix& lightViewProj)
 	{
-		if (!m_model || !m_isVisible) return;
+		bool isGhost = m_isGhostMode || (m_owner != nullptr && m_owner->GetActorType() == HEIN::ActorType::Ghost);
+		if (!m_model || !m_isVisible || isGhost) return;
 
 		ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
 

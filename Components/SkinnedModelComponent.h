@@ -45,6 +45,13 @@ namespace HEIN
 		
 		bool m_needsReload = false;
 
+		// Ghost / Transparency Effect Parameters
+		bool m_isGhostMode = false;
+		DirectX::SimpleMath::Vector4 m_ghostColor = DirectX::SimpleMath::Vector4(0.25f, 0.75f, 1.0f, 0.4f);
+		float m_ghostRimPower = 3.0f;
+		float m_ghostRimIntensity = 2.0f;
+		float m_ghostTime = 0.0f;
+
 		// Root Motion Settings & State
 		bool m_enableRootMotion = false;
 		bool m_rootMotionExtractY = false;
@@ -143,6 +150,15 @@ namespace HEIN
 
 		void SetVisible(bool visible) { m_isVisible = visible; }
 		bool IsVisible() const { return m_isVisible; }
+
+		// Ghost Effect API
+		void SetGhostMode(bool enable) { m_isGhostMode = enable; }
+		bool IsGhostMode() const { return m_isGhostMode; }
+		void SetGhostColor(const DirectX::SimpleMath::Vector4& col) { m_ghostColor = col; }
+		const DirectX::SimpleMath::Vector4& GetGhostColor() const { return m_ghostColor; }
+		void SetGhostRim(float power, float intensity) { m_ghostRimPower = power; m_ghostRimIntensity = intensity; }
+		float GetGhostRimPower() const { return m_ghostRimPower; }
+		float GetGhostRimIntensity() const { return m_ghostRimIntensity; }
 
 		// Root Motion API
 		bool IsRootMotionEnabled() const { return m_enableRootMotion; }

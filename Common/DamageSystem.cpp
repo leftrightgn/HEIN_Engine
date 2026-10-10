@@ -36,7 +36,7 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 				{
 					Actor* attacker = actorManager.GetActor(ownerA);
 					if (!attacker) attacker = actorA;
-					applyDamage = s_damageInterceptor(attacker, actorB, damage);
+					applyDamage = s_damageInterceptor(attacker, actorB, dealerA, damage);
 				}
 				if (applyDamage)
 				{
@@ -70,7 +70,7 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 				{
 					Actor* attacker = actorManager.GetActor(ownerB);
 					if (!attacker) attacker = actorB;
-					applyDamage = s_damageInterceptor(attacker, actorA, damage);
+					applyDamage = s_damageInterceptor(attacker, actorA, dealerB, damage);
 				}
 				if (applyDamage)
 				{

@@ -36,6 +36,12 @@ cbuffer cbLighting : register(b1)
     
     float3 CameraPos;
     float FogPadding;
+    
+    float4 GhostColor;          // (r, g, b, alphaMultiplier)
+    int IsGhost;                // 1 = Ghost effect enabled, 0 = normal
+    float GhostRimPower;        // Fresnel power (e.g. 3.0)
+    float GhostRimIntensity;    // Glow intensity (e.g. 2.0)
+    float GhostTime;            // Elapsed time for subtle aura breathing
 };
 
 // ==============================================================================

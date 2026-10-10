@@ -10,6 +10,7 @@ HEIN::DamageDealerComponent::DamageDealerComponent(Actor* owner)
 	, m_damageType(DamageType::Physical)
 	, m_isActive(true)
 	, m_causesStun(false)
+	, m_knockbackForce(20.0f)
 {
 }
 
@@ -38,11 +39,12 @@ void HEIN::DamageDealerComponent::OnMessageAccepted(Message::MessageID messageID
 	}
 }
 
-void HEIN::DamageDealerComponent::Initialize(float damageAmount, DamageType damageType, bool causesStun)
+void HEIN::DamageDealerComponent::Initialize(float damageAmount, DamageType damageType, bool causesStun, float knockbackForce)
 {
 	m_damageAmount = damageAmount;
 	m_damageType = damageType;
 	m_causesStun = causesStun;
+	m_knockbackForce = knockbackForce;
 }
 
 nlohmann::json HEIN::DamageDealerComponent::Serialize()
@@ -52,6 +54,7 @@ nlohmann::json HEIN::DamageDealerComponent::Serialize()
     data["DamageType"] = static_cast<int>(m_damageType);
     data["IsActive"] = m_isActive;
     data["CausesStun"] = m_causesStun;
+    data["KnockbackForce"] = m_knockbackForce;
     return data;
 }
 
@@ -62,6 +65,10 @@ void HEIN::DamageDealerComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("DamageType")) m_damageType = static_cast<DamageType>(data["DamageType"]);
     if (data.contains("IsActive")) m_isActive = data["IsActive"];
     if (data.contains("CausesStun")) m_causesStun = data["CausesStun"];
+    if (data.contains("KnockbackForce"))
+        m_knockbackForce = data["KnockbackForce"];
+    else
+        m_knockbackForce = 20.0f;
 }
 
 void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& gameContext)
@@ -69,6 +76,7 @@ void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& gameContext)
     if (ImGui::CollapsingHeader("DamageDealerComponent", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::DragFloat("Damage Amount", &m_damageAmount, 0.5f);
+        ImGui::DragFloat("Knockback Force", &m_knockbackForce, 0.5f, 0.0f, 200.0f);
         ImGui::Checkbox("Is Active", &m_isActive);
         ImGui::Checkbox("Causes Stun", &m_causesStun);
 

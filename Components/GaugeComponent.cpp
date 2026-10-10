@@ -243,7 +243,7 @@ HEIN::Actor* HEIN::GaugeComponent::FindPlayerActor(GameContext& gameContext)
 
     for (auto& pair : gameContext.actorManager->GetAllActors())
     {
-        if (pair.second->GetActorType() == HEIN::ActorType::Player)
+        if (pair.second && (pair.second->GetActorType() == HEIN::ActorType::Player || pair.second->GetTag() == L"Player"))
         {
             return pair.second.get();
         }
@@ -332,6 +332,37 @@ void HEIN::GaugeComponent::Draw(
 
     // Auto-sync bound bar values from data source components
     SyncBoundBars(gameContext);
+
+    // Filter ScreenSpace mode: Only the active controlled Player and Enemy boss draw ScreenSpace HUDs!
+    if (m_anchorMode == GaugeAnchorMode::ScreenSpace)
+    {
+        if (m_owner)
+        {
+            HEIN::ActorType ownerType = m_owner->GetActorType();
+            if (ownerType == HEIN::ActorType::Player)
+            {
+                // Only the currently active player actor draws the player HUD
+                Actor* activePlayer = FindPlayerActor(gameContext);
+                if (activePlayer && m_owner != activePlayer && (!gameContext.isEditorMode || HEIN::g_ActiveGizmoTarget != this))
+                {
+                    return; // Inactive or former player body - do not draw over active HUD
+                }
+            }
+            else if (ownerType == HEIN::ActorType::Enemy)
+            {
+                // Enemy boss HUD is allowed
+            }
+            else
+            {
+                // Dormant vessels (ActorType::Default), corpses, props, Ghost, etc.
+                // MUST NOT draw a screen-space HUD unless actively being edited in editor!
+                if (!gameContext.isEditorMode || HEIN::g_ActiveGizmoTarget != this)
+                {
+                    return;
+                }
+            }
+        }
+    }
 
     // --- Range-based activation check ---
     // When the gauge is a child of an enemy actor, only show it when
@@ -446,6 +477,13 @@ void HEIN::GaugeComponent::DrawBar(
         m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(context);
     }
     EnsureWhiteTexture(device);
+
+    if (device && ((!bar.fillTex && !bar.fillTexPath.empty()) ||
+                   (!bar.backgroundTex && !bar.backgroundTexPath.empty()) ||
+                   (!bar.borderTex && !bar.borderTexPath.empty())))
+    {
+        const_cast<GaugeComponent*>(this)->LoadBarTextures(device, const_cast<GaugeBarDef&>(bar));
+    }
 
     // UI overlay uses DepthNone so it draws on top of 3D
     context->OMSetDepthStencilState(gameContext.commonStates.DepthNone(), 0);
@@ -1009,8 +1047,37 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                 }
 
                 // Values
-                ImGui::DragFloat("Current Value", &bar.currentValue, 0.5f, 0.0f, bar.maxValue);
-                ImGui::DragFloat("Max Value", &bar.maxValue, 0.5f, 1.0f, 99999.0f);
+                if (bar.autoBind && bar.gaugeType == GaugeType::HP)
+                {
+                    Actor* target = GetParentActor(gameContext);
+                    if (!target) target = m_owner;
+                    HealthComponent* health = target ? target->GetComponent<HealthComponent>() : nullptr;
+                    if (health)
+                    {
+                        float curHp = health->GetCurrentHealth();
+                        float maxHp = health->GetMaxHealth();
+                        if (ImGui::DragFloat("Current Health (Syncs with HealthComponent)", &curHp, 1.0f, 0.0f, maxHp, "%.0f"))
+                        {
+                            health->SetCurrentHealth(curHp);
+                            bar.currentValue = curHp;
+                        }
+                        if (ImGui::DragFloat("Max Health (Syncs with HealthComponent)", &maxHp, 1.0f, 1.0f, 99999.0f, "%.0f"))
+                        {
+                            health->SetMaxHealth(maxHp);
+                            bar.maxValue = maxHp;
+                        }
+                    }
+                    else
+                    {
+                        ImGui::DragFloat("Current Value", &bar.currentValue, 1.0f, 0.0f, bar.maxValue, "%.0f");
+                        ImGui::DragFloat("Max Value", &bar.maxValue, 1.0f, 1.0f, 99999.0f, "%.0f");
+                    }
+                }
+                else
+                {
+                    ImGui::DragFloat("Current Value", &bar.currentValue, 0.5f, 0.0f, bar.maxValue);
+                    ImGui::DragFloat("Max Value", &bar.maxValue, 0.5f, 1.0f, 99999.0f);
+                }
 
                 // Layout
                 ImGui::DragFloat2("Offset (X, Y)", &bar.offset.x, 1.0f);

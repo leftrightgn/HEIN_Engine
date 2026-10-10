@@ -62,6 +62,7 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 GetVelocity() const;
 		 
 		bool isKinematic() const { return m_isKinematic; }
+		void SetKinematic(bool isKinematic) { m_isKinematic = isKinematic; }
 		bool UsesGravity() const { return m_useGravity; }
 		bool IsGrounded() const { return m_isGrounded; }
 	};

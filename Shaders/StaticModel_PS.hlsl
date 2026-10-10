@@ -57,6 +57,54 @@ float4 main(VSOutput input) : SV_TARGET
 {
     float4 baseColor = DiffuseMap.Sample(LinearSampler, input.TexCoord);
     
+    // Ghost Form Transparency & Ethereal Rim Glow
+    if (IsGhost != 0)
+    {
+        // Fallback color if model has missing or black texture
+        if (baseColor.a < 0.05f || dot(baseColor.rgb, baseColor.rgb) < 0.001f)
+        {
+            baseColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+
+        float3 norm = normalize(input.Normal);
+        float3 viewDir = normalize(CameraPos - input.WorldPos);
+
+        // Invert normal for backfaces so Fresnel glow works from all angles (CullNone)
+        if (dot(norm, viewDir) < 0.0f)
+        {
+            norm = -norm;
+        }
+
+        // Fresnel Rim calculation (edges glow, center is see-through)
+        float NdotV = saturate(dot(norm, viewDir));
+        float rim = pow(1.0f - NdotV, max(GhostRimPower, 0.1f));
+
+        // Diffuse factor for subtle lighting depth
+        float3 lightVector = LightPos - input.WorldPos;
+        float3 L = (LightType == 0) ? normalize(-LightDir) : normalize(lightVector);
+        float diff = max(dot(norm, L), 0.0f);
+
+        // Spectral Ghost Color & Alpha
+        float3 spectralColor = GhostColor.rgb;
+        float baseAlpha = saturate(GhostColor.a * baseColor.a);
+        float finalAlpha = saturate(baseAlpha + rim * GhostRimIntensity * 0.45f);
+
+        // Gentle spiritual breathing pulsation
+        float pulse = 0.92f + 0.08f * sin(GhostTime * 3.0f);
+        finalAlpha = saturate(finalAlpha * pulse);
+
+        // Tint texture and add glowing spectral rim outline
+        float3 ghostRgb = lerp(baseColor.rgb, spectralColor, 0.65f);
+        float3 finalColor = ghostRgb * (LightColor.rgb * diff * LightIntensity * 0.5f + 0.4f) + spectralColor * (rim * GhostRimIntensity);
+
+        // Distance Fog
+        float dist = length(input.WorldPos - CameraPos);
+        float fogFactor = saturate((dist - FogStart) / (FogEnd - FogStart));
+        finalColor = lerp(finalColor, FogColor.rgb, fogFactor);
+
+        return float4(finalColor, finalAlpha);
+    }
+
     // Alpha Clipping
     clip(baseColor.a - 0.05f);
 

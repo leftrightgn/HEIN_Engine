@@ -6,11 +6,12 @@ namespace HEIN
 {
 	class Actor;
 	class ActorManager;
+	class DamageDealerComponent;
 
 	class DamageSystem
 	{
 	public:
-		using DamageInterceptorFunc = std::function<bool(Actor* attacker, Actor* victim, float damage)>;
+		using DamageInterceptorFunc = std::function<bool(Actor* attacker, Actor* victim, DamageDealerComponent* dealer, float damage)>;
 		inline static DamageInterceptorFunc s_damageInterceptor = nullptr;
 		static void SetDamageInterceptor(DamageInterceptorFunc interceptor) { s_damageInterceptor = std::move(interceptor); }
 

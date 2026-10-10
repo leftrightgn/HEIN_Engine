@@ -436,8 +436,9 @@ void HEIN::StaticModelComponent::Initialize(
     InitializeShaders(device);
 }
 
-void HEIN::StaticModelComponent::Update(float)
+void HEIN::StaticModelComponent::Update(float deltaTime)
 {
+    m_ghostTime += deltaTime;
 }
 
 void HEIN::StaticModelComponent::Draw(
@@ -607,6 +608,14 @@ void HEIN::StaticModelComponent::Draw(
             cbLight->CameraPos = viewInv.Translation();
             cbLight->FogPadding = 0.0f;
 
+            // Ghost effect parameters
+            bool isGhost = m_isGhostMode || (m_owner != nullptr && m_owner->GetActorType() == HEIN::ActorType::Ghost);
+            cbLight->IsGhost = isGhost ? 1 : 0;
+            cbLight->GhostColor = m_ghostColor;
+            cbLight->GhostRimPower = m_ghostRimPower;
+            cbLight->GhostRimIntensity = m_ghostRimIntensity;
+            cbLight->GhostTime = m_ghostTime;
+
             context->Unmap(m_cbLighting.Get(), 0);
         }
     }
@@ -717,22 +726,45 @@ void HEIN::StaticModelComponent::Draw(
                     context->PSSetSamplers(1, 1, &shadowSampler);
                 }
 
+                bool isGhost = m_isGhostMode || (m_owner != nullptr && m_owner->GetActorType() == HEIN::ActorType::Ghost);
                 context->RSSetState(gameContext.commonStates.CullNone());
-                context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
-                context->OMSetBlendState(part->isAlpha ? gameContext.commonStates.AlphaBlend() : gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+                if (isGhost)
+                {
+                    context->OMSetDepthStencilState(gameContext.commonStates.DepthRead(), 0);
+                    context->OMSetBlendState(gameContext.commonStates.AlphaBlend(), nullptr, 0xFFFFFFFF);
+                }
+                else
+                {
+                    context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+                    context->OMSetBlendState(part->isAlpha ? gameContext.commonStates.AlphaBlend() : gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+                }
 
                 context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
             }
             else
             {
                 // Fallback to basic part draw if layout creation failed
+                bool isGhost = m_isGhostMode || (m_owner != nullptr && m_owner->GetActorType() == HEIN::ActorType::Ghost);
                 context->RSSetState(gameContext.commonStates.CullNone());
-                context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
-                context->OMSetBlendState(part->isAlpha ? gameContext.commonStates.AlphaBlend() : gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+                if (isGhost)
+                {
+                    context->OMSetDepthStencilState(gameContext.commonStates.DepthRead(), 0);
+                    context->OMSetBlendState(gameContext.commonStates.AlphaBlend(), nullptr, 0xFFFFFFFF);
+                }
+                else
+                {
+                    context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+                    context->OMSetBlendState(part->isAlpha ? gameContext.commonStates.AlphaBlend() : gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+                }
                 context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
             }
         }
     }
+
+    // Restore default pipeline states
+    context->RSSetState(gameContext.commonStates.CullCounterClockwise());
+    context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+    context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
 
     // Unbind shadow SRV to avoid D3D11 resource hazards when shadow depth is written next frame
     if (gameContext.shadowSystem)
@@ -747,7 +779,8 @@ void HEIN::StaticModelComponent::DrawShadow(
     const DirectX::SimpleMath::Matrix& lightViewProj
 )
 {
-    if (!m_isVisible || !m_model || !m_castShadows) return;
+    bool isGhost = m_isGhostMode || (m_owner != nullptr && m_owner->GetActorType() == HEIN::ActorType::Ghost);
+    if (!m_isVisible || !m_model || !m_castShadows || isGhost) return;
 
     ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
     DirectX::DX11::CommonStates& states = gameContext.commonStates;
