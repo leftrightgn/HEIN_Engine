@@ -34,6 +34,10 @@ namespace HEIN
 
 		void Initialize(HEIN::ActorID targetActorID, const std::wstring& socketName);
 
+		const std::wstring& GetOwnerTag() const { return m_socketOwnerTag; }
+		const std::wstring& GetSocketName() const { return m_socketName; }
+		void SetOwnerTag(const std::wstring& tag) { m_socketOwnerTag = tag; m_socketOwnerActorID = HEIN::INVALID_ACTOR_ID; }
+
 		void Start() override {}
 		void Update(float /*deltaTime*/) override {}
 		void LateUpdate(float deltaTime) override;

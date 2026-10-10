@@ -89,5 +89,22 @@ namespace HEIN
 
 		void SetCastShadows(bool castShadows) { m_castShadows = castShadows; }
 		bool CastsShadows() const { return m_castShadows; }
+
+		// Ghost Effect API
+		void SetGhostMode(bool enable) { m_isGhostMode = enable; }
+		bool IsGhostMode() const { return m_isGhostMode; }
+		void SetGhostColor(const DirectX::SimpleMath::Vector4& col) { m_ghostColor = col; }
+		const DirectX::SimpleMath::Vector4& GetGhostColor() const { return m_ghostColor; }
+		void SetGhostRim(float power, float intensity) { m_ghostRimPower = power; m_ghostRimIntensity = intensity; }
+		float GetGhostRimPower() const { return m_ghostRimPower; }
+		float GetGhostRimIntensity() const { return m_ghostRimIntensity; }
+
+	private:
+		// Ghost / Transparency Effect Parameters
+		bool m_isGhostMode = false;
+		DirectX::SimpleMath::Vector4 m_ghostColor = DirectX::SimpleMath::Vector4(0.25f, 0.75f, 1.0f, 0.4f);
+		float m_ghostRimPower = 3.0f;
+		float m_ghostRimIntensity = 2.0f;
+		float m_ghostTime = 0.0f;
 	};
 }

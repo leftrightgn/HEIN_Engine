@@ -18,7 +18,8 @@ namespace HEIN
 		Player = 1,
 		Enemy = 2,
 		Items = 3,
-		Enviroment = 4
+		Enviroment = 4,
+		Ghost = 5
 	};
 
 	using ActorID = uint32_t;

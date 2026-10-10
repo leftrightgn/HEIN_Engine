@@ -18,6 +18,10 @@ void HEIN::SocketAttachmentComponent::Initialize(HEIN::ActorID targetActorID, co
 {
 	m_socketOwnerActorID = targetActorID;
 	m_socketName = socketName;
+	if (m_owner && targetActorID != HEIN::INVALID_ACTOR_ID)
+	{
+		m_owner->SetOwnerID(targetActorID);
+	}
 	if (m_actorManager)
 	{
 		Actor* target = m_actorManager->GetActor(targetActorID);
@@ -32,10 +36,19 @@ void HEIN::SocketAttachmentComponent::LateUpdate(float deltaTime)
 	if (m_socketOwnerActorID == HEIN::INVALID_ACTOR_ID && m_socketOwnerTag != L"")
 	{
 		Actor* target = m_actorManager->GetActorByName(m_socketOwnerTag);
-		if (target) m_socketOwnerActorID = target->GetID();
+		if (target)
+		{
+			m_socketOwnerActorID = target->GetID();
+			if (m_owner) m_owner->SetOwnerID(m_socketOwnerActorID);
+		}
 	}
 
 	if (m_socketOwnerActorID == HEIN::INVALID_ACTOR_ID) return;
+
+	if (m_owner && m_owner->GetOwnerID() != m_socketOwnerActorID)
+	{
+		m_owner->SetOwnerID(m_socketOwnerActorID);
+	}
 
 	HEIN::Actor* targetActor = m_actorManager->GetActor(m_socketOwnerActorID);
 	if (targetActor == nullptr) return;
