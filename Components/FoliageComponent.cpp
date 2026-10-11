@@ -1648,7 +1648,7 @@ namespace HEIN
 		j["Tilt"] = m_tilt;
 		j["Bend"] = m_bend;
 
-		// High-performance separate JSON storage for foliage instances
+		// Separate JSON storage for foliage instances
 		j["FoliageDataPath"] = m_foliageDataPath;
 		SaveInstancesToJson(m_foliageDataPath);
 
@@ -2019,15 +2019,14 @@ namespace HEIN
 		}
 		else if (data.contains("BinaryDataPath"))
 		{
-			m_binaryDataPath = data["BinaryDataPath"].get<std::string>();
-			std::string binPath = m_binaryDataPath;
-			if (binPath.length() >= 4 && binPath.substr(binPath.length() - 4) == ".bin")
+			std::string bPath = data["BinaryDataPath"].get<std::string>();
+			if (bPath.length() >= 4 && bPath.substr(bPath.length() - 4) == ".bin")
 			{
-				m_foliageDataPath = binPath.substr(0, binPath.length() - 4) + ".json";
+				m_foliageDataPath = bPath.substr(0, bPath.length() - 4) + ".json";
 			}
 			else
 			{
-				m_foliageDataPath = binPath;
+				m_foliageDataPath = bPath;
 			}
 		}
 
@@ -2035,11 +2034,6 @@ namespace HEIN
 		if (!m_foliageDataPath.empty())
 		{
 			loaded = LoadInstancesFromJson(m_foliageDataPath);
-		}
-
-		if (!loaded && !m_binaryDataPath.empty())
-		{
-			loaded = LoadInstancesFromBinary(m_binaryDataPath);
 		}
 
 		// Fallback for legacy scene files where instances were embedded directly in JSON
