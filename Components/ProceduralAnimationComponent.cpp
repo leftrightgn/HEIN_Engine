@@ -176,7 +176,8 @@ namespace HEIN
                         m_meshCollider = act->GetComponent<MeshColliderComponent>();
 
                     auto aabb = act->GetComponent<AABBColliderComponent>();
-                    if (aabb && !aabb->IsTrigger() && (aabb->GetCollisionLayer() & CollisionLayer::Layer_Environment))
+                    if (aabb && !aabb->IsTrigger() && !aabb->IsWall() &&
+                        (aabb->IsGround() || (aabb->GetCollisionLayer() & (CollisionLayer::Layer_Environment | CollisionLayer::Layer_Ground))))
                     {
                         m_environmentAABBs.push_back(aabb);
                     }

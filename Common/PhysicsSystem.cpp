@@ -5,6 +5,7 @@
 #include "Components/RigidBodyComponent.h"
 #include "Components/TransformComponent.h"
 #include "Components/ColliderComponent/ColliderComponent.h"
+#include "Components/ColliderComponent/AABBColliderComponent.h"
 #include "Components/ColliderComponent/TerrainColliderComponent.h"
 #include "../../../Dual/BlackBoard/CombatBlackBoard.h"
 
@@ -22,6 +23,22 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
     // Player position query for distance-based simulation culling
     DirectX::SimpleMath::Vector3 playerPos = DirectX::SimpleMath::Vector3::Zero;
     HEIN::Actor* playerActor = actorManager.GetActorByName(L"Player");
+    if (playerActor == nullptr || playerActor->GetActorType() != HEIN::ActorType::Player)
+    {
+        for (const auto& pair : actorManager.GetAllActors())
+        {
+            if (pair.second && pair.second->IsActive())
+            {
+                if (pair.second->GetActorType() == HEIN::ActorType::Player ||
+                    pair.second->GetActorType() == HEIN::ActorType::Ghost)
+                {
+                    playerActor = pair.second.get();
+                    break;
+                }
+            }
+        }
+    }
+
     if (playerActor != nullptr)
     {
         HEIN::TransformComponent* playerTrans = playerActor->GetComponent<HEIN::TransformComponent>();
@@ -37,6 +54,8 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
     for (auto& pair : actorManager.GetAllActors())
     {
         HEIN::Actor* actor = pair.second.get();
+        if (!actor || !actor->IsActive()) continue;
+
         HEIN::RigidBodyComponent* rb = actor->GetComponent<HEIN::RigidBodyComponent>();
         HEIN::TransformComponent* transform = actor->GetComponent<HEIN::TransformComponent>();
 
@@ -51,16 +70,57 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
         if (!rb || !transform) continue;
 
         // Initial Ground Snapping & Spawn Anchor Persistence
-        if (rb->NeedsInitialSnap() && activeTerrain != nullptr)
+        if (rb->NeedsInitialSnap())
         {
             DirectX::SimpleMath::Vector3 pos = transform->GetPosition();
-            float terrainHeight = 0.0f;
-            DirectX::SimpleMath::Vector3 normal;
+            float highestGround = -FLT_MAX;
+            bool foundGround = false;
 
-            if (activeTerrain->GetHeightAtPosition(pos.x, pos.z, terrainHeight, normal))
+            if (activeTerrain != nullptr)
             {
-                // Align vertical elevation to terrain contact surface with offset
-                pos.y = terrainHeight + 0.5f;
+                float terrainHeight = 0.0f;
+                DirectX::SimpleMath::Vector3 normal;
+                if (activeTerrain->GetHeightAtPosition(pos.x, pos.z, terrainHeight, normal))
+                {
+                    highestGround = terrainHeight;
+                    foundGround = true;
+                }
+            }
+
+            // Query static environment AABB colliders (e.g. stage floor)
+            for (auto& envPair : actorManager.GetAllActors())
+            {
+                if (!envPair.second || !envPair.second->IsActive()) continue;
+                for (auto* aabbComp : envPair.second->GetComponents<HEIN::AABBColliderComponent>())
+                {
+                    if (!aabbComp || aabbComp->IsTrigger()) continue;
+                    if (aabbComp->IsWall()) continue;
+                    if (!aabbComp->IsGround() && (aabbComp->GetCollisionLayer() & (HEIN::CollisionLayer::Layer_Environment | HEIN::CollisionLayer::Layer_Default)) == 0) continue;
+
+                    const auto& aabb = aabbComp->GetWorldAABB();
+                    float minX = aabb.Center.x - aabb.Extents.x;
+                    float maxX = aabb.Center.x + aabb.Extents.x;
+                    float minZ = aabb.Center.z - aabb.Extents.z;
+                    float maxZ = aabb.Center.z + aabb.Extents.z;
+                    float topY = aabb.Center.y + aabb.Extents.y;
+                    float botY = aabb.Center.y - aabb.Extents.y;
+
+                    if (pos.x >= minX && pos.x <= maxX && pos.z >= minZ && pos.z <= maxZ && pos.y >= (botY - 5.0f))
+                    {
+                        if (!foundGround || topY > highestGround)
+                        {
+                            highestGround = topY;
+                            foundGround = true;
+                        }
+                    }
+                }
+            }
+
+            if (foundGround)
+            {
+                // Align vertical elevation to contact surface with offset
+                float snapOffset = (actor->GetActorType() == HEIN::ActorType::Ghost) ? 3.5f : 0.5f;
+                pos.y = highestGround + snapOffset;
                 transform->SetPosition(pos);
             }
 
@@ -77,8 +137,10 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
         }
 
         // Distance-Based Simulation Culling (Hibernation)
-        // Exempt Player and primary environmental roots from simulation culling
-        if (actor->GetActorType() != HEIN::ActorType::Player && actor->GetTag() != L"StageRoot")
+        // Exempt Player, Ghost avatar, and primary environmental roots from simulation culling
+        if (actor->GetActorType() != HEIN::ActorType::Player &&
+            actor->GetActorType() != HEIN::ActorType::Ghost &&
+            actor->GetTag() != L"StageRoot")
         {
             float distSq = DirectX::SimpleMath::Vector3::DistanceSquared(playerPos, transform->GetPosition());
 
@@ -110,6 +172,24 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
 
             DirectX::SimpleMath::Vector3 currentPosition = transform->GetPosition();
             currentPosition += (rb->m_velocity * deltaTime);
+
+            // Terrain Surface Floor Constraint: Prevent Ghost or any character from sinking below terrain
+            if (activeTerrain != nullptr)
+            {
+                float groundHeight = 0.0f;
+                DirectX::SimpleMath::Vector3 groundNormal;
+                if (activeTerrain->GetHeightAtPosition(currentPosition.x, currentPosition.z, groundHeight, groundNormal))
+                {
+                    float minHeight = (actor->GetActorType() == HEIN::ActorType::Ghost) ? (groundHeight + 3.5f) : groundHeight;
+                    if (currentPosition.y < minHeight)
+                    {
+                        currentPosition.y = minHeight;
+                        rb->m_velocity.y = std::max(rb->m_velocity.y, 0.0f);
+                        rb->m_isGrounded = true;
+                    }
+                }
+            }
+
             transform->SetPosition(currentPosition);
 
             rb->m_acceleration = DirectX::SimpleMath::Vector3::Zero;
@@ -125,6 +205,8 @@ void HEIN::PhysicsSystem::UpdateCollisions(GameContext& gameContext, HEIN::Actor
     for (auto& pair : actorManager.GetAllActors())
     {
         HEIN::Actor* actor = pair.second.get();
+        if (!actor || !actor->IsActive()) continue;
+
         std::vector<HEIN::ColliderComponent*> actorColliders = actor->GetComponents<HEIN::ColliderComponent>();
         for (HEIN::ColliderComponent* col : actorColliders)
         {
@@ -194,17 +276,30 @@ void HEIN::PhysicsSystem::ResolvePhysicalOverlap(HEIN::ColliderComponent* colA, 
     // ---------------------------------------------------------
     if (aIsDynamic && bIsDynamic)
     {
+        // Character vs Character pushbox separation acts horizontally on the ground plane
+        // to prevent downward attack impacts or landing leaps from driving characters into the floor
+        DirectX::SimpleMath::Vector3 sepNormal = manifold.normal;
+        sepNormal.y = 0.0f;
+        if (sepNormal.LengthSquared() > 0.0001f)
+        {
+            sepNormal.Normalize();
+        }
+        else
+        {
+            sepNormal = manifold.normal;
+        }
+
         // Split the displacement so they push EACH OTHER equally!
         float halfDepth = manifold.penetrationDepth * 0.5f;
 
         // Push A away
         DirectX::SimpleMath::Vector3 posA = transformA->GetPosition();
-        posA += (manifold.normal * halfDepth);
+        posA += (sepNormal * halfDepth);
         transformA->SetPosition(posA);
 
         // Push B away (in the exact opposite direction)
         DirectX::SimpleMath::Vector3 posB = transformB->GetPosition();
-        posB -= (manifold.normal * halfDepth);
+        posB -= (sepNormal * halfDepth);
         transformB->SetPosition(posB);
     }
     // ---------------------------------------------------------

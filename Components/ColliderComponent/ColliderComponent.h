@@ -26,6 +26,8 @@ namespace HEIN
 		constexpr uint32_t Layer_Enemy = 1 << 3;
 		constexpr uint32_t Layer_PlayerWeapon = 1 << 4;
 		constexpr uint32_t Layer_EnemyWeapon = 1 << 5;
+		constexpr uint32_t Layer_Ground = 1 << 6;
+		constexpr uint32_t Layer_Wall = 1 << 7;
 		constexpr uint32_t Layer_All = ~0u; // Everything all Set to 1
 	};
 
@@ -117,6 +119,19 @@ namespace HEIN
 
 		void SetCollisionMask(uint32_t mask) { m_mask = mask; }
 		uint32_t GetCollisionMask() const { return m_mask; }
+
+		bool IsGround() const
+		{
+			if (m_colliderTag == L"Wall" || (m_layer & CollisionLayer::Layer_Wall) != 0) return false;
+			if (m_colliderTag == L"Ground" || (m_layer & CollisionLayer::Layer_Ground) != 0) return true;
+			return (m_layer & CollisionLayer::Layer_Environment) != 0;
+		}
+
+		bool IsWall() const
+		{
+			if (m_colliderTag == L"Wall" || (m_layer & CollisionLayer::Layer_Wall) != 0) return true;
+			return false;
+		}
 
 		DirectX::SimpleMath::Matrix GetCalculateWorldMatrix() { return CalculateWorldMatrix(); }
 
