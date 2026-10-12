@@ -90,17 +90,28 @@ void HEIN::ColliderComponent::OnInspectorGUI(GameContext& gameContext)
         }
 
         // Collision Layer Dropdown
-        const char* layerNames[] = { "Default (1)", "Environment (2)", "Player (4)", "Enemy (8)", "PlayerWeapon (16)", "EnemyWeapon (32)" };
+        const char* layerNames[] = {
+            "Default (1)",
+            "Environment (2)",
+            "Player (4)",
+            "Enemy (8)",
+            "PlayerWeapon (16)",
+            "EnemyWeapon (32)",
+            "Ground (64)",
+            "Wall (128)"
+        };
         uint32_t layerValues[] = {
             CollisionLayer::Layer_Default,
             CollisionLayer::Layer_Environment,
             CollisionLayer::Layer_Player,
             CollisionLayer::Layer_Enemy,
             CollisionLayer::Layer_PlayerWeapon,
-            CollisionLayer::Layer_EnemyWeapon
+            CollisionLayer::Layer_EnemyWeapon,
+            CollisionLayer::Layer_Ground,
+            CollisionLayer::Layer_Wall
         };
         int currentLayerIdx = 0;
-        for (int i = 0; i < 6; ++i)
+        for (int i = 0; i < 8; ++i)
         {
             if (m_layer == layerValues[i])
             {
@@ -108,7 +119,7 @@ void HEIN::ColliderComponent::OnInspectorGUI(GameContext& gameContext)
                 break;
             }
         }
-        if (ImGui::Combo("Collision Layer", &currentLayerIdx, layerNames, 6))
+        if (ImGui::Combo("Collision Layer", &currentLayerIdx, layerNames, 8))
         {
             m_layer = layerValues[currentLayerIdx];
         }
@@ -131,6 +142,8 @@ void HEIN::ColliderComponent::OnInspectorGUI(GameContext& gameContext)
             DrawMaskBit("Collide with Enemy", CollisionLayer::Layer_Enemy);
             DrawMaskBit("Collide with PlayerWeapon", CollisionLayer::Layer_PlayerWeapon);
             DrawMaskBit("Collide with EnemyWeapon", CollisionLayer::Layer_EnemyWeapon);
+            DrawMaskBit("Collide with Ground", CollisionLayer::Layer_Ground);
+            DrawMaskBit("Collide with Wall", CollisionLayer::Layer_Wall);
 
             if (ImGui::Button("Collide With All")) m_mask = CollisionLayer::Layer_All;
             ImGui::TreePop();

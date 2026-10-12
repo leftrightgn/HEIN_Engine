@@ -102,6 +102,7 @@ void HEIN::CameraController::SetFirstCamera(CameraType key)
 		m_cameraStack.clear();
 		m_cameraStack.push_back(std::move(firstCam));
 		m_cameraStack.back()->OnEnter(m_data);
+		UpdateMouseMode();
 	}
 }
 

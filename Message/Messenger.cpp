@@ -38,7 +38,12 @@ void HEIN::Messenger::DestroyInstance()
 
 void HEIN::Messenger::Register(int actorID, IObserver* observer)
 {
-    m_objects[actorID].push_back(observer);
+    if (observer == nullptr) return;
+    auto& observers = m_objects[actorID];
+    if (std::find(observers.begin(), observers.end(), observer) == observers.end())
+    {
+        observers.push_back(observer);
+    }
 }
 
 void HEIN::Messenger::UnRegister(int actorID)
