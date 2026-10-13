@@ -106,6 +106,7 @@ namespace HEIN
         bool showValue = true;
         float fontSize = 0.8f;
         DirectX::SimpleMath::Vector4 labelColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        DirectX::SimpleMath::Vector2 textOffset = { 0.0f, 0.0f };
     };
 
     /**
