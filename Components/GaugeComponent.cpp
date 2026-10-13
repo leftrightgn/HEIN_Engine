@@ -621,7 +621,10 @@ void HEIN::GaugeComponent::DrawBar(
         if (bar.showLabel)
         {
             // Label: drawn to the left of the bar
-            ImVec2 labelPos(m_lastVpX + barX + 4.0f, m_lastVpY + barY + (barH - fontSize) * 0.5f);
+            ImVec2 labelPos(
+                m_lastVpX + barX + (4.0f + bar.textOffset.x) * scaleX,
+                m_lastVpY + barY + (barH - fontSize) * 0.5f + bar.textOffset.y * scaleY
+            );
 
             // Drop shadow
             drawList->AddText(ImGui::GetFont(), fontSize,
@@ -640,8 +643,8 @@ void HEIN::GaugeComponent::DrawBar(
             float scaledValWidth = baseValSize.x * (fontSize / ImGui::GetFontSize());
 
             ImVec2 valPos(
-                m_lastVpX + barX + barW - scaledValWidth - 4.0f,
-                m_lastVpY + barY + (barH - fontSize) * 0.5f
+                m_lastVpX + barX + barW - scaledValWidth - 4.0f * scaleX + bar.textOffset.x * scaleX,
+                m_lastVpY + barY + (barH - fontSize) * 0.5f + bar.textOffset.y * scaleY
             );
 
             // Drop shadow
@@ -796,6 +799,8 @@ nlohmann::json HEIN::GaugeComponent::Serialize()
         b["LabelColorG"] = bar.labelColor.y;
         b["LabelColorB"] = bar.labelColor.z;
         b["LabelColorA"] = bar.labelColor.w;
+        b["TextOffsetX"] = bar.textOffset.x;
+        b["TextOffsetY"] = bar.textOffset.y;
 
         barsArray.push_back(b);
     }
@@ -899,6 +904,8 @@ void HEIN::GaugeComponent::Deserialize(const nlohmann::json& data)
                 bar.labelColor.z = b["LabelColorB"];
                 bar.labelColor.w = b.value("LabelColorA", 1.0f);
             }
+            if (b.contains("TextOffsetX")) bar.textOffset.x = b["TextOffsetX"];
+            if (b.contains("TextOffsetY")) bar.textOffset.y = b["TextOffsetY"];
 
             m_bars.push_back(bar);
         }
@@ -1227,6 +1234,7 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                 ImGui::Checkbox("Show Value", &bar.showValue);
                 ImGui::SliderFloat("Font Size", &bar.fontSize, 0.3f, 3.0f, "%.2fx");
                 ImGui::ColorEdit4("Label Color", &bar.labelColor.x);
+                ImGui::DragFloat2("Text Offset (X, Y)", &bar.textOffset.x, 0.5f);
 
                 ImGui::Separator();
                 if (ImGui::Button("Reload Textures"))
