@@ -52,11 +52,18 @@ namespace HEIN
 		float m_ghostRimIntensity = 2.0f;
 		float m_ghostTime = 0.0f;
 
+		// Hit Flash Effect (triggered by HealthComponent when damage is taken)
+		DirectX::SimpleMath::Vector4 m_hitFlashColor = DirectX::SimpleMath::Vector4(1.0f, 0.1f, 0.1f, 0.8f);
+		float m_hitFlashDuration = 0.15f;
+		float m_hitFlashTimer = 0.0f;
+
 		// Root Motion Settings & State
 		bool m_enableRootMotion = false;
 		bool m_rootMotionExtractY = false;
 		std::wstring m_rootBoneName = L"";
+		bool m_hasActiveRootMotion = false;
 		DirectX::SimpleMath::Vector3 m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+		DirectX::SimpleMath::Vector3 m_rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
 		DirectX::SimpleMath::Vector3 m_initialRootTranslation = DirectX::SimpleMath::Vector3::Zero;
 		bool m_hasPrevRootTranslation = false;
 		double m_prevAnimTime = 0.0;
@@ -160,6 +167,15 @@ namespace HEIN
 		float GetGhostRimPower() const { return m_ghostRimPower; }
 		float GetGhostRimIntensity() const { return m_ghostRimIntensity; }
 
+		// Hit Flash API: tints the model with color (a = strength) and fades out over duration seconds
+		void TriggerHitFlash(const DirectX::SimpleMath::Vector4& color, float duration)
+		{
+			m_hitFlashColor = color;
+			m_hitFlashDuration = (duration > 0.001f) ? duration : 0.001f;
+			m_hitFlashTimer = m_hitFlashDuration;
+		}
+		bool IsHitFlashing() const { return m_hitFlashTimer > 0.0f; }
+
 		// Root Motion API
 		bool IsRootMotionEnabled() const { return m_enableRootMotion; }
 		void SetEnableRootMotion(bool enable)
@@ -174,7 +190,9 @@ namespace HEIN
 		const std::wstring& GetRootBoneName() const { return m_rootBoneName; }
 		void SetRootBoneName(const std::wstring& name) { m_rootBoneName = name; }
 
+		bool HasActiveRootMotion() const { return m_enableRootMotion && m_hasActiveRootMotion; }
 		DirectX::SimpleMath::Vector3 GetRootMotionDelta() const { return m_rootMotionDelta; }
+		DirectX::SimpleMath::Vector3 GetRootMotionVelocity() const { return m_rootMotionVelocity; }
 		int GetRootBoneIndex() const;
 
 		void ResetRootMotionTracking()
@@ -183,9 +201,10 @@ namespace HEIN
 			m_targetHasPrevRootTranslation = false;
 			m_prevAnimTime = 0.0;
 			m_targetPrevAnimTime = 0.0;
+			m_hasActiveRootMotion = false;
 			m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+			m_rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
 		}
-
 		const DirectX::SimpleMath::Matrix* GetCurrentLocalBones() const
 		{
 			if (m_isBlending)

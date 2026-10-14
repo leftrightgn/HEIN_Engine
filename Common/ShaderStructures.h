@@ -53,5 +53,8 @@ namespace HEIN
         float GhostRimPower;
         float GhostRimIntensity;
         float GhostTime;
+
+        // 16 bytes: Hit flash tint (r, g, b, strength 0..1). strength = 0 means no flash.
+        DirectX::SimpleMath::Vector4 HitFlashColor;
     };
 }

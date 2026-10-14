@@ -42,6 +42,8 @@ cbuffer cbLighting : register(b1)
     float GhostRimPower;        // Fresnel power (e.g. 3.0)
     float GhostRimIntensity;    // Glow intensity (e.g. 2.0)
     float GhostTime;            // Elapsed time for subtle aura breathing
+
+    float4 HitFlashColor;       // (r, g, b, strength 0..1) - damage flash tint
 };
 
 // ==============================================================================

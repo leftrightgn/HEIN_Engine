@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "HealthComponent.h"
 #include <DebugingTools/DebugUIManager.h>
+#include <Components/SkinnedModelComponent.h>
+#include <Entities/Actor.h>
 
 HEIN::HealthComponent::HealthComponent(Actor* owner)
 	: IComponent(owner)
@@ -32,6 +34,14 @@ void HEIN::HealthComponent::ApplyDamage(float damage)
 	{
 		m_currentHealth -= damage;
 		m_invincibilityTimer = 0.5f;
+
+		if (m_enableHitFlash && m_owner != nullptr)
+		{
+			if (auto* model = m_owner->GetComponent<HEIN::SkinnedModelComponent>())
+			{
+				model->TriggerHitFlash(m_hitFlashColor, m_hitFlashDuration);
+			}
+		}
 	}
 }
 
@@ -42,6 +52,9 @@ nlohmann::json HEIN::HealthComponent::Serialize()
     data["CurrentHealth"] = m_currentHealth;
     data["IsInvincible"] = m_isInvincible;
     data["IsGameplayInvincible"] = m_isGameplayInvincible;
+    data["EnableHitFlash"] = m_enableHitFlash;
+    data["HitFlashColor"] = { m_hitFlashColor.x, m_hitFlashColor.y, m_hitFlashColor.z, m_hitFlashColor.w };
+    data["HitFlashDuration"] = m_hitFlashDuration;
     return data;
 }
 
@@ -52,6 +65,13 @@ void HEIN::HealthComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("CurrentHealth")) m_currentHealth = data["CurrentHealth"];
     if (data.contains("IsInvincible")) m_isInvincible = data["IsInvincible"];
     if (data.contains("IsGameplayInvincible")) m_isGameplayInvincible = data["IsGameplayInvincible"];
+    if (data.contains("EnableHitFlash")) m_enableHitFlash = data["EnableHitFlash"];
+    if (data.contains("HitFlashColor") && data["HitFlashColor"].is_array() && data["HitFlashColor"].size() == 4)
+    {
+        const auto& c = data["HitFlashColor"];
+        m_hitFlashColor = DirectX::SimpleMath::Vector4(c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>());
+    }
+    if (data.contains("HitFlashDuration")) m_hitFlashDuration = data["HitFlashDuration"];
 }
 
 void HEIN::HealthComponent::OnInspectorGUI(GameContext& gameContext)
@@ -84,5 +104,19 @@ void HEIN::HealthComponent::OnInspectorGUI(GameContext& gameContext)
 		}
 		ImGui::Checkbox("UI Invincible", &m_isInvincible);
 		ImGui::Checkbox("Gameplay Invincible", &m_isGameplayInvincible);
+
+		// Hit Flash settings
+		ImGui::Separator();
+		ImGui::Text("Hit Effect:");
+		ImGui::Checkbox("Enable Hit Flash", &m_enableHitFlash);
+		ImGui::ColorEdit4("Hit Color (A = Strength)", &m_hitFlashColor.x);
+		ImGui::DragFloat("Hit Flash Duration", &m_hitFlashDuration, 0.01f, 0.01f, 2.0f, "%.2f s");
+		if (ImGui::Button("Preview Hit Flash") && m_owner != nullptr)
+		{
+			if (auto* model = m_owner->GetComponent<HEIN::SkinnedModelComponent>())
+			{
+				model->TriggerHitFlash(m_hitFlashColor, m_hitFlashDuration);
+			}
+		}
 	}
 }
