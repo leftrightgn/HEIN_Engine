@@ -17,6 +17,11 @@ namespace HEIN
 		bool m_isInvincible;
 		bool m_isGameplayInvincible;
 
+		// Hit Flash (visual feedback when damage is applied; rendered by SkinnedModelComponent)
+		bool m_enableHitFlash = true;
+		DirectX::SimpleMath::Vector4 m_hitFlashColor = { 1.0f, 0.1f, 0.1f, 0.8f }; // rgb + strength
+		float m_hitFlashDuration = 0.15f;
+
 	public:
 		std::string GetComponentName() const override { return "HealthComponent"; }
 		nlohmann::json Serialize() override;
@@ -43,5 +48,12 @@ namespace HEIN
 		void SetInvincible(bool invincible) { m_isInvincible = invincible; }
 		void SetGameplayInvincible(bool invincible) { m_isGameplayInvincible = invincible; }
 
+		// Hit Flash API
+		bool IsHitFlashEnabled() const { return m_enableHitFlash; }
+		void SetHitFlashEnabled(bool enable) { m_enableHitFlash = enable; }
+		const DirectX::SimpleMath::Vector4& GetHitFlashColor() const { return m_hitFlashColor; }
+		void SetHitFlashColor(const DirectX::SimpleMath::Vector4& color) { m_hitFlashColor = color; }
+		float GetHitFlashDuration() const { return m_hitFlashDuration; }
+		void SetHitFlashDuration(float duration) { m_hitFlashDuration = duration; }
 	};
 }

@@ -17,7 +17,6 @@
 #include "LightComponent.h"
 #include "Camera/CameraController.h"
 #include "FogComponent.h"
-#include "../../../Dual/BlackBoard/CombatBlackBoard.h"
 
 
 std::shared_ptr<DirectX::EffectFactory> HEIN::SkinnedModelComponent::s_fxFactory = nullptr;
@@ -236,6 +235,10 @@ namespace HEIN
 		sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 		sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 		sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampDesc.MaxAnisotropy = 16;
+		sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+		sampDesc.MinLOD = 0.0f;
+		sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
 		device->CreateSamplerState(&sampDesc, m_samplerState.ReleaseAndGetAddressOf());
 
 	}
@@ -410,51 +413,50 @@ namespace HEIN
 				worldDelta = DirectX::SimpleMath::Vector3::Transform(scaledDelta, transform->GetRotation());
 			}
 		}
+
 		m_rootMotionDelta = worldDelta;
 
-		if (m_isVisible && m_owner != nullptr)
+		// Deadzone (0.01 units) prevents microscopic in-place hip bobbing from triggering movement
+		if (m_isVisible && worldDelta.LengthSquared() > 0.0001f)
 		{
-			auto* bb = m_owner->GetComponent<CombatBlackBoard>();
-			auto* transform = m_owner->GetComponent<TransformComponent>();
+			m_hasActiveRootMotion = true;
+			float safeDt = (deltaTime > 0.0001f) ? deltaTime : 0.016f;
+			DirectX::SimpleMath::Vector3 computedVel = worldDelta / safeDt;
 
-			if (bb != nullptr)
+			float speedSq = computedVel.LengthSquared();
+			constexpr float MAX_ROOT_SPEED = 60.0f; // Sane limit prevents velocity explosions
+			if (speedSq > MAX_ROOT_SPEED * MAX_ROOT_SPEED)
 			{
-				// Deadzone (0.01 units) prevents microscopic in-place hip bobbing from triggering movement
-				if (worldDelta.LengthSquared() > 0.0001f)
-				{
-					bb->hasRootMotion = true;
-					float safeDt = (deltaTime > 0.0001f) ? deltaTime : 0.016f;
-					DirectX::SimpleMath::Vector3 computedVel = worldDelta / safeDt;
-					float speedSq = computedVel.LengthSquared();
-					constexpr float MAX_ROOT_SPEED = 60.0f; // Sane limit prevents velocity explosions
-					if (speedSq > MAX_ROOT_SPEED * MAX_ROOT_SPEED)
-					{
-						computedVel = (computedVel / std::sqrt(speedSq)) * MAX_ROOT_SPEED;
-					}
-					bb->rootMotionVelocity = computedVel;
-					bb->rootMotionDelta = worldDelta;
-				}
-				else
-				{
-					bb->hasRootMotion = false;
-					bb->rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
-					bb->rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
-				}
+				computedVel = (computedVel / std::sqrt(speedSq)) * MAX_ROOT_SPEED;
 			}
-			else if (transform != nullptr && worldDelta.LengthSquared() > 0.0001f)
-			{
-				// If no CombatBlackBoard on actor, directly move transform
-				transform->SetPosition(transform->GetPosition() + worldDelta);
-			}
+
+			m_rootMotionVelocity = computedVel;
+		}
+		else
+		{
+			m_hasActiveRootMotion = false;
+			m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+			m_rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
 		}
 	}
 
 	void SkinnedModelComponent::Update(float deltaTime)
 	{
 		m_ghostTime += deltaTime;
+		if (m_hitFlashTimer > 0.0f)
+		{
+			m_hitFlashTimer -= deltaTime;
+			if (m_hitFlashTimer < 0.0f) m_hitFlashTimer = 0.0f;
+		}
 		if (!m_model) return;
 
 		int rootIdx = m_enableRootMotion ? GetRootBoneIndex() : -1;
+		if (!m_enableRootMotion || rootIdx < 0 || m_currentAnimation == nullptr)
+		{
+			m_hasActiveRootMotion = false;
+			m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+			m_rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
+		}
 
 		if (m_isBlending)
 		{
@@ -602,7 +604,7 @@ namespace HEIN
 	{
 		if (!m_model || !m_isVisible) return;
 
-		bool isPlayer = (m_owner->GetActorType() == HEIN::ActorType::Player);
+		bool isPlayer = (m_owner->GetActorType() == HEIN::ActorType::Player || m_owner->GetActorType() == HEIN::ActorType::Ghost);
 
 		if (!isPlayer)
 		{
@@ -645,10 +647,18 @@ namespace HEIN
 				// Retrieve the base static bounding box
 				DirectX::BoundingBox expandedBox = mesh->boundingBox;
 
-				// Expand the extents by 50% to account for animation stretching/reaching
-				expandedBox.Extents.x *= 1.5f;
-				expandedBox.Extents.y *= 1.5f;
-				expandedBox.Extents.z *= 1.5f;
+				// If model has zero or invalid extents in SDKMesh header, use safe fallback extents
+				if (expandedBox.Extents.x < 0.001f && expandedBox.Extents.y < 0.001f && expandedBox.Extents.z < 0.001f)
+				{
+					expandedBox.Extents = DirectX::SimpleMath::Vector3(50.0f, 100.0f, 50.0f);
+				}
+				else
+				{
+					// Expand the extents by 50% to account for animation stretching/reaching
+					expandedBox.Extents.x *= 1.5f;
+					expandedBox.Extents.y *= 1.5f;
+					expandedBox.Extents.z *= 1.5f;
+				}
 
 				DirectX::BoundingOrientedBox worldOBB;
 				DirectX::BoundingOrientedBox::CreateFromBoundingBox(worldOBB, expandedBox);
@@ -743,6 +753,11 @@ namespace HEIN
 				cbLight->GhostRimPower = m_ghostRimPower;
 				cbLight->GhostRimIntensity = m_ghostRimIntensity;
 				cbLight->GhostTime = m_ghostTime;
+
+				// Hit flash: strength fades linearly from color.a to 0 over the flash duration
+				float flashFade = (m_hitFlashDuration > 0.0f) ? (m_hitFlashTimer / m_hitFlashDuration) : 0.0f;
+				cbLight->HitFlashColor = DirectX::SimpleMath::Vector4(
+					m_hitFlashColor.x, m_hitFlashColor.y, m_hitFlashColor.z, m_hitFlashColor.w * flashFade);
 
 				context->Unmap(m_cbLighting.Get(), 0);
 			}
@@ -875,7 +890,7 @@ namespace HEIN
 				else
 				{
 					context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
-					context->OMSetBlendState(part->isAlpha ? gameContext.commonStates.AlphaBlend() : gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
+					context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
 				}
 
 				context->DrawIndexed(part->indexCount, part->startIndex, part->vertexOffset);
@@ -1480,6 +1495,10 @@ void HEIN::SkinnedModelComponent::InitializeAfterDeserialize(GameContext& gameCo
         if (m_animations.find("Idle") != m_animations.end())
         {
             m_currentAnimation = m_animations["Idle"].get();
+        }
+        else if (!m_animations.empty())
+        {
+            m_currentAnimation = m_animations.begin()->second.get();
         }
     }
 }

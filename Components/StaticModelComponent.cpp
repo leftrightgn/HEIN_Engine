@@ -615,6 +615,7 @@ void HEIN::StaticModelComponent::Draw(
             cbLight->GhostRimPower = m_ghostRimPower;
             cbLight->GhostRimIntensity = m_ghostRimIntensity;
             cbLight->GhostTime = m_ghostTime;
+            cbLight->HitFlashColor = DirectX::SimpleMath::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
 
             context->Unmap(m_cbLighting.Get(), 0);
         }
