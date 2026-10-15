@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "ActorManager.h"
+#include "Framework/GameContext.h"
 #include <Components/TransformComponent.h>
 #include <Components/SocketAttachmentComponent.h>
 
@@ -121,9 +122,12 @@ void HEIN::ActorManager::DrawAll(
     }
 
     // Pass 2: Draw all 2D UI components on top of 3D geometry
-    for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
+    if (gameContext.showUI)
     {
-        pair.second->Draw2D(gameContext);
+        for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
+        {
+            pair.second->Draw2D(gameContext);
+        }
     }
 }
 

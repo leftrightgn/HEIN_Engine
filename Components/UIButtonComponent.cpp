@@ -161,7 +161,7 @@ void HEIN::UIButtonComponent::Draw2D(GameContext& gameContext)
 
 void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
 {
-    if (!m_isVisible) return;
+    if (!m_isVisible || !gameContext.showUI) return;
 
     // Query current active viewport to support responsive scaling in full view, windowed mode, and sub-viewports
     D3D11_VIEWPORT vp = {};

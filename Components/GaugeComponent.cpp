@@ -328,7 +328,7 @@ void HEIN::GaugeComponent::Draw(
     const DirectX::SimpleMath::Matrix& /*view*/,
     const DirectX::SimpleMath::Matrix& /*proj*/)
 {
-    if (!m_isVisible || m_bars.empty()) return;
+    if (!m_isVisible || m_bars.empty() || !gameContext.showUI) return;
 
     // Auto-sync bound bar values from data source components
     SyncBoundBars(gameContext);

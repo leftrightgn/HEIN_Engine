@@ -41,6 +41,8 @@ namespace HEIN
 		void SetExtents(DirectX::SimpleMath::Vector3 extents) { m_extents = extents; }
 
 		DirectX::BoundingBox GetWorldAABB() const { return m_worldAABB; }
+
+		bool IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const override;
 	};
 
 

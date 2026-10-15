@@ -450,83 +450,6 @@ void HEIN::StaticModelComponent::Draw(
 {
     if (!m_isVisible || !m_model) return;
 
-    bool isPlayer = (m_owner->GetActorType() == HEIN::ActorType::Player);
-
-    if (!isPlayer)
-    {
-        DirectX::SimpleMath::Matrix cullingView = view;
-        DirectX::SimpleMath::Matrix cullingProj = proj;
-
-        // Force culling to use the main camera to match Terrain and Foliage systems
-        if (gameContext.mainCamera != nullptr)
-        {
-            cullingView = gameContext.mainCamera->GetView();
-
-            D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
-            float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
-            float fov = gameContext.mainCamera->GetFov();
-            if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
-
-            cullingProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
-                fov, aspect, 0.1f, 5000.0f
-            );
-        }
-
-        // Build the World-Space Camera Frustum
-        DirectX::BoundingFrustum worldFrustum(cullingProj, true); // true for Right-Handed
-        DirectX::SimpleMath::Matrix camWorld;
-        if (std::abs(cullingView.Determinant()) < 1e-6f)
-            camWorld = DirectX::SimpleMath::Matrix::Identity;
-        else
-            camWorld = cullingView.Invert();
-
-        worldFrustum.Transform(worldFrustum, camWorld);
-
-        // Normalize orientation quaternion to guarantee numerical stability
-        DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&worldFrustum.Orientation);
-        q = DirectX::XMQuaternionNormalize(q);
-        DirectX::XMStoreFloat4(&worldFrustum.Orientation, q);
-
-        // Combine all sub-meshes into one master bounding box
-        DirectX::BoundingBox masterBox;
-        if (!m_model->meshes.empty())
-        {
-            masterBox = m_model->meshes[0]->boundingBox;
-            for (size_t i = 1; i < m_model->meshes.size(); i++)
-            {
-                DirectX::BoundingBox::CreateMerged(masterBox, masterBox, m_model->meshes[i]->boundingBox);
-            }
-        }
-
-        // SDKMESH files often default to 1x1x1 bounding boxes (Extents = 0.5f).
-        // If the master box is suspiciously small (<= 1.0f), force the massive fallback.
-        if (masterBox.Extents.x <= 1.0f && masterBox.Extents.y <= 1.0f && masterBox.Extents.z <= 1.0f)
-        {
-            masterBox.Extents = DirectX::SimpleMath::Vector3(100.0f, 100.0f, 100.0f);
-        }
-        else
-        {
-            // Pad legitimate bounding boxes by 50% just in case of slight exporter inaccuracies
-            masterBox.Extents.x *= 1.5f;
-            masterBox.Extents.y *= 1.5f;
-            masterBox.Extents.z *= 1.5f;
-        }
-
-        DirectX::BoundingOrientedBox worldOBB;
-        DirectX::BoundingOrientedBox::CreateFromBoundingBox(worldOBB, masterBox);
-        worldOBB.Transform(worldOBB, world);
-
-        DirectX::XMVECTOR qBox = DirectX::XMLoadFloat4(&worldOBB.Orientation);
-        qBox = DirectX::XMQuaternionNormalize(qBox);
-        DirectX::XMStoreFloat4(&worldOBB.Orientation, qBox);
-
-        // Abort drawing if the entire merged model is completely off-screen
-        if (!worldFrustum.Intersects(worldOBB))
-        {
-            return;
-        }
-    }
-
     ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
     ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
     DirectX::DX11::CommonStates& states = gameContext.commonStates;
@@ -903,15 +826,33 @@ int HEIN::StaticModelComponent::GetBoneIndex(const std::wstring boneName)
 DirectX::BoundingBox HEIN::StaticModelComponent::GetBoundingBox() const
 {
     DirectX::BoundingBox totalBox;
+    bool hasValidMeshBox = false;
 
     if (m_model != nullptr && !m_model->meshes.empty())
     {
-        totalBox = m_model->meshes[0]->boundingBox;
-
-        for (size_t i = 1; i < m_model->meshes.size(); i++) 
+        for (size_t i = 0; i < m_model->meshes.size(); i++) 
         {
-            DirectX::BoundingBox::CreateMerged(totalBox, totalBox, m_model->meshes[i]->boundingBox);
+            const auto& b = m_model->meshes[i]->boundingBox;
+            if (!std::isnan(b.Center.x) && !std::isnan(b.Extents.x) &&
+                b.Extents.x > 0.001f && b.Extents.y > 0.001f && b.Extents.z > 0.001f)
+            {
+                if (!hasValidMeshBox)
+                {
+                    totalBox = b;
+                    hasValidMeshBox = true;
+                }
+                else
+                {
+                    DirectX::BoundingBox::CreateMerged(totalBox, totalBox, b);
+                }
+            }
         }
+    }
+
+    if (!hasValidMeshBox || (totalBox.Extents.x <= 1.0f && totalBox.Extents.y <= 1.0f && totalBox.Extents.z <= 1.0f))
+    {
+        totalBox.Center = DirectX::SimpleMath::Vector3(0.0f, 0.0f, 0.0f);
+        totalBox.Extents = DirectX::SimpleMath::Vector3(5000.0f, 2000.0f, 5000.0f);
     }
 
     return totalBox;

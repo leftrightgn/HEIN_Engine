@@ -1,10 +1,13 @@
 #include "pch.h"
 #include "Actor.h"
+#include "Framework/GameContext.h"
 #include "Components/IComponent.h"
 #include <Components/TransformComponent.h>
 #include <Components/SkinnedModelComponent.h>
+#include <Components/ColliderComponent/ColliderComponent.h>
 #include <Factory/ComponentFactory.h>
 #include "ActorManager.h"
+#include <Camera/CameraController.h>
 #include <ImGui/imgui.h>
 
 
@@ -45,6 +48,62 @@ void HEIN::Actor::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matr
 	TransformComponent* transform = GetComponent<TransformComponent>();
 	if (!transform) return;
 
+	// Collider-based Frustum Culling
+	bool isPlayer = (m_type == ActorType::Player || m_type == ActorType::Ghost);
+	if (!isPlayer && gameContext.enableFrustumCulling && m_enableFrustumCulling)
+	{
+		std::vector<ColliderComponent*> colliders = GetComponents<ColliderComponent>();
+		if (!colliders.empty())
+		{
+			DirectX::SimpleMath::Matrix cullingView = view;
+			DirectX::SimpleMath::Matrix cullingProj = proj;
+
+			// Use Main Game Camera's View and Proj for culling so debug/editor camera can observe Main Camera culling
+			if (gameContext.mainCamera != nullptr)
+			{
+				cullingView = gameContext.mainCamera->GetView();
+
+				D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
+				float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
+				float fov = gameContext.mainCamera->GetFov();
+				if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
+
+				cullingProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
+					fov, aspect, 0.1f, 5000.0f
+				);
+			}
+
+			// DirectXTK SimpleMath produces Right-Handed matrices (rhcoords = true)
+			DirectX::BoundingFrustum worldFrustum(cullingProj, true);
+			DirectX::SimpleMath::Matrix camWorld;
+			if (std::abs(cullingView.Determinant()) < 1e-6f)
+				camWorld = DirectX::SimpleMath::Matrix::Identity;
+			else
+				camWorld = cullingView.Invert();
+
+			worldFrustum.Transform(worldFrustum, camWorld);
+			DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&worldFrustum.Orientation);
+			q = DirectX::XMQuaternionNormalize(q);
+			DirectX::XMStoreFloat4(&worldFrustum.Orientation, q);
+
+			bool anyColliderVisible = false;
+			for (auto* col : colliders)
+			{
+				if (col && col->IntersectsFrustum(worldFrustum))
+				{
+					anyColliderVisible = true;
+					break;
+				}
+			}
+
+			// If all colliders on this actor are outside the frustum, skip drawing all components of this actor
+			if (!anyColliderVisible)
+			{
+				return;
+			}
+		}
+	}
+
 	DirectX::SimpleMath::Matrix world = transform->GetWorldMatrix();
 
 	for (auto& component : m_components)
@@ -58,7 +117,7 @@ void HEIN::Actor::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matr
 
 void HEIN::Actor::Draw2D(GameContext& gameContext)
 {
-	if (!m_isVisible || !m_isActive) return;
+	if (!m_isVisible || !m_isActive || !gameContext.showUI) return;
 
 	for (auto& component : m_components)
 	{
@@ -81,6 +140,9 @@ void HEIN::Actor::Start()
 void HEIN::Actor::DrawInspector(GameContext& gameContext)
 {
 	HEIN::IComponent* compToRemove = nullptr;
+
+	ImGui::Checkbox("Frustum Culling", &m_enableFrustumCulling);
+	ImGui::Separator();
 
 	std::vector<HEIN::SkinnedModelComponent*> skinnedModels = GetComponents<HEIN::SkinnedModelComponent>();
 	if (skinnedModels.size() > 1)
@@ -130,9 +192,9 @@ nlohmann::json HEIN::Actor::Serialize(ActorManager* manager)
 	actorData["OwnerID"] = m_ownerID;
 	actorData["IsVisible"] = m_isVisible;
 	actorData["IsActive"] = m_isActive;
+	actorData["EnableFrustumCulling"] = m_enableFrustumCulling;
 
 	nlohmann::json componentArray = nlohmann::json::array();
-
 	for (auto& compPtr : m_components)
 	{
 		HEIN::IComponent* comp = compPtr.get();
@@ -194,6 +256,11 @@ void HEIN::Actor::Deserialize(const nlohmann::json& actorData, ActorManager* man
 	if (actorData.contains("IsActive"))
 	{
 		m_isActive = actorData["IsActive"].get<bool>();
+	}
+
+	if (actorData.contains("EnableFrustumCulling"))
+	{
+		m_enableFrustumCulling = actorData["EnableFrustumCulling"].get<bool>();
 	}
 
 	if (actorData.contains("Components"))

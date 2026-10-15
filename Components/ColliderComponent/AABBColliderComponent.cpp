@@ -119,3 +119,12 @@ void HEIN::AABBColliderComponent::OnInspectorGUI(GameContext& gameContext)
         }
     }
 }
+
+bool HEIN::AABBColliderComponent::IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const
+{
+    DirectX::BoundingBox box = m_worldAABB;
+    box.Extents.x *= 1.3f;
+    box.Extents.y *= 1.3f;
+    box.Extents.z *= 1.3f;
+    return frustum.Intersects(box);
+}

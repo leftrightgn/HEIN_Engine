@@ -306,39 +306,38 @@ void HEIN::DebugCollisionRenderer::DrawWireFrames(
 	m_primitiveBatch->End();
 
 	// Draw Meshes
-	context->OMSetBlendState(states.AlphaBlend(), nullptr, 0xFFFFFFFF);
-	context->RSSetState(states.Wireframe());
-	context->IASetInputLayout(m_meshInputLayout.Get());
-
-	m_meshEffect->SetView(view);
-	m_meshEffect->SetProjection(proj);
-
-	m_meshBatch->Begin();
-
-	for (size_t i = 0; i < m_meshes.size(); i++)
+	if (!m_meshes.empty())
 	{
-		const MeshData& m = m_meshes[i];
-		DirectX::SimpleMath::Color lineColor = color;
-		if (m.lineColor.w != 0.0f)
+		context->OMSetBlendState(states.AlphaBlend(), nullptr, 0xFFFFFFFF);
+		context->RSSetState(states.Wireframe());
+		context->IASetInputLayout(m_meshInputLayout.Get());
+		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		m_meshEffect->SetView(view);
+		m_meshEffect->SetProjection(proj);
+
+		for (size_t i = 0; i < m_meshes.size(); i++)
 		{
-			lineColor = m.lineColor;
+			const MeshData& m = m_meshes[i];
+			if (!m.vertexBuffer || !m.indexBuffer || m.indexCount == 0) continue;
+
+			DirectX::SimpleMath::Color lineColor = color;
+			if (m.lineColor.w != 0.0f)
+			{
+				lineColor = m.lineColor;
+			}
+
+			m_meshEffect->SetColorAndAlpha(lineColor);
+			m_meshEffect->SetWorld(m.world);
+			m_meshEffect->Apply(context);
+
+			UINT stride = sizeof(DirectX::VertexPosition);
+			UINT offset = 0;
+			ID3D11Buffer* vb = m.vertexBuffer;
+			context->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+			context->IASetIndexBuffer(m.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+
+			context->DrawIndexed(m.indexCount, 0, 0);
 		}
-
-		m_meshEffect->SetColorAndAlpha(lineColor);
-		DirectX::SimpleMath::Matrix world = 
-			DirectX::SimpleMath::Matrix::CreateScale(m.scale) *
-			DirectX::SimpleMath::Matrix::CreateFromQuaternion(m.rotate) *
-			DirectX::SimpleMath::Matrix::CreateTranslation(m.position);
-
-		m_meshEffect->SetWorld(world);
-		m_meshEffect->Apply(context);
-
-		m_meshBatch->DrawIndexed(
-			D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-			m.indexes.data(), m.indexes.size(),
-			m.vertexes.data(), m.vertexes.size()
-		);
 	}
-
-	m_meshBatch->End();
 }

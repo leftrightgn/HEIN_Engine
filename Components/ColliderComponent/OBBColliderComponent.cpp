@@ -138,3 +138,12 @@ void HEIN::OBBColliderComponent::OnInspectorGUI(GameContext& gameContext)
         }
     }
 }
+
+bool HEIN::OBBColliderComponent::IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const
+{
+    DirectX::BoundingOrientedBox box = m_worldOBB;
+    box.Extents.x *= 1.3f;
+    box.Extents.y *= 1.3f;
+    box.Extents.z *= 1.3f;
+    return frustum.Intersects(box);
+}

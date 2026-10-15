@@ -617,6 +617,10 @@ namespace HEIN
 		ImGui::Checkbox("Show Viewport", &m_showViewportPreview);
 		ImGui::SameLine();
 		ImGui::Checkbox("Show Colliders", &m_showColliders);
+		ImGui::SameLine();
+		ImGui::Checkbox("Show UI", &m_showUI);
+		ImGui::SameLine();
+		ImGui::Checkbox("Frustum Culling", &gameContext.enableFrustumCulling);
 
 		if (m_selectedActor != nullptr)
 		{
