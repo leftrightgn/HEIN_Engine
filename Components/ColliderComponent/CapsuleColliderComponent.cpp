@@ -214,3 +214,17 @@ void HEIN::CapsuleColliderComponent::OnInspectorGUI(GameContext& gameContext)
         ImGui::DragFloat("Height", &m_height, 0.05f);
     }
 }
+
+bool HEIN::CapsuleColliderComponent::IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const
+{
+    DirectX::SimpleMath::Vector3 minPt = DirectX::SimpleMath::Vector3::Min(m_worldTopCenter, m_worldBottomCenter) - DirectX::SimpleMath::Vector3(m_radius, m_radius, m_radius);
+    DirectX::SimpleMath::Vector3 maxPt = DirectX::SimpleMath::Vector3::Max(m_worldTopCenter, m_worldBottomCenter) + DirectX::SimpleMath::Vector3(m_radius, m_radius, m_radius);
+    DirectX::BoundingBox box;
+    box.Center = (minPt + maxPt) * 0.5f;
+    box.Extents = (maxPt - minPt) * 0.5f;
+    // Add 30% padding so weapons and animation reaches are never culled
+    box.Extents.x *= 1.3f;
+    box.Extents.y *= 1.3f;
+    box.Extents.z *= 1.3f;
+    return frustum.Intersects(box);
+}

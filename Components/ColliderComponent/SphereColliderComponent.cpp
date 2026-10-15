@@ -96,3 +96,10 @@ void HEIN::SphereColliderComponent::Deserialize(const nlohmann::json& data)
     ColliderComponent::Deserialize(data);
     if (data.contains("Radius")) m_radius = data["Radius"];
 }
+
+bool HEIN::SphereColliderComponent::IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const
+{
+    DirectX::BoundingSphere sphere = m_worldSphere;
+    sphere.Radius *= 1.3f;
+    return frustum.Intersects(sphere);
+}

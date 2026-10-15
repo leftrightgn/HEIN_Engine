@@ -50,6 +50,8 @@ namespace HEIN
 		
 		DirectX::SimpleMath::Vector3 GetWorldTopCenter() const { return m_worldTopCenter; }
 		DirectX::SimpleMath::Vector3 GetWorldBottomCenter() const { return m_worldBottomCenter; }
+
+		bool IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const override;
 	};
 
 

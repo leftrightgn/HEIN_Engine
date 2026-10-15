@@ -39,6 +39,8 @@ namespace HEIN
 		float GetRadius() const { return m_radius; }
 
 		DirectX::BoundingSphere GetWorldSphere() const { return m_worldSphere; }
+
+		bool IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const override;
 	};
 
 

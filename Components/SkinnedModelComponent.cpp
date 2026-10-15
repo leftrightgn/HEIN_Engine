@@ -604,81 +604,6 @@ namespace HEIN
 	{
 		if (!m_model || !m_isVisible) return;
 
-		bool isPlayer = (m_owner->GetActorType() == HEIN::ActorType::Player || m_owner->GetActorType() == HEIN::ActorType::Ghost);
-
-		if (!isPlayer)
-		{
-			DirectX::SimpleMath::Matrix cullingView = view;
-			DirectX::SimpleMath::Matrix cullingProj = proj;
-
-			// Force culling to use the main camera
-			if (gameContext.mainCamera != nullptr)
-			{
-				cullingView = gameContext.mainCamera->GetView();
-
-				D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
-				float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
-				float fov = gameContext.mainCamera->GetFov();
-				if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
-
-				cullingProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
-					fov, aspect, 0.1f, 5000.0f
-				);
-			}
-
-			// Build the World-Space Camera Frustum
-			DirectX::BoundingFrustum worldFrustum(cullingProj, true);
-			DirectX::SimpleMath::Matrix camWorld;
-			if (std::abs(cullingView.Determinant()) < 1e-6f)
-				camWorld = DirectX::SimpleMath::Matrix::Identity;
-			else
-				camWorld = cullingView.Invert();
-
-			worldFrustum.Transform(worldFrustum, camWorld);
-
-			DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&worldFrustum.Orientation);
-			q = DirectX::XMQuaternionNormalize(q);
-			DirectX::XMStoreFloat4(&worldFrustum.Orientation, q);
-
-			// Test Expanded Bounding Boxes against the Frustum
-			bool isVisible = false;
-			for (const auto& mesh : m_model->meshes)
-			{
-				// Retrieve the base static bounding box
-				DirectX::BoundingBox expandedBox = mesh->boundingBox;
-
-				// If model has zero or invalid extents in SDKMesh header, use safe fallback extents
-				if (expandedBox.Extents.x < 0.001f && expandedBox.Extents.y < 0.001f && expandedBox.Extents.z < 0.001f)
-				{
-					expandedBox.Extents = DirectX::SimpleMath::Vector3(50.0f, 100.0f, 50.0f);
-				}
-				else
-				{
-					// Expand the extents by 50% to account for animation stretching/reaching
-					expandedBox.Extents.x *= 1.5f;
-					expandedBox.Extents.y *= 1.5f;
-					expandedBox.Extents.z *= 1.5f;
-				}
-
-				DirectX::BoundingOrientedBox worldOBB;
-				DirectX::BoundingOrientedBox::CreateFromBoundingBox(worldOBB, expandedBox);
-				worldOBB.Transform(worldOBB, world);
-
-				DirectX::XMVECTOR qBox = DirectX::XMLoadFloat4(&worldOBB.Orientation);
-				qBox = DirectX::XMQuaternionNormalize(qBox);
-				DirectX::XMStoreFloat4(&worldOBB.Orientation, qBox);
-
-				if (worldFrustum.Intersects(worldOBB))
-				{
-					isVisible = true;
-					break;
-				}
-			}
-
-			// Abort drawing if completely off-screen
-			if (!isVisible) return;
-		}
-
 		ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
 
 		// The Matrix Buffer update has been moved inside the mesh loop
@@ -1411,6 +1336,37 @@ namespace HEIN
 					std::string name = newAnimName;
 					if (name.empty()) name = "Anim" + std::to_string(m_animations.size());
 					LoadAnimation(name, HEIN::EditorUtils::MakeRelativePath(file).c_str());
+				}
+			}
+		}
+
+		if (m_needsReload)
+		{
+			m_needsReload = false;
+			m_staticInputLayouts.clear();
+			m_inputLayout.Reset();
+			if (!m_modelPath.empty())
+			{
+				if (m_textureDir.empty())
+				{
+					std::filesystem::path p(m_modelPath);
+					m_textureDir = p.parent_path().wstring() + L"/";
+					for (wchar_t& c : m_textureDir) if (c == L'\\') c = L'/';
+				}
+				Initialize(gameContext, m_modelPath.c_str(), m_textureDir.c_str());
+
+				// Re-bind existing animations to the newly loaded model bones if any
+				for (const auto& pair : m_animationPaths)
+				{
+					LoadAnimation(pair.first, pair.second.c_str());
+				}
+				if (m_animations.find("Idle") != m_animations.end())
+				{
+					m_currentAnimation = m_animations["Idle"].get();
+				}
+				else if (!m_animations.empty())
+				{
+					m_currentAnimation = m_animations.begin()->second.get();
 				}
 			}
 		}

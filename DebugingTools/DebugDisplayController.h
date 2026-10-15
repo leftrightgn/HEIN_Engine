@@ -66,6 +66,9 @@ namespace HEIN
 		EditorAction GetUIAction() const { return m_currentAction; }
 		DebugUIManager& GetDebugUI() { return m_debugUI; }
 		const DebugUIManager& GetDebugUI() const { return m_debugUI; }
+
+		bool IsShowUIEnabled() const { return m_debugUI.IsShowUIEnabled(); }
+		void SetShowUIEnabled(bool enabled) { m_debugUI.SetShowUIEnabled(enabled); }
 	};
 }
 

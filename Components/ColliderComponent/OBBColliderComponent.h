@@ -45,5 +45,7 @@ namespace HEIN
 		}
 
 		DirectX::BoundingOrientedBox GetWorldOBB() const { return m_worldOBB; }
+
+		bool IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const override;
 	};
 }

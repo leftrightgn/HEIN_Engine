@@ -72,4 +72,6 @@ struct GameContext
 	HEIN::ShadowSystem* shadowSystem = nullptr;
 
 	bool isEditorMode = false;
+	bool showUI = true;
+	bool enableFrustumCulling = true;
 };

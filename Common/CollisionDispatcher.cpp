@@ -78,6 +78,15 @@ HEIN::CollisionManifold HEIN::CollisionDispatcher::CheckCollision(HEIN::Collider
 
         return HEIN::CollisionMath::CheckCapsuleVsMesh(capsuleA, meshB);
     }
+    else if (shapeA == HEIN::ColliderShape::Mesh && shapeB == HEIN::ColliderShape::Capsule)
+    {
+        HEIN::CapsuleColliderComponent* capsuleB = dynamic_cast<HEIN::CapsuleColliderComponent*>(colB);
+        HEIN::MeshColliderComponent* meshA = dynamic_cast<HEIN::MeshColliderComponent*>(colA);
+
+        resultManifold = HEIN::CollisionMath::CheckCapsuleVsMesh(capsuleB, meshA);
+        resultManifold.normal = resultManifold.normal * -1.0f;
+        return resultManifold;
+    }
 
     else if (shapeA == HEIN::ColliderShape::Capsule && shapeB == HEIN::ColliderShape::Terrain)
     {

@@ -50,6 +50,7 @@ namespace HEIN
 		// Unity-style Visibility and Active state
 		bool m_isVisible = true;
 		bool m_isActive = true;
+		bool m_enableFrustumCulling = true;
 
 		// Memory safe Array of Components
 		std::vector<std::unique_ptr<HEIN::IComponent>> m_components;
@@ -99,6 +100,8 @@ namespace HEIN
 		void SetVisible(bool visible) { m_isVisible = visible; }
 		bool IsActive() const { return m_isActive; }
 		void SetActive(bool active) { m_isActive = active; }
+		bool IsFrustumCullingEnabled() const { return m_enableFrustumCulling; }
+		void SetEnableFrustumCulling(bool enable) { m_enableFrustumCulling = enable; }
 
 		/// <summary>
 		/// Adds a child to this actor's scene graph hierarchy.

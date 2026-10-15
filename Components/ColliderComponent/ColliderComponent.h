@@ -135,6 +135,8 @@ namespace HEIN
 
 		DirectX::SimpleMath::Matrix GetCalculateWorldMatrix() { return CalculateWorldMatrix(); }
 
+		virtual bool IntersectsFrustum(const DirectX::BoundingFrustum& /*frustum*/) const { return true; }
+
 	protected:
 
 		DirectX::SimpleMath::Matrix CalculateWorldMatrix();

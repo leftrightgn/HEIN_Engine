@@ -70,26 +70,19 @@ namespace HEIN
 
 		struct MeshData
 		{
-			const std::vector<DirectX::VertexPosition>& vertexes;
-			
-			const std::vector<uint16_t>& indexes;
-
-			DirectX::SimpleMath::Vector3 scale;
-
-			DirectX::SimpleMath::Vector3 position;
-
-			DirectX::SimpleMath::Quaternion rotate;
-
+			ID3D11Buffer* vertexBuffer;
+			ID3D11Buffer* indexBuffer;
+			UINT indexCount;
+			DirectX::SimpleMath::Matrix world;
 			DirectX::SimpleMath::Color lineColor;
 
 			constexpr MeshData(
-				const std::vector<DirectX::VertexPosition>& vertexes,
-				const std::vector<uint16_t>& indexes,
-				const DirectX::SimpleMath::Vector3& scale,
-				const DirectX::SimpleMath::Vector3& position,
-				const DirectX::SimpleMath::Quaternion& rotate,
+				ID3D11Buffer* vb,
+				ID3D11Buffer* ib,
+				UINT indexCount,
+				const DirectX::SimpleMath::Matrix& world,
 				DirectX::SimpleMath::Color lineColor) noexcept
-				: vertexes(vertexes), indexes(indexes), scale(scale), position(position), rotate(rotate), lineColor(lineColor) {}
+				: vertexBuffer(vb), indexBuffer(ib), indexCount(indexCount), world(world), lineColor(lineColor) {}
 		};
 
 		struct LineSegmentData
@@ -205,15 +198,33 @@ namespace HEIN
 		}
 
 		void QueueMesh(
-			const std::vector<DirectX::VertexPosition>& vertexes,
-			const std::vector<uint16_t>& indexes,
+			ID3D11Buffer* vertexBuffer,
+			ID3D11Buffer* indexBuffer,
+			UINT indexCount,
+			const DirectX::SimpleMath::Matrix& world,
+			DirectX::FXMVECTOR lineColor = DirectX::XMVECTORF32{ 0.0f, 0.0f, 0.0f, 0.0f }
+		)
+		{
+			if (!vertexBuffer || !indexBuffer || indexCount == 0) return;
+			m_meshes.push_back(MeshData(vertexBuffer, indexBuffer, indexCount, world, lineColor));
+		}
+
+		void QueueMesh(
+			ID3D11Buffer* vertexBuffer,
+			ID3D11Buffer* indexBuffer,
+			UINT indexCount,
 			DirectX::SimpleMath::Vector3 scale,
 			DirectX::SimpleMath::Vector3 position,
 			DirectX::SimpleMath::Quaternion rotate,
 			DirectX::FXMVECTOR lineColor = DirectX::XMVECTORF32{ 0.0f, 0.0f, 0.0f, 0.0f }
 		)
 		{
-			m_meshes.push_back(MeshData(vertexes, indexes, scale, position, rotate, lineColor));
+			if (!vertexBuffer || !indexBuffer || indexCount == 0) return;
+			DirectX::SimpleMath::Matrix world =
+				DirectX::SimpleMath::Matrix::CreateScale(scale) *
+				DirectX::SimpleMath::Matrix::CreateFromQuaternion(rotate) *
+				DirectX::SimpleMath::Matrix::CreateTranslation(position);
+			m_meshes.push_back(MeshData(vertexBuffer, indexBuffer, indexCount, world, lineColor));
 		}
 
 		void QueueLine(

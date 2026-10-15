@@ -56,6 +56,7 @@ namespace HEIN
         }
 
         m_debugUI.Update(gameContext, mainActorManager, GetViewMatrix(), m_projMatrix, cameraComp);
+        const_cast<GameContext&>(gameContext).showUI = m_debugUI.IsShowUIEnabled();
 
         const float deltaTime = static_cast<float>(gameContext.timer.GetElapsedSeconds());
 
@@ -151,6 +152,8 @@ namespace HEIN
             return;
         }
 
+        gameContext.showUI = m_debugUI.IsShowUIEnabled();
+
         ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
         ID3D11DepthStencilView* dsv = gameContext.deviceResources.GetDepthStencilView();
         D3D11_VIEWPORT fullscreen = gameContext.deviceResources.GetScreenViewport();
@@ -239,6 +242,11 @@ namespace HEIN
 
                 if (skybox) skybox->Draw(gameContext, mainView, pipProj);
                 actorManager.DrawAll(gameContext, mainView, pipProj);
+
+                if (gameContext.debugCollisionRenderer != nullptr)
+                {
+                    gameContext.debugCollisionRenderer->Clear();
+                }
             }
 
             context->RSSetViewports(1, &fullscreen);

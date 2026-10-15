@@ -47,6 +47,7 @@ namespace HEIN
 		bool m_showViewportPreview = true;
 		bool m_showAnimatorWindow = false;
 		bool m_showColliders = true;
+		bool m_showUI = true;
 
 		double m_lastleftClickTime = -1;
 		const double DOUBLE_CLICK_THRESHOLD = 0.3;
@@ -68,6 +69,9 @@ namespace HEIN
 
 		bool IsShowCollidersEnabled() const { return m_showColliders; }
 		void SetShowCollidersEnabled(bool enabled) { m_showColliders = enabled; }
+
+		bool IsShowUIEnabled() const { return m_showUI; }
+		void SetShowUIEnabled(bool enabled) { m_showUI = enabled; }
 
 		DirectX::SimpleMath::Vector2 GetViewportPos() const { return m_viewportPos; }
 		DirectX::SimpleMath::Vector2 GetViewportSize() const { return m_viewportSize; }
