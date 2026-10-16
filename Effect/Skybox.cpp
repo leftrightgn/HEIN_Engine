@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Skybox.h"
 #include <Windows.h>
+#include "Components/StaticModelComponent.h"
 
 const std::vector<D3D11_INPUT_ELEMENT_DESC> HEIN::Skybox::INPUT_LAYOUT =
 {
@@ -34,9 +35,13 @@ void HEIN::Skybox::Initialize(GameContext& gameContext, const wchar_t* texturePa
             m_skyInputLayout.ReleaseAndGetAddressOf()
         )
     );
-    DX::ThrowIfFailed(
-        DirectX::CreateDDSTextureFromFile(device, texturePath,
-            nullptr, m_cubemap.ReleaseAndGetAddressOf()));
+    // Shared cache: TitleScene and GameScene use the same cubemap, capped at 1024 dimension (saves ~25 MB VRAM)
+    if (!HEIN::TryLoadCachedTextureFile(device, texturePath ? texturePath : L"", m_cubemap.ReleaseAndGetAddressOf(), 1024))
+    {
+        DX::ThrowIfFailed(
+            DirectX::CreateDDSTextureFromFile(device, texturePath,
+                nullptr, m_cubemap.ReleaseAndGetAddressOf()));
+    }
 
     m_effect->SetTexture(m_cubemap.Get());
 }

@@ -82,8 +82,8 @@ namespace DX
         double m_endTime;
         // Animation time
         double m_animTime;
-        // Animation data buffer
-        std::unique_ptr<uint8_t[]> m_animData;
+        // Animation data buffer (shared across instances using the same .sdkmesh_anim clip)
+        std::shared_ptr<uint8_t[]> m_animData;
         // Animation size
         size_t  m_animSize;
         // Bone to track conversion array

@@ -126,15 +126,36 @@ void HEIN::MeshColliderComponent::LoadFromObj(const wchar_t* filePath, ID3D11Dev
 	m_worldTriangles.resize(m_localTriangles.size());
 	SyncColliderState();
 
-	if (device != nullptr)
-	{
-		CreateGpuBuffers(device);
-	}
+	// Debug wireframe buffers are built lazily in Draw() only when the editor shows colliders.
+	// Runtime collision only needs m_localTriangles / m_worldTriangles.
+	(void)device;
+	m_debugVertices.clear();
+	m_debugVertices.shrink_to_fit();
+	m_debugIndices.clear();
+	m_debugIndices.shrink_to_fit();
 }
 
 void HEIN::MeshColliderComponent::CreateGpuBuffers(ID3D11Device* device)
 {
-	if (!device || m_debugVertices.empty() || m_debugIndices.empty()) return;
+	if (!device) return;
+
+	if (m_debugVertices.empty() && !m_localTriangles.empty())
+	{
+		m_debugVertices.reserve(m_localTriangles.size() * 3);
+		m_debugIndices.reserve(m_localTriangles.size() * 3);
+		for (const auto& tri : m_localTriangles)
+		{
+			uint32_t baseIdx = static_cast<uint32_t>(m_debugVertices.size());
+			m_debugVertices.emplace_back(tri.v0);
+			m_debugVertices.emplace_back(tri.v1);
+			m_debugVertices.emplace_back(tri.v2);
+			m_debugIndices.push_back(baseIdx);
+			m_debugIndices.push_back(baseIdx + 1);
+			m_debugIndices.push_back(baseIdx + 2);
+		}
+	}
+
+	if (m_debugVertices.empty() || m_debugIndices.empty()) return;
 
 	m_vertexBuffer.Reset();
 	m_indexBuffer.Reset();
@@ -166,6 +187,17 @@ void HEIN::MeshColliderComponent::CreateGpuBuffers(ID3D11Device* device)
 	}
 
 	m_indexCount = static_cast<UINT>(m_debugIndices.size());
+}
+
+void HEIN::MeshColliderComponent::ReleaseDebugResources()
+{
+	m_vertexBuffer.Reset();
+	m_indexBuffer.Reset();
+	m_indexCount = 0;
+	m_debugVertices.clear();
+	m_debugVertices.shrink_to_fit();
+	m_debugIndices.clear();
+	m_debugIndices.shrink_to_fit();
 }
 
 void HEIN::MeshColliderComponent::Start()
@@ -215,8 +247,8 @@ void HEIN::MeshColliderComponent::Draw(
 	const DirectX::SimpleMath::Matrix& proj
 )
 {
-	if (gameContext.debugCollisionRenderer == nullptr) return;
-	if (m_debugVertices.empty() || m_debugIndices.empty()) return;
+	if (!gameContext.isEditorMode || !gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;
+	if (m_localTriangles.empty()) return;
 
 	if (m_vertexBuffer == nullptr)
 	{

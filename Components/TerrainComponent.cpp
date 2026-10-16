@@ -14,6 +14,7 @@
 #include <d3dcompiler.h>
 #include "Effect/ReadData.h"
 #include "Camera/CameraController.h"
+#include "StaticModelComponent.h"
 
 HEIN::TerrainComponent::TerrainComponent(Actor* owner)
 	: IComponent(owner)
@@ -89,47 +90,28 @@ bool HEIN::TerrainComponent::Initialize(
 		return false;
 	}
 
+	// All terrain textures go through the shared texture cache (handles ../Dual/ fallbacks
+	// and lets multiple terrains share the same SRV instead of loading the file twice).
 	m_texture.Reset();
 	if (!m_textureFilename.empty())
 	{
-		HRESULT hr = DirectX::CreateDDSTextureFromFile(device, m_textureFilename.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
-		if (FAILED(hr))
-		{
-			// Fallback: If CWD changed, try relative to the most likely project directories
-			std::wstring fallback = L"../Dual/" + m_textureFilename;
-			hr = DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
-			if (FAILED(hr))
-			{
-				fallback = L"../../Dual/Dual/" + m_textureFilename;
-				DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_texture.ReleaseAndGetAddressOf());
-			}
-		}
+		HEIN::TryLoadCachedTextureFile(device, m_textureFilename, m_texture.ReleaseAndGetAddressOf());
 	}
 	m_texture2.Reset();
 	if (!m_texture2Filename.empty())
 	{
-		DirectX::CreateDDSTextureFromFile(device, m_texture2Filename.c_str(), nullptr, m_texture2.ReleaseAndGetAddressOf());
+		HEIN::TryLoadCachedTextureFile(device, m_texture2Filename, m_texture2.ReleaseAndGetAddressOf());
 	}
 
 	m_alphaTexture.Reset();
 	if (!m_alphaMapFilename.empty())
 	{
-		DirectX::CreateDDSTextureFromFile(device, m_alphaMapFilename.c_str(), nullptr, m_alphaTexture.ReleaseAndGetAddressOf());
+		HEIN::TryLoadCachedTextureFile(device, m_alphaMapFilename, m_alphaTexture.ReleaseAndGetAddressOf());
 	}
 	m_normalTexture.Reset();
 	if (!m_normalMapFilename.empty())
 	{
-		HRESULT hrNorm = DirectX::CreateDDSTextureFromFile(device, m_normalMapFilename.c_str(), nullptr, m_normalTexture.ReleaseAndGetAddressOf());
-		if (FAILED(hrNorm))
-		{
-			std::wstring fallback = L"../Dual/" + m_normalMapFilename;
-			hrNorm = DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_normalTexture.ReleaseAndGetAddressOf());
-			if (FAILED(hrNorm))
-			{
-				fallback = L"../../Dual/Dual/" + m_normalMapFilename;
-				DirectX::CreateDDSTextureFromFile(device, fallback.c_str(), nullptr, m_normalTexture.ReleaseAndGetAddressOf());
-			}
-		}
+		HEIN::TryLoadCachedTextureFile(device, m_normalMapFilename, m_normalTexture.ReleaseAndGetAddressOf());
 	}
 
 	// Load precompiled CSO shaders if available, falling back to dynamic compilation
@@ -301,6 +283,7 @@ bool HEIN::TerrainComponent::Initialize(
 	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 	device->CreateSamplerState(&samplerDesc, m_sampleState.ReleaseAndGetAddressOf());
 
+	m_needsReload = false;
 	return true;
 }
 
@@ -511,7 +494,7 @@ void HEIN::TerrainComponent::Draw(
 		DirectX::XMStoreFloat4(&worldOBB.Orientation, qBox);
 
 		// Queue Cell Bounding Box for debug rendering if enabled
-		if (m_showCellBounds && gameContext.debugCollisionRenderer)
+		if (gameContext.isEditorMode && gameContext.showColliders && m_showCellBounds && gameContext.debugCollisionRenderer)
 		{
 			gameContext.debugCollisionRenderer->QueueOBB(worldOBB, DirectX::Colors::LimeGreen);
 		}
@@ -751,6 +734,7 @@ void HEIN::TerrainComponent::InitializeAfterDeserialize(GameContext& gameContext
 			m_texutreTiling
 		);
 	}
+	m_needsReload = false;
 }
 
 void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)

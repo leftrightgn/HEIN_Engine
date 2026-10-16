@@ -130,7 +130,12 @@ namespace HEIN
 
 		Microsoft::WRL::ComPtr<ID3D11InputLayout> m_lineInputLayout;
 
+		ID3D11Device* m_device = nullptr;
+		ID3D11DeviceContext* m_context = nullptr;
+		bool m_gpuInitialized = false;
+
     private:
+		void EnsureResourcesCreated();
 
 		void DrawSolidShapes(
 			ID3D11DeviceContext* context,
@@ -170,6 +175,7 @@ namespace HEIN
 		);
 
 		void Clear();
+		void ReleaseDebugMemory();
 
 
 		void QueueSphere(

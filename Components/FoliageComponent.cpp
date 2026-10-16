@@ -5,6 +5,7 @@
 #include "Components/TransformComponent.h"
 #include "Components/TerrainComponent.h"
 #include "FogComponent.h"
+#include "StaticModelComponent.h"
 #include "Framework/GameContext.h"
 #include "Common/ShadowSystem.h"
 #include "Camera/CameraController.h"
@@ -150,6 +151,7 @@ namespace HEIN
 
 		cell->instances[typeIdx].push_back(inst);
 		cell->bufferDirty[typeIdx] = true;
+		m_instancesModified = true;
 
 		// Expand the cell's physical boundaries to ensure accurate camera culling.
 		// Significant vertical padding prevents popping when tall objects enter the frame.
@@ -172,11 +174,13 @@ namespace HEIN
 			pair.second->instances[typeIdx].clear();
 			pair.second->bufferDirty[typeIdx] = true;
 		}
+		m_instancesModified = true;
 	}
 
 	void FoliageComponent::ClearAll()
 	{
 		m_cells.clear();
+		m_instancesModified = true;
 	}
 
 	size_t FoliageComponent::GetInstanceCount(FoliageType type) const
@@ -696,6 +700,11 @@ namespace HEIN
 	{
 		if (path.empty()) return false;
 
+		if (HEIN::TryLoadCachedTextureFile(device, path, outSrv.ReleaseAndGetAddressOf()))
+		{
+			return true;
+		}
+
 		std::vector<std::wstring> candidates = {
 			path,
 			L"../" + path,
@@ -708,6 +717,11 @@ namespace HEIN
 
 		for (const auto& testPath : candidates)
 		{
+			if (HEIN::TryLoadCachedTextureFile(device, testPath, outSrv.ReleaseAndGetAddressOf()))
+			{
+				return true;
+			}
+
 			HRESULT hr = DirectX::CreateDDSTextureFromFile(device, testPath.c_str(), nullptr, outSrv.ReleaseAndGetAddressOf());
 			if (SUCCEEDED(hr)) return true;
 
@@ -732,7 +746,8 @@ namespace HEIN
 
 			if (cell->instanceBuffers[i] == nullptr || cell->instanceBufferCapacities[i] < count)
 			{
-				cell->instanceBufferCapacities[i] = static_cast<uint32_t>(std::max(count, size_t(64)) * 3 / 2);
+				const size_t capacity = m_brushActive ? static_cast<uint32_t>(std::max(count, size_t(64)) * 3 / 2) : static_cast<uint32_t>(count);
+				cell->instanceBufferCapacities[i] = static_cast<uint32_t>(capacity);
 
 				D3D11_BUFFER_DESC bd = {};
 				bd.Usage = D3D11_USAGE_DYNAMIC;
@@ -1314,6 +1329,7 @@ namespace HEIN
 				if (list.size() != beforeSize)
 				{
 					cell->bufferDirty[t] = true;
+					m_instancesModified = true;
 				}
 			}
 		}
@@ -1650,7 +1666,10 @@ namespace HEIN
 
 		// Separate JSON storage for foliage instances
 		j["FoliageDataPath"] = m_foliageDataPath;
-		SaveInstancesToJson(m_foliageDataPath);
+		if (m_instancesModified || !std::filesystem::exists(ResolveDataPath(m_foliageDataPath, false)))
+		{
+			SaveInstancesToJson(m_foliageDataPath);
+		}
 
 		return j;
 	}
@@ -1725,32 +1744,33 @@ namespace HEIN
 			return false;
 		}
 
-		nlohmann::json j;
-		j["Version"] = 1;
-		j["Count"] = GetTotalInstanceCount();
+		file << "{\n  \"Version\": 1,\n  \"Count\": " << GetTotalInstanceCount() << ",\n  \"Instances\": [\n";
 
-		nlohmann::json instancesArr = nlohmann::json::array();
+		bool first = true;
 		for (const auto& pair : m_cells)
 		{
 			for (size_t t = 0; t < static_cast<size_t>(FoliageType::Count); ++t)
 			{
 				for (const auto& inst : pair.second->instances[t])
 				{
-					instancesArr.push_back({
-						inst.worldPos.x,
-						inst.worldPos.y,
-						inst.worldPos.z,
-						inst.rotation,
-						inst.scale,
-						inst.type
-					});
+					if (!first)
+					{
+						file << ",\n";
+					}
+					first = false;
+					file << "    ["
+					     << inst.worldPos.x << ", "
+					     << inst.worldPos.y << ", "
+					     << inst.worldPos.z << ", "
+					     << inst.rotation << ", "
+					     << inst.scale << ", "
+					     << inst.type << "]";
 				}
 			}
 		}
-		j["Instances"] = std::move(instancesArr);
-
-		file << j.dump(2);
+		file << "\n  ]\n}\n";
 		file.close();
+		m_instancesModified = false;
 		return true;
 	}
 
@@ -1758,65 +1778,144 @@ namespace HEIN
 	{
 		std::string resolvedPath = ResolveDataPath(path, false);
 
-		std::ifstream file(resolvedPath);
-		if (!file.is_open())
+		// Read the whole .json text in a single allocation and scan it directly.
+		// Building a nlohmann::json DOM here allocated one heap vector (+ debug proxy)
+		// per instance array (~70k arrays => ~100 MB of fragmented CRT heap in Debug).
+		std::string text;
 		{
-			return false;
+			std::ifstream file(resolvedPath, std::ios::binary | std::ios::ate);
+			if (!file.is_open())
+			{
+				return false;
+			}
+			std::streamsize size = file.tellg();
+			if (size <= 0) return false;
+			text.resize(static_cast<size_t>(size));
+			file.seekg(0, std::ios::beg);
+			if (!file.read(text.data(), size)) return false;
 		}
 
-		nlohmann::json j;
-		try
+		// Fallback for object-style entries ({"Pos":[...],"Rot":..}) - rare, editor-legacy format
+		auto parseWithDom = [this, &text]() -> bool
 		{
-			file >> j;
-		}
-		catch (...)
-		{
-			OutputDebugStringA("[FoliageComponent] Failed to parse foliage JSON file.\n");
-			return false;
-		}
+			nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
+			if (j.is_discarded() || !j.contains("Instances") || !j["Instances"].is_array())
+			{
+				OutputDebugStringA("[FoliageComponent] Failed to parse foliage JSON file.\n");
+				return false;
+			}
 
-		if (!j.contains("Instances") || !j["Instances"].is_array())
+			m_tempLoadedInstances.clear();
+			const auto& arr = j["Instances"];
+			m_tempLoadedInstances.reserve(arr.size());
+
+			for (const auto& item : arr)
+			{
+				if (item.is_array() && item.size() >= 6)
+				{
+					FoliageInstanceData inst;
+					inst.worldPos.x = item[0].get<float>();
+					inst.worldPos.y = item[1].get<float>();
+					inst.worldPos.z = item[2].get<float>();
+					inst.rotation = item[3].get<float>();
+					inst.scale = item[4].get<float>();
+					inst.type = item[5].get<uint32_t>();
+					m_tempLoadedInstances.push_back(inst);
+				}
+				else if (item.is_object())
+				{
+					FoliageInstanceData inst;
+					if (item.contains("Pos") && item["Pos"].is_array() && item["Pos"].size() >= 3)
+					{
+						inst.worldPos.x = item["Pos"][0].get<float>();
+						inst.worldPos.y = item["Pos"][1].get<float>();
+						inst.worldPos.z = item["Pos"][2].get<float>();
+					}
+					else if (item.contains("Position") && item["Position"].is_array() && item["Position"].size() >= 3)
+					{
+						inst.worldPos.x = item["Position"][0].get<float>();
+						inst.worldPos.y = item["Position"][1].get<float>();
+						inst.worldPos.z = item["Position"][2].get<float>();
+					}
+					inst.rotation = item.value("Rot", item.value("Rotation", 0.0f));
+					inst.scale = item.value("Scale", 1.0f);
+					inst.type = item.value("Type", 0u);
+					m_tempLoadedInstances.push_back(inst);
+				}
+			}
+			return true;
+		};
+
+		const size_t instKey = text.find("\"Instances\"");
+		if (instKey == std::string::npos)
 		{
 			return false;
 		}
 
 		m_tempLoadedInstances.clear();
-		const auto& arr = j["Instances"];
-		m_tempLoadedInstances.reserve(arr.size());
 
-		for (const auto& item : arr)
+		// Use "Count" as a reserve hint so the vector is allocated exactly once
+		const size_t countKey = text.find("\"Count\"");
+		if (countKey != std::string::npos && countKey < instKey)
 		{
-			if (item.is_array() && item.size() >= 6)
+			const size_t colon = text.find(':', countKey);
+			if (colon != std::string::npos)
 			{
-				FoliageInstanceData inst;
-				inst.worldPos.x = item[0].get<float>();
-				inst.worldPos.y = item[1].get<float>();
-				inst.worldPos.z = item[2].get<float>();
-				inst.rotation = item[3].get<float>();
-				inst.scale = item[4].get<float>();
-				inst.type = item[5].get<uint32_t>();
-				m_tempLoadedInstances.push_back(inst);
+				unsigned long hint = std::strtoul(text.c_str() + colon + 1, nullptr, 10);
+				if (hint > 0 && hint < 10000000ul)
+				{
+					m_tempLoadedInstances.reserve(hint);
+				}
 			}
-			else if (item.is_object())
+		}
+
+		const size_t arrStart = text.find('[', instKey);
+		if (arrStart == std::string::npos)
+		{
+			return false;
+		}
+
+		const char* s = text.c_str() + arrStart + 1;
+		const char* end = text.c_str() + text.size();
+		auto skipSeparators = [&s, end]()
+		{
+			while (s < end && (*s == ' ' || *s == '\n' || *s == '\r' || *s == '\t' || *s == ','))
 			{
-				FoliageInstanceData inst;
-				if (item.contains("Pos") && item["Pos"].is_array() && item["Pos"].size() >= 3)
-				{
-					inst.worldPos.x = item["Pos"][0].get<float>();
-					inst.worldPos.y = item["Pos"][1].get<float>();
-					inst.worldPos.z = item["Pos"][2].get<float>();
-				}
-				else if (item.contains("Position") && item["Position"].is_array() && item["Position"].size() >= 3)
-				{
-					inst.worldPos.x = item["Position"][0].get<float>();
-					inst.worldPos.y = item["Position"][1].get<float>();
-					inst.worldPos.z = item["Position"][2].get<float>();
-				}
-				inst.rotation = item.value("Rot", item.value("Rotation", 0.0f));
-				inst.scale = item.value("Scale", 1.0f);
-				inst.type = item.value("Type", 0u);
-				m_tempLoadedInstances.push_back(inst);
+				++s;
 			}
+		};
+
+		while (true)
+		{
+			skipSeparators();
+			if (s >= end) return false;
+			if (*s == ']') break;            // end of "Instances"
+			if (*s != '[') return parseWithDom(); // object-style entry -> DOM fallback
+			++s;
+
+			float v[6];
+			for (int n = 0; n < 6; ++n)
+			{
+				skipSeparators();
+				char* next = nullptr;
+				v[n] = std::strtof(s, &next);
+				if (next == s) return parseWithDom();
+				s = next;
+			}
+
+			// Skip any extra values up to the closing bracket of this instance
+			while (s < end && *s != ']') ++s;
+			if (s >= end) return false;
+			++s;
+
+			FoliageInstanceData inst;
+			inst.worldPos.x = v[0];
+			inst.worldPos.y = v[1];
+			inst.worldPos.z = v[2];
+			inst.rotation = v[3];
+			inst.scale = v[4];
+			inst.type = static_cast<uint32_t>(v[5]);
+			m_tempLoadedInstances.push_back(inst);
 		}
 
 		return true;
@@ -2072,5 +2171,15 @@ namespace HEIN
 
 		m_tempLoadedInstances.clear();
 		m_tempLoadedInstances.shrink_to_fit();
+
+		// Trim vector capacity across all cells to prevent retained heap overhead
+		for (auto& pair : m_cells)
+		{
+			for (size_t t = 0; t < static_cast<size_t>(FoliageType::Count); ++t)
+			{
+				pair.second->instances[t].shrink_to_fit();
+			}
+		}
+		m_instancesModified = false;
 	}
 }

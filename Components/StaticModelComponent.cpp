@@ -24,6 +24,219 @@
 
 namespace HEIN
 {
+    namespace
+    {
+        ID3D11Device* s_cachedDevice = nullptr;
+        std::unordered_map<std::wstring, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>> s_fileTextureCache;
+        std::unordered_map<std::wstring, std::wstring> s_aliasToFileKey;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> s_whiteFallbackSRV;
+
+        Microsoft::WRL::ComPtr<ID3D11VertexShader> s_sharedVS;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> s_sharedPS;
+        Microsoft::WRL::ComPtr<ID3D11SamplerState> s_sharedSampler;
+        std::vector<uint8_t> s_sharedVSBytecode;
+
+        std::wstring NormalizeTextureKey(const std::wstring& pathStr)
+        {
+            std::error_code ec;
+            std::filesystem::path p(pathStr);
+            std::wstring norm = std::filesystem::weakly_canonical(p, ec).wstring();
+            if (ec || norm.empty())
+            {
+                norm = p.lexically_normal().wstring();
+            }
+            for (auto& c : norm)
+            {
+                if (c == L'/') c = L'\\';
+                c = towlower(c);
+            }
+            return norm;
+        }
+
+        void EnsureDeviceCacheValid(ID3D11Device* device)
+        {
+            if (s_cachedDevice != device)
+            {
+                s_fileTextureCache.clear();
+                s_aliasToFileKey.clear();
+                s_whiteFallbackSRV.Reset();
+                s_sharedVS.Reset();
+                s_sharedPS.Reset();
+                s_sharedSampler.Reset();
+                s_sharedVSBytecode.clear();
+                s_cachedDevice = device;
+            }
+        }
+
+        void PruneUnusedCachedTextures()
+        {
+            for (auto it = s_fileTextureCache.begin(); it != s_fileTextureCache.end(); )
+            {
+                if (!it->second)
+                {
+                    it = s_fileTextureCache.erase(it);
+                    continue;
+                }
+                it->second->AddRef();
+                ULONG refs = it->second->Release();
+                if (refs <= 1)
+                {
+                    it = s_fileTextureCache.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+
+            for (auto it = s_aliasToFileKey.begin(); it != s_aliasToFileKey.end(); )
+            {
+                if (s_fileTextureCache.find(it->second) == s_fileTextureCache.end())
+                {
+                    it = s_aliasToFileKey.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+
+        bool LoadOrGetCachedFileTexture(
+            ID3D11Device* device,
+            const std::wstring& candidatePath,
+            const std::wstring& aliasKey,
+            ID3D11ShaderResourceView** textureView,
+            size_t maxTextureDimension = 2048
+        )
+        {
+            std::wstring fileKey = NormalizeTextureKey(candidatePath);
+            auto cachedIt = s_fileTextureCache.find(fileKey);
+            if (cachedIt != s_fileTextureCache.end() && cachedIt->second)
+            {
+                if (!aliasKey.empty())
+                {
+                    s_aliasToFileKey[aliasKey] = fileKey;
+                }
+                cachedIt->second.CopyTo(textureView);
+                return true;
+            }
+
+            Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
+            HRESULT hr = DirectX::CreateDDSTextureFromFileEx(
+                device,
+                candidatePath.c_str(),
+                maxTextureDimension,
+                D3D11_USAGE_IMMUTABLE,
+                D3D11_BIND_SHADER_RESOURCE,
+                0,
+                0,
+                DirectX::DDS_LOADER_DEFAULT,
+                nullptr,
+                srv.GetAddressOf()
+            );
+            if (FAILED(hr) || !srv)
+            {
+                hr = DirectX::CreateDDSTextureFromFile(device, candidatePath.c_str(), nullptr, srv.ReleaseAndGetAddressOf());
+            }
+            if (FAILED(hr) || !srv)
+            {
+                hr = DirectX::CreateWICTextureFromFileEx(
+                    device,
+                    candidatePath.c_str(),
+                    maxTextureDimension,
+                    D3D11_USAGE_IMMUTABLE,
+                    D3D11_BIND_SHADER_RESOURCE,
+                    0,
+                    0,
+                    DirectX::WIC_LOADER_DEFAULT,
+                    nullptr,
+                    srv.ReleaseAndGetAddressOf()
+                );
+                if (FAILED(hr) || !srv)
+                {
+                    hr = DirectX::CreateWICTextureFromFile(device, candidatePath.c_str(), nullptr, srv.ReleaseAndGetAddressOf());
+                }
+            }
+
+            if (SUCCEEDED(hr) && srv)
+            {
+                s_fileTextureCache[fileKey] = srv;
+                if (!aliasKey.empty())
+                {
+                    s_aliasToFileKey[aliasKey] = fileKey;
+                }
+                srv.CopyTo(textureView);
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    bool TryLoadCachedTextureFile(
+        ID3D11Device* device,
+        const std::wstring& path,
+        ID3D11ShaderResourceView** textureView,
+        size_t maxTextureDimension
+    )
+    {
+        if (!device || path.empty() || !textureView) return false;
+        *textureView = nullptr;
+
+        EnsureDeviceCacheValid(device);
+
+        std::wstring aliasKey = L"file|" + path;
+        for (auto& c : aliasKey)
+        {
+            if (c == L'/') c = L'\\';
+            c = towlower(c);
+        }
+
+        auto aliasIt = s_aliasToFileKey.find(aliasKey);
+        if (aliasIt != s_aliasToFileKey.end())
+        {
+            auto fileIt = s_fileTextureCache.find(aliasIt->second);
+            if (fileIt != s_fileTextureCache.end() && fileIt->second)
+            {
+                fileIt->second.CopyTo(textureView);
+                return true;
+            }
+        }
+
+        std::filesystem::path rawP(path);
+        std::wstring filenameOnly = rawP.filename().wstring();
+
+        std::vector<std::wstring> candidates = {
+            path,
+            L"Dual/" + path,
+            L"../Dual/" + path,
+            L"../../Dual/Dual/" + path,
+            L"../" + path,
+            L"../../" + path
+        };
+        if (!filenameOnly.empty())
+        {
+            candidates.push_back(L"Resources/Textures/" + filenameOnly);
+            candidates.push_back(L"Dual/Resources/Textures/" + filenameOnly);
+            candidates.push_back(L"../Dual/Resources/Textures/" + filenameOnly);
+        }
+
+        std::error_code ec;
+        for (const auto& cand : candidates)
+        {
+            if (std::filesystem::exists(cand, ec))
+            {
+                if (LoadOrGetCachedFileTexture(device, cand, aliasKey, textureView, maxTextureDimension))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     bool TryLoadTexture(
         ID3D11Device* device,
         const std::wstring& dir,
@@ -34,18 +247,43 @@ namespace HEIN
         if (!device || !name || !textureView) return false;
         *textureView = nullptr;
 
+        EnsureDeviceCacheValid(device);
+
+        std::wstring cleanDir = dir;
+        if (!cleanDir.empty() && cleanDir.back() != L'/' && cleanDir.back() != L'\\')
+        {
+            cleanDir += L'/';
+        }
+
         std::wstring rawName = name;
+        std::wstring aliasKey = cleanDir + L"|" + rawName;
+        for (auto& c : aliasKey)
+        {
+            if (c == L'/') c = L'\\';
+            c = towlower(c);
+        }
+
+        auto aliasIt = s_aliasToFileKey.find(aliasKey);
+        if (aliasIt != s_aliasToFileKey.end())
+        {
+            auto fileIt = s_fileTextureCache.find(aliasIt->second);
+            if (fileIt != s_fileTextureCache.end() && fileIt->second)
+            {
+                fileIt->second.CopyTo(textureView);
+                return true;
+            }
+        }
+
         std::vector<std::wstring> candidates;
 
         // Direct path in dir and raw path
-        if (!dir.empty())
+        if (!cleanDir.empty())
         {
-            candidates.push_back(dir + rawName);
+            candidates.push_back(cleanDir + rawName);
         }
         candidates.push_back(rawName);
 
         // Extract potential subnames by splitting on '_'
-    
         size_t pos = 0;
         while ((pos = rawName.find(L'_', pos)) != std::wstring::npos)
         {
@@ -55,36 +293,36 @@ namespace HEIN
                 std::wstring sub = rawName.substr(pos);
                 if (!sub.empty() && sub.find(L'.') != std::wstring::npos)
                 {
-                    if (!dir.empty()) candidates.push_back(dir + sub);
+                    if (!cleanDir.empty()) candidates.push_back(cleanDir + sub);
                     candidates.push_back(sub);
                 }
             }
         }
 
-        // xtract just the filename if it was a path with '/' or '\\'
+        // Extract just the filename if it was a path with '/' or '\\'
         std::filesystem::path rawP(rawName);
         std::wstring filenameOnly = rawP.filename().wstring();
         if (!filenameOnly.empty())
         {
-            if (!dir.empty()) candidates.push_back(dir + filenameOnly);
+            if (!cleanDir.empty()) candidates.push_back(cleanDir + filenameOnly);
             candidates.push_back(filenameOnly);
         }
 
-        // Try loading candidates
+        // Try loading candidates (checking shared file cache before touching disk)
+        std::error_code ec;
         for (const auto& cand : candidates)
         {
-            if (std::filesystem::exists(cand))
+            if (std::filesystem::exists(cand, ec))
             {
-                HRESULT hr = DirectX::CreateDDSTextureFromFile(device, cand.c_str(), nullptr, textureView);
-                if (SUCCEEDED(hr) && *textureView) return true;
-
-                hr = DirectX::CreateWICTextureFromFile(device, cand.c_str(), nullptr, textureView);
-                if (SUCCEEDED(hr) && *textureView) return true;
+                if (LoadOrGetCachedFileTexture(device, cand, aliasKey, textureView))
+                {
+                    return true;
+                }
             }
         }
 
         // Fuzzy search in directory
-        if (!dir.empty() && std::filesystem::exists(dir) && std::filesystem::is_directory(dir))
+        if (!cleanDir.empty() && std::filesystem::exists(cleanDir, ec) && std::filesystem::is_directory(cleanDir, ec))
         {
             std::wstring stem = rawP.stem().wstring();
             size_t lastUnder = stem.rfind(L'_');
@@ -97,7 +335,7 @@ namespace HEIN
 
             try
             {
-                for (const auto& entry : std::filesystem::directory_iterator(dir))
+                for (const auto& entry : std::filesystem::directory_iterator(cleanDir))
                 {
                     if (entry.is_regular_file())
                     {
@@ -112,11 +350,10 @@ namespace HEIN
                             if (!lowerStem.empty() && (entryStem.find(lowerStem) != std::wstring::npos || lowerStem.find(entryStem) != std::wstring::npos))
                             {
                                 std::wstring matchPath = entry.path().wstring();
-                                HRESULT hr = DirectX::CreateDDSTextureFromFile(device, matchPath.c_str(), nullptr, textureView);
-                                if (SUCCEEDED(hr) && *textureView) return true;
-
-                                hr = DirectX::CreateWICTextureFromFile(device, matchPath.c_str(), nullptr, textureView);
-                                if (SUCCEEDED(hr) && *textureView) return true;
+                                if (LoadOrGetCachedFileTexture(device, matchPath, aliasKey, textureView))
+                                {
+                                    return true;
+                                }
                             }
                         }
                     }
@@ -125,27 +362,35 @@ namespace HEIN
             catch (...) {}
         }
 
-        // Fallback 1x1 white texture so rendering never crashes
-        D3D11_TEXTURE2D_DESC desc = {};
-        desc.Width = 1;
-        desc.Height = 1;
-        desc.MipLevels = 1;
-        desc.ArraySize = 1;
-        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        desc.SampleDesc.Count = 1;
-        desc.Usage = D3D11_USAGE_IMMUTABLE;
-        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-        uint32_t whitePixel = 0xFFFFFFFF;
-        D3D11_SUBRESOURCE_DATA initData = {};
-        initData.pSysMem = &whitePixel;
-        initData.SysMemPitch = sizeof(uint32_t);
-
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
-        if (SUCCEEDED(device->CreateTexture2D(&desc, &initData, tex.GetAddressOf())))
+        // Fallback shared 1x1 white texture so rendering never crashes
+        if (!s_whiteFallbackSRV)
         {
-            device->CreateShaderResourceView(tex.Get(), nullptr, textureView);
-            return (*textureView != nullptr);
+            D3D11_TEXTURE2D_DESC desc = {};
+            desc.Width = 1;
+            desc.Height = 1;
+            desc.MipLevels = 1;
+            desc.ArraySize = 1;
+            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            desc.SampleDesc.Count = 1;
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+            uint32_t whitePixel = 0xFFFFFFFF;
+            D3D11_SUBRESOURCE_DATA initData = {};
+            initData.pSysMem = &whitePixel;
+            initData.SysMemPitch = sizeof(uint32_t);
+
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
+            if (SUCCEEDED(device->CreateTexture2D(&desc, &initData, tex.GetAddressOf())))
+            {
+                device->CreateShaderResourceView(tex.Get(), nullptr, s_whiteFallbackSRV.ReleaseAndGetAddressOf());
+            }
+        }
+
+        if (s_whiteFallbackSRV)
+        {
+            s_whiteFallbackSRV.CopyTo(textureView);
+            return true;
         }
 
         return false;
@@ -161,7 +406,10 @@ namespace HEIN
         SmartEffectFactory(ID3D11Device* device)
             : DirectX::EffectFactory(device), m_pDevice(device)
         {
+            SetSharing(true);
         }
+
+        ID3D11Device* GetDevice() const { return m_pDevice; }
 
         void SetDirectory(const wchar_t* path)
         {
@@ -169,36 +417,30 @@ namespace HEIN
             DirectX::EffectFactory::SetDirectory(path);
         }
 
+        std::shared_ptr<DirectX::IEffect> CreateEffect(
+            const EffectInfo& info,
+            ID3D11DeviceContext* deviceContext
+        ) override
+        {
+            // StaticModel_PS.hlsl only samples DiffuseMap (t0) and ShadowMap (t4).
+            // Strip unused normal/specular/emissive texture references so DirectXTK
+            // does not load 4K normal/specular DDS maps that the shader never reads.
+            EffectInfo strippedInfo = info;
+            strippedInfo.normalTexture = nullptr;
+            strippedInfo.specularTexture = nullptr;
+            strippedInfo.emissiveTexture = nullptr;
+            strippedInfo.enableNormalMaps = false;
+            return DirectX::EffectFactory::CreateEffect(strippedInfo, deviceContext);
+        }
+
         void CreateTexture(
             const wchar_t* name,
-            ID3D11DeviceContext* deviceContext,
+            ID3D11DeviceContext* /*deviceContext*/,
             ID3D11ShaderResourceView** textureView
         ) override
         {
-            std::wstring wname = name ? name : L"";
-            std::wstring cand1 = m_dir + wname;
-            std::wstring cand2 = wname;
-            
-            bool exists = false;
-            if (!wname.empty())
-            {
-                if (std::filesystem::exists(cand1) || std::filesystem::exists(cand2) ||
-                    std::filesystem::exists(cand1 + L".dds") || std::filesystem::exists(cand2 + L".dds"))
-                {
-                    exists = true;
-                }
-            }
-
-            if (exists)
-            {
-                try
-                {
-                    DirectX::EffectFactory::CreateTexture(name, deviceContext, textureView);
-                    if (textureView && *textureView) return;
-                }
-                catch (...) {}
-            }
-
+            // Route all texture requests through TryLoadTexture so every texture
+            // (both exact path and fuzzy SDKMESH material names) shares s_fileTextureCache.
             TryLoadTexture(m_pDevice, m_dir, name, textureView);
         }
     };
@@ -207,6 +449,27 @@ namespace HEIN
 std::shared_ptr<DirectX::EffectFactory> HEIN::StaticModelComponent::s_fxFactory = nullptr;
 std::unordered_map<std::wstring, std::weak_ptr<DirectX::Model>> HEIN::StaticModelComponent::s_modelCache;
 
+void HEIN::StaticModelComponent::PruneModelCache()
+{
+    for (auto it = s_modelCache.begin(); it != s_modelCache.end(); )
+    {
+        if (it->second.expired())
+            it = s_modelCache.erase(it);
+        else
+            ++it;
+    }
+    if (s_fxFactory)
+    {
+        s_fxFactory->ReleaseCache();
+    }
+}
+
+void HEIN::PruneSharedTextureCache()
+{
+    StaticModelComponent::PruneModelCache();
+    PruneUnusedCachedTextures();
+}
+
 HEIN::StaticModelComponent::StaticModelComponent(Actor* owner)
 	: IComponent(owner) 
 {
@@ -214,115 +477,122 @@ HEIN::StaticModelComponent::StaticModelComponent(Actor* owner)
 
 void HEIN::StaticModelComponent::InitializeShaders(ID3D11Device* device)
 {
+    EnsureDeviceCacheValid(device);
+
     if (m_vertexShader && m_pixelShader && m_cbMatrices && m_cbLighting) return;
 
-    bool loadedCso = false;
-    std::vector<uint8_t> vsData, psData;
-    try
+    if (!s_sharedVS || !s_sharedPS || s_sharedVSBytecode.empty())
     {
-        vsData = DX::ReadData(L"Resources/Shaders/StaticModel_VS.cso");
-        psData = DX::ReadData(L"Resources/Shaders/StaticModel_PS.cso");
-        loadedCso = true;
-    }
-    catch (...)
-    {
+        bool loadedCso = false;
+        std::vector<uint8_t> vsData, psData;
         try
         {
-            vsData = DX::ReadData(L"StaticModel_VS.cso");
-            psData = DX::ReadData(L"StaticModel_PS.cso");
+            vsData = DX::ReadData(L"Resources/Shaders/StaticModel_VS.cso");
+            psData = DX::ReadData(L"Resources/Shaders/StaticModel_PS.cso");
             loadedCso = true;
         }
         catch (...)
         {
-            loadedCso = false;
-        }
-    }
-
-    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
-    const void* vsBytecode = nullptr;
-    size_t vsBytecodeSize = 0;
-    const void* psBytecode = nullptr;
-    size_t psBytecodeSize = 0;
-
-    if (loadedCso)
-    {
-        vsBytecode = vsData.data();
-        vsBytecodeSize = vsData.size();
-        psBytecode = psData.data();
-        psBytecodeSize = psData.size();
-    }
-    else
-    {
-        HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/StaticModel_VS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
-        if (FAILED(hr))
-        {
-            hr = D3DCompileFromFile(L"External/Engine/Shaders/StaticModel_VS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
-        }
-        if (FAILED(hr))
-        {
-            if (errorBlob)
+            try
             {
-                OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-                FILE* f;
-                if (fopen_s(&f, "ShaderError_StaticVS.txt", "w") == 0)
-                {
-                    fprintf(f, "%s", (char*)errorBlob->GetBufferPointer());
-                    fclose(f);
-                }
+                vsData = DX::ReadData(L"StaticModel_VS.cso");
+                psData = DX::ReadData(L"StaticModel_PS.cso");
+                loadedCso = true;
             }
-            return;
-        }
-
-        hr = D3DCompileFromFile(L"../External/Engine/Shaders/StaticModel_PS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
-        if (FAILED(hr))
-        {
-            hr = D3DCompileFromFile(L"External/Engine/Shaders/StaticModel_PS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
-        }
-        if (FAILED(hr))
-        {
-            if (errorBlob)
+            catch (...)
             {
-                OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-                FILE* f;
-                if (fopen_s(&f, "ShaderError_StaticPS.txt", "w") == 0)
-                {
-                    fprintf(f, "%s", (char*)errorBlob->GetBufferPointer());
-                    fclose(f);
-                }
+                loadedCso = false;
             }
-            return;
         }
 
-        vsBytecode = vsBlob->GetBufferPointer();
-        vsBytecodeSize = vsBlob->GetBufferSize();
-        psBytecode = psBlob->GetBufferPointer();
-        psBytecodeSize = psBlob->GetBufferSize();
+        Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
+        const void* vsBytecode = nullptr;
+        size_t vsBytecodeSize = 0;
+        const void* psBytecode = nullptr;
+        size_t psBytecodeSize = 0;
+
+        if (loadedCso)
+        {
+            vsBytecode = vsData.data();
+            vsBytecodeSize = vsData.size();
+            psBytecode = psData.data();
+            psBytecodeSize = psData.size();
+        }
+        else
+        {
+            HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/StaticModel_VS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+            if (FAILED(hr))
+            {
+                hr = D3DCompileFromFile(L"External/Engine/Shaders/StaticModel_VS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+            }
+            if (FAILED(hr))
+            {
+                if (errorBlob)
+                {
+                    OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+                }
+                return;
+            }
+
+            hr = D3DCompileFromFile(L"../External/Engine/Shaders/StaticModel_PS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+            if (FAILED(hr))
+            {
+                hr = D3DCompileFromFile(L"External/Engine/Shaders/StaticModel_PS.hlsl", nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+            }
+            if (FAILED(hr))
+            {
+                if (errorBlob)
+                {
+                    OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+                }
+                return;
+            }
+
+            vsBytecode = vsBlob->GetBufferPointer();
+            vsBytecodeSize = vsBlob->GetBufferSize();
+            psBytecode = psBlob->GetBufferPointer();
+            psBytecodeSize = psBlob->GetBufferSize();
+        }
+
+        s_sharedVSBytecode.assign((const uint8_t*)vsBytecode, (const uint8_t*)vsBytecode + vsBytecodeSize);
+        device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, s_sharedVS.ReleaseAndGetAddressOf());
+        device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, s_sharedPS.ReleaseAndGetAddressOf());
     }
 
-    m_vsBytecode.assign((const uint8_t*)vsBytecode, (const uint8_t*)vsBytecode + vsBytecodeSize);
+    if (!s_sharedSampler)
+    {
+        D3D11_SAMPLER_DESC sampDesc = {};
+        sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+        sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+        sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+        device->CreateSamplerState(&sampDesc, s_sharedSampler.ReleaseAndGetAddressOf());
+    }
 
-    device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, m_vertexShader.ReleaseAndGetAddressOf());
-    device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, m_pixelShader.ReleaseAndGetAddressOf());
+    m_vertexShader = s_sharedVS;
+    m_pixelShader = s_sharedPS;
+    m_samplerState = s_sharedSampler;
 
     // Create Constant Buffers
-    D3D11_BUFFER_DESC cbDesc = {};
-    cbDesc.Usage = D3D11_USAGE_DYNAMIC;
-    cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    if (!m_cbMatrices)
+    {
+        D3D11_BUFFER_DESC cbDesc = {};
+        cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+        cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        cbDesc.ByteWidth = sizeof(CB_StaticMatrices);
+        device->CreateBuffer(&cbDesc, nullptr, m_cbMatrices.ReleaseAndGetAddressOf());
+    }
 
-    cbDesc.ByteWidth = sizeof(CB_StaticMatrices);
-    device->CreateBuffer(&cbDesc, nullptr, m_cbMatrices.ReleaseAndGetAddressOf());
-
-    cbDesc.ByteWidth = sizeof(CB_Lighting);
-    device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
-
-    // Create Sampler State (Linear Wrap)
-    D3D11_SAMPLER_DESC sampDesc = {};
-    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-    device->CreateSamplerState(&sampDesc, m_samplerState.ReleaseAndGetAddressOf());
+    if (!m_cbLighting)
+    {
+        D3D11_BUFFER_DESC cbDesc = {};
+        cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+        cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        cbDesc.ByteWidth = sizeof(CB_Lighting);
+        device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
+    }
 }
 
 void HEIN::StaticModelComponent::Initialize(
@@ -346,6 +616,8 @@ void HEIN::StaticModelComponent::Initialize(
     }
 
     ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
+    EnsureDeviceCacheValid(device);
+    PruneUnusedCachedTextures();
 
     std::wstring key = m_modelPath;
     std::shared_ptr<DirectX::Model> cachedModel = s_modelCache[key].lock();
@@ -358,28 +630,24 @@ void HEIN::StaticModelComponent::Initialize(
     {
         try
         {
+            auto smartFactory = std::dynamic_pointer_cast<SmartEffectFactory>(s_fxFactory);
+            if (!smartFactory || smartFactory->GetDevice() != device)
+            {
+                smartFactory = std::make_shared<SmartEffectFactory>(device);
+                s_fxFactory = smartFactory;
+            }
+            smartFactory->SetDirectory(m_textureDir.empty() ? nullptr : m_textureDir.c_str());
+
             std::filesystem::path p(m_modelPath);
             std::wstring ext = p.extension().wstring();
             for (auto& c : ext) c = towlower(c);
 
             if (ext == L".cmo")
             {
-                // Use EffectFactory (not DGSLEffectFactory) so the model gets BasicEffect
-                // which supports IEffectFog for fog blending. DGSLEffect does not support IEffectFog.
-                SmartEffectFactory cmoFactory(device);
-                if (!m_textureDir.empty())
-                {
-                    cmoFactory.SetDirectory(m_textureDir.c_str());
-                }
-                else
-                {
-                    cmoFactory.SetDirectory(nullptr);
-                }
-
                 m_model = DirectX::Model::CreateFromCMO(
                     device,
                     m_modelPath.c_str(),
-                    cmoFactory,
+                    *smartFactory,
                     static_cast<DirectX::ModelLoaderFlags>(
                         DirectX::ModelLoader_CounterClockwise |
                         DirectX::ModelLoader_IncludeBones
@@ -388,20 +656,10 @@ void HEIN::StaticModelComponent::Initialize(
             }
             else
             {
-                SmartEffectFactory sdkMeshFactory(device);
-                if (!m_textureDir.empty())
-                {
-                    sdkMeshFactory.SetDirectory(m_textureDir.c_str());
-                }
-                else
-                {
-                    sdkMeshFactory.SetDirectory(nullptr);
-                }
-
                 m_model = DirectX::Model::CreateFromSDKMESH(
                     device,
                     m_modelPath.c_str(),
-                    sdkMeshFactory,
+                    *smartFactory,
                     static_cast<DirectX::ModelLoaderFlags>(
                         DirectX::ModelLoader_Clockwise |
                         DirectX::ModelLoader_IncludeBones
@@ -593,7 +851,7 @@ void HEIN::StaticModelComponent::Draw(
             if (!m_inputLayouts[part.get()])
             {
                 auto& decl = part->vbDecl;
-                if (decl && !m_vsBytecode.empty())
+                if (decl && !s_sharedVSBytecode.empty())
                 {
                     std::vector<D3D11_INPUT_ELEMENT_DESC> modifiedDecl = *decl;
                     for (auto& element : modifiedDecl)
@@ -607,13 +865,13 @@ void HEIN::StaticModelComponent::Draw(
                     device->CreateInputLayout(
                         modifiedDecl.data(),
                         (UINT)modifiedDecl.size(),
-                        m_vsBytecode.data(),
-                        m_vsBytecode.size(),
+                        s_sharedVSBytecode.data(),
+                        s_sharedVSBytecode.size(),
                         m_inputLayouts[part.get()].ReleaseAndGetAddressOf()
                     );
                 }
 
-                if (!m_inputLayouts[part.get()] && !m_vsBytecode.empty())
+                if (!m_inputLayouts[part.get()] && !s_sharedVSBytecode.empty())
                 {
                     static const D3D11_INPUT_ELEMENT_DESC defaultLayout[] = {
                         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -623,8 +881,8 @@ void HEIN::StaticModelComponent::Draw(
                     device->CreateInputLayout(
                         defaultLayout,
                         (UINT)_countof(defaultLayout),
-                        m_vsBytecode.data(),
-                        m_vsBytecode.size(),
+                        s_sharedVSBytecode.data(),
+                        s_sharedVSBytecode.size(),
                         m_inputLayouts[part.get()].ReleaseAndGetAddressOf()
                     );
                 }

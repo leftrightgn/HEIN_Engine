@@ -6,6 +6,22 @@
 
 namespace HEIN
 {
+	bool TryLoadTexture(
+		ID3D11Device* device,
+		const std::wstring& dir,
+		const wchar_t* name,
+		ID3D11ShaderResourceView** textureView
+	);
+
+	bool TryLoadCachedTextureFile(
+		ID3D11Device* device,
+		const std::wstring& path,
+		ID3D11ShaderResourceView** textureView,
+		size_t maxTextureDimension = 2048
+	);
+
+	void PruneSharedTextureCache();
+
 	class StaticModelComponent : public IComponent
 	{
 	private:
@@ -24,7 +40,6 @@ namespace HEIN
 		Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbMatrices;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbLighting;
 		Microsoft::WRL::ComPtr<ID3D11SamplerState> m_samplerState;
-		std::vector<uint8_t> m_vsBytecode;
 
 		void InitializeShaders(ID3D11Device* device);
 	public:
@@ -33,6 +48,7 @@ namespace HEIN
 		bool m_castShadows = true;
 
 		StaticModelComponent(Actor* owner);
+		static void PruneModelCache();
 
 		void Initialize(
 			GameContext& gameContext,
