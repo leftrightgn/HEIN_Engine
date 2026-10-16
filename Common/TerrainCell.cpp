@@ -36,9 +36,9 @@ bool HEIN::TerrainCell::Initialize(ID3D11Device* device, void* vertexData, int v
 	if (m_boundingBox.Extents.y < 2.0f) m_boundingBox.Extents.y = 2.0f;
 	if (m_boundingBox.Extents.z < 1.0f) m_boundingBox.Extents.z = 1.0f;
 
-	// Build DirectX Buffers
+	// Build DirectX Buffers (IMMUTABLE: cells are fully rebuilt on change, never updated in place)
 	D3D11_BUFFER_DESC vertexBufferDesc = {};
-	vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	vertexBufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
 	vertexBufferDesc.ByteWidth = sizeof(TerrainVertexType) * m_vertexCount;
 	vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
@@ -47,7 +47,7 @@ bool HEIN::TerrainCell::Initialize(ID3D11Device* device, void* vertexData, int v
 	DX::ThrowIfFailed(device->CreateBuffer(&vertexBufferDesc, &vData, m_vertexBuffer.ReleaseAndGetAddressOf()));
 
 	D3D11_BUFFER_DESC indexBufferDesc = {};
-	indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	indexBufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
 	indexBufferDesc.ByteWidth = sizeof(uint32_t) * m_indexCount;
 	indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 

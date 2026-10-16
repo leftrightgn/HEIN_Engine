@@ -66,6 +66,7 @@ namespace HEIN
 		bool IsDescendantOf(ActorID potentialChild, ActorID potentialParent) const;
 
 		void ClearAllActors();
+		void ReleaseEditorResources();
 	private:
 
 		// internal helper for scene graph map: recursively applies parent transform to children

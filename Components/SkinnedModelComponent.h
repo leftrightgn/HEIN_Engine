@@ -97,6 +97,7 @@ namespace HEIN
 		Microsoft::WRL::ComPtr<ID3D11SamplerState> m_samplerState;
 
 	public:
+		static void PruneModelCache();
 		
 		SkinnedModelComponent(Actor* owner);
 

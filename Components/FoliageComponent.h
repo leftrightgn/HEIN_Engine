@@ -195,6 +195,7 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 m_currentHitNormal = DirectX::SimpleMath::Vector3::Up;
 
 		bool m_isInitialized = false;
+		bool m_instancesModified = false;
 
 	public:
 		FoliageComponent(Actor* owner);

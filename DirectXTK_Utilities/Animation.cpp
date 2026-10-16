@@ -10,6 +10,8 @@
 #include <cassert>
 #include <fstream>
 #include <stdexcept>
+#include <unordered_map>
+#include <string>
 
 using namespace DX;
 using namespace DirectX;
@@ -60,6 +62,14 @@ namespace
     static_assert(sizeof(SDKANIMATION_FRAME_DATA) == 112, "SDK Mesh structure size incorrect");
 
 #pragma pack(pop)
+
+    struct CachedAnimData
+    {
+        std::unique_ptr<uint8_t[]> buffer;
+        size_t size = 0;
+    };
+
+    std::unordered_map<std::wstring, std::weak_ptr<CachedAnimData>> s_animCache;
 }
 
 // Constructor
@@ -87,6 +97,21 @@ HRESULT AnimationSDKMESH::Load(_In_z_ const wchar_t* fileName)
 
     if (!fileName)
         return E_INVALIDARG;
+
+    std::wstring cacheKey = fileName;
+    for (auto& c : cacheKey)
+    {
+        if (c == L'/') c = L'\\';
+        c = towlower(c);
+    }
+
+    auto cachedEntry = s_animCache[cacheKey].lock();
+    if (cachedEntry && cachedEntry->buffer && cachedEntry->size > 0)
+    {
+        m_animData = std::shared_ptr<uint8_t[]>(cachedEntry, cachedEntry->buffer.get());
+        m_animSize = cachedEntry->size;
+        return S_OK;
+    }
 
     // Declare file stream
     std::ifstream inFile(fileName, std::ios::in | std::ios::binary | std::ios::ate);
@@ -138,10 +163,25 @@ HRESULT AnimationSDKMESH::Load(_In_z_ const wchar_t* fileName)
     if (dataSize > uint64_t(length))
         return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
 
-    m_animData.swap(blob);
+    // Resolve frame data pointers once on load so the buffer can be safely shared across instances
+    SDKANIMATION_FRAME_DATA* frameData = reinterpret_cast<SDKANIMATION_FRAME_DATA*>(blob.get() + header->AnimationDataOffset);
+    for (size_t j = 0; j < header->NumFrames; ++j)
+    {
+        uint64_t offset = sizeof(SDKANIMATION_FILE_HEADER) + frameData[j].DataOffset;
+        uint64_t end = offset + sizeof(SDKANIMATION_DATA) * uint64_t(header->NumAnimationKeys);
+        if (end > UINT32_MAX || end > uint64_t(length))
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
 
-    // Calculate animation size
-    m_animSize = static_cast<size_t>(length);
+        frameData[j].pAnimationData = reinterpret_cast<SDKANIMATION_DATA*>(blob.get() + offset);
+    }
+
+    auto newEntry = std::make_shared<CachedAnimData>();
+    newEntry->buffer = std::move(blob);
+    newEntry->size = static_cast<size_t>(length);
+    s_animCache[cacheKey] = newEntry;
+
+    m_animData = std::shared_ptr<uint8_t[]>(newEntry, newEntry->buffer.get());
+    m_animSize = newEntry->size;
     return S_OK;
 }
 
@@ -155,7 +195,7 @@ bool AnimationSDKMESH::Bind(const Model& model)
 
     const SDKANIMATION_FILE_HEADER* header = reinterpret_cast<const SDKANIMATION_FILE_HEADER*>(m_animData.get());
     assert(header->Version == SDKMESH_FILE_VERSION);
-    SDKANIMATION_FRAME_DATA* frameData = reinterpret_cast<SDKANIMATION_FRAME_DATA*>(m_animData.get() + header->AnimationDataOffset);
+    const SDKANIMATION_FRAME_DATA* frameData = reinterpret_cast<const SDKANIMATION_FRAME_DATA*>(m_animData.get() + header->AnimationDataOffset);
 
     if (header->NumAnimationKeys > 0 && header->AnimationFPS > 0)
     {
@@ -178,14 +218,6 @@ bool AnimationSDKMESH::Bind(const Model& model)
 
     for (size_t j = 0; j < header->NumFrames; ++j)
     {
-        uint64_t offset = sizeof(SDKANIMATION_FILE_HEADER) + frameData[j].DataOffset;
-        uint64_t end = offset + sizeof(SDKANIMATION_DATA) * uint64_t(header->NumAnimationKeys);
-        if (end > UINT32_MAX
-            || end > m_animSize)
-            throw std::runtime_error("Animation file invalid");
-
-        frameData[j].pAnimationData = reinterpret_cast<SDKANIMATION_DATA*>(m_animData.get() + offset);
-
         wchar_t frameName[MAX_FRAME_NAME] = {};
         MultiByteToWideChar(CP_UTF8, 0, frameData[j].FrameName, -1, frameName, MAX_FRAME_NAME);
 
@@ -194,11 +226,6 @@ bool AnimationSDKMESH::Bind(const Model& model)
         {
             if (_wcsicmp(frameName, it.name.c_str()) == 0)
             {
-#if(_DEBUG)
-                wchar_t buffer[128];
-                swprintf_s(buffer, _countof(buffer), L"%3zu: %-40ws \n", count, it.name.c_str());
-                OutputDebugString(buffer);
-#endif
                 m_boneToTrack[count] = static_cast<uint32_t>(j);
                 result = true;
                 break;

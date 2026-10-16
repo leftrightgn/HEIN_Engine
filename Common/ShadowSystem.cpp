@@ -51,6 +51,15 @@ namespace HEIN {
         m_shadowViewport.MaxDepth = 1.0f;
     }
 
+    void ShadowSystem::Release() {
+        m_shadowMap.Reset();
+        m_shadowDSV.Reset();
+        m_shadowSRV.Reset();
+        m_shadowSampler.Reset();
+        m_width = 0;
+        m_height = 0;
+    }
+
     void ShadowSystem::BindShadowMap(ID3D11DeviceContext* context) {
         // Ensure shadow map SRV is unbound from pixel shader (slot 4) to eliminate D3D11 OM hazard
         ID3D11ShaderResourceView* nullSRV = nullptr;

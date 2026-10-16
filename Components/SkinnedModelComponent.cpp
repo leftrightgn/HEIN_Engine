@@ -24,6 +24,84 @@ std::unordered_map<std::wstring, std::weak_ptr<DirectX::Model>> HEIN::SkinnedMod
 
 namespace HEIN
 {
+	bool TryLoadTexture(
+		ID3D11Device* device,
+		const std::wstring& dir,
+		const wchar_t* name,
+		ID3D11ShaderResourceView** textureView
+	);
+
+	namespace
+	{
+		ID3D11Device* s_skinnedShaderDevice = nullptr;
+		Microsoft::WRL::ComPtr<ID3D11VertexShader> s_sharedSkinnedVS;
+		Microsoft::WRL::ComPtr<ID3D11PixelShader> s_sharedSkinnedPS;
+		Microsoft::WRL::ComPtr<ID3D11SamplerState> s_sharedSkinnedSampler;
+		std::vector<uint8_t> s_sharedSkinnedVSBytecode;
+
+		class SkinnedEffectFactory : public DirectX::EffectFactory
+		{
+		private:
+			ID3D11Device* m_pDevice;
+			std::wstring m_dir;
+
+		public:
+			SkinnedEffectFactory(ID3D11Device* device)
+				: DirectX::EffectFactory(device), m_pDevice(device)
+			{
+				SetSharing(true);
+			}
+
+			ID3D11Device* GetDevice() const { return m_pDevice; }
+
+			void SetDirectory(const wchar_t* path)
+			{
+				m_dir = path ? path : L"";
+				DirectX::EffectFactory::SetDirectory(path);
+			}
+
+			std::shared_ptr<DirectX::IEffect> CreateEffect(
+				const EffectInfo& info,
+				ID3D11DeviceContext* deviceContext
+			) override
+			{
+				// CustomSkinned_PS.hlsl only samples DiffuseMap (t0) and ShadowMap (t4).
+				// Strip unused normal/specular/emissive texture references so DirectXTK
+				// does not load 4K normal/specular DDS maps that the shader never reads.
+				EffectInfo strippedInfo = info;
+				strippedInfo.normalTexture = nullptr;
+				strippedInfo.specularTexture = nullptr;
+				strippedInfo.emissiveTexture = nullptr;
+				strippedInfo.enableNormalMaps = false;
+				return DirectX::EffectFactory::CreateEffect(strippedInfo, deviceContext);
+			}
+
+			void CreateTexture(
+				const wchar_t* name,
+				ID3D11DeviceContext* /*deviceContext*/,
+				ID3D11ShaderResourceView** textureView
+			) override
+			{
+				TryLoadTexture(m_pDevice, m_dir, name, textureView);
+			}
+		};
+	}
+
+	void SkinnedModelComponent::PruneModelCache()
+	{
+		for (auto it = s_modelCache.begin(); it != s_modelCache.end(); )
+		{
+			if (it->second.expired())
+				it = s_modelCache.erase(it);
+			else
+				++it;
+		}
+		if (s_fxFactory)
+		{
+			s_fxFactory->ReleaseCache();
+		}
+	}
+
 	SkinnedModelComponent::SkinnedModelComponent(Actor* owner)
 		: IComponent(owner)
 	{
@@ -40,11 +118,23 @@ namespace HEIN
 		
 		ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
 
-		if (s_fxFactory == nullptr)
+		if (s_skinnedShaderDevice != device)
 		{
-			s_fxFactory = std::make_shared<DirectX::EffectFactory>(device);
+			s_sharedSkinnedVS.Reset();
+			s_sharedSkinnedPS.Reset();
+			s_sharedSkinnedSampler.Reset();
+			s_sharedSkinnedVSBytecode.clear();
+			s_fxFactory.reset();
+			s_skinnedShaderDevice = device;
 		}
-		static_cast<DirectX::EffectFactory*>(s_fxFactory.get())->SetDirectory(textureDir);
+
+		auto skinnedFactory = std::dynamic_pointer_cast<SkinnedEffectFactory>(s_fxFactory);
+		if (!skinnedFactory || skinnedFactory->GetDevice() != device)
+		{
+			skinnedFactory = std::make_shared<SkinnedEffectFactory>(device);
+			s_fxFactory = skinnedFactory;
+		}
+		skinnedFactory->SetDirectory(textureDir);
 	
 		std::wstring key = modelPath;
 
@@ -61,7 +151,7 @@ namespace HEIN
 				m_model = DirectX::Model::CreateFromSDKMESH(
 					device,
 					modelPath,
-					*s_fxFactory,
+					*skinnedFactory,
 					static_cast<DirectX::ModelLoaderFlags>
 					(
 						DirectX::ModelLoader_Clockwise |
@@ -98,98 +188,122 @@ namespace HEIN
 			m_blendedLocalBones[i] = DirectX::SimpleMath::Matrix::Identity;
 		}
 
-
-		// Load Shaders (Precompiled CSO first, then runtime fallback)
-		std::vector<uint8_t> vsData;
-		std::vector<uint8_t> psData;
-		bool loadedCso = false;
-		try
+		// Load Shaders once and share across all SkinnedModelComponent instances
+		if (!s_sharedSkinnedVS || !s_sharedSkinnedPS || s_sharedSkinnedVSBytecode.empty())
 		{
-			vsData = DX::ReadData(L"Resources/Shaders/CustomSkinned_VS.cso");
-			psData = DX::ReadData(L"Resources/Shaders/CustomSkinned_PS.cso");
-			loadedCso = true;
-		}
-		catch (...)
-		{
+			std::vector<uint8_t> vsData;
+			std::vector<uint8_t> psData;
+			bool loadedCso = false;
 			try
 			{
-				vsData = DX::ReadData(L"CustomSkinned_VS.cso");
-				psData = DX::ReadData(L"CustomSkinned_PS.cso");
+				vsData = DX::ReadData(L"Resources/Shaders/CustomSkinned_VS.cso");
+				psData = DX::ReadData(L"Resources/Shaders/CustomSkinned_PS.cso");
 				loadedCso = true;
 			}
 			catch (...)
 			{
-				loadedCso = false;
-			}
-		}
-
-		Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
-		const void* vsBytecode = nullptr;
-		size_t vsBytecodeSize = 0;
-		const void* psBytecode = nullptr;
-		size_t psBytecodeSize = 0;
-
-		if (loadedCso)
-		{
-			vsBytecode = vsData.data();
-			vsBytecodeSize = vsData.size();
-			psBytecode = psData.data();
-			psBytecodeSize = psData.size();
-		}
-		else
-		{
-			HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned_VS.hlsl", nullptr, nullptr, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
-			if (FAILED(hr))
-			{
-				hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned_VS.hlsl", nullptr, nullptr, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
-			}
-			if (FAILED(hr))
-			{
-				if (errorBlob) {
-					FILE* f;
-					if (fopen_s(&f, "ShaderError.txt", "w") == 0) {
-						fprintf(f, "%s", (char*)errorBlob->GetBufferPointer());
-						fclose(f);
-					}
+				try
+				{
+					vsData = DX::ReadData(L"CustomSkinned_VS.cso");
+					psData = DX::ReadData(L"CustomSkinned_PS.cso");
+					loadedCso = true;
 				}
-				return; // Gracefully fail
+				catch (...)
+				{
+					loadedCso = false;
+				}
 			}
 
-			hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned_PS.hlsl", nullptr, nullptr, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
-			if (FAILED(hr))
+			Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
+			const void* vsBytecode = nullptr;
+			size_t vsBytecodeSize = 0;
+			const void* psBytecode = nullptr;
+			size_t psBytecodeSize = 0;
+
+			if (loadedCso)
 			{
-				hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned_PS.hlsl", nullptr, nullptr, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+				vsBytecode = vsData.data();
+				vsBytecodeSize = vsData.size();
+				psBytecode = psData.data();
+				psBytecodeSize = psData.size();
 			}
-			if (FAILED(hr))
+			else
 			{
-				if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-				return; // Gracefully fail
+				HRESULT hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned_VS.hlsl", nullptr, nullptr, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+				if (FAILED(hr))
+				{
+					hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned_VS.hlsl", nullptr, nullptr, "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+				}
+				if (FAILED(hr))
+				{
+					if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+					return; // Gracefully fail
+				}
+
+				hr = D3DCompileFromFile(L"../External/Engine/Shaders/CustomSkinned_PS.hlsl", nullptr, nullptr, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+				if (FAILED(hr))
+				{
+					hr = D3DCompileFromFile(L"External/Engine/Shaders/CustomSkinned_PS.hlsl", nullptr, nullptr, "main", "ps_5_0", 0, 0, &psBlob, &errorBlob);
+				}
+				if (FAILED(hr))
+				{
+					if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+					return; // Gracefully fail
+				}
+
+				vsBytecode = vsBlob->GetBufferPointer();
+				vsBytecodeSize = vsBlob->GetBufferSize();
+				psBytecode = psBlob->GetBufferPointer();
+				psBytecodeSize = psBlob->GetBufferSize();
 			}
 
-			vsBytecode = vsBlob->GetBufferPointer();
-			vsBytecodeSize = vsBlob->GetBufferSize();
-			psBytecode = psBlob->GetBufferPointer();
-			psBytecodeSize = psBlob->GetBufferSize();
+			s_sharedSkinnedVSBytecode.assign((const uint8_t*)vsBytecode, (const uint8_t*)vsBytecode + vsBytecodeSize);
+			device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, s_sharedSkinnedVS.ReleaseAndGetAddressOf());
+			device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, s_sharedSkinnedPS.ReleaseAndGetAddressOf());
 		}
 
-		device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, m_vertexShader.ReleaseAndGetAddressOf());
-		device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, m_pixelShader.ReleaseAndGetAddressOf());
+		if (!s_sharedSkinnedSampler)
+		{
+			D3D11_SAMPLER_DESC sampDesc = {};
+			sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.MaxAnisotropy = 16;
+			sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+			sampDesc.MinLOD = 0.0f;
+			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+			device->CreateSamplerState(&sampDesc, s_sharedSkinnedSampler.ReleaseAndGetAddressOf());
+		}
+
+		m_vertexShader = s_sharedSkinnedVS;
+		m_pixelShader = s_sharedSkinnedPS;
+		m_samplerState = s_sharedSkinnedSampler;
 
 		// Create Constant Buffers 
-		D3D11_BUFFER_DESC cbDesc = {};
-		cbDesc.Usage = D3D11_USAGE_DYNAMIC;
-		cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		if (!m_cbMatrices)
+		{
+			D3D11_BUFFER_DESC cbDesc = {};
+			cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+			cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+			cbDesc.ByteWidth = sizeof(CB_Matrices);
+			device->CreateBuffer(&cbDesc, nullptr, m_cbMatrices.ReleaseAndGetAddressOf());
+		}
 
-		cbDesc.ByteWidth = sizeof(CB_Matrices);
-		device->CreateBuffer(&cbDesc, nullptr, m_cbMatrices.ReleaseAndGetAddressOf());
-
-		cbDesc.ByteWidth = sizeof(CB_Lighting);
-		device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
+		if (!m_cbLighting)
+		{
+			D3D11_BUFFER_DESC cbDesc = {};
+			cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+			cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+			cbDesc.ByteWidth = sizeof(CB_Lighting);
+			device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
+		}
 
 		// Create Input Layout explicitly to match CustomSkinned_VS.hlsl shader using the actual vertex declaration from the model!
 		bool layoutCreated = false;
-		if (!m_model->meshes.empty())
+		if (!m_model->meshes.empty() && !s_sharedSkinnedVSBytecode.empty())
 		{
 			for (const auto& mesh : m_model->meshes)
 			{
@@ -212,8 +326,8 @@ namespace HEIN
 							HRESULT hrLayout = device->CreateInputLayout(
 								modifiedDecl.data(),
 								(UINT)modifiedDecl.size(),
-								vsBytecode,
-								vsBytecodeSize,
+								s_sharedSkinnedVSBytecode.data(),
+								s_sharedSkinnedVSBytecode.size(),
 								m_inputLayout.ReleaseAndGetAddressOf()
 							);
 							if (SUCCEEDED(hrLayout))
@@ -227,20 +341,6 @@ namespace HEIN
 				if (layoutCreated) break;
 			}
 		}
-
-		
-		// Create Sampler State
-		D3D11_SAMPLER_DESC sampDesc = {};
-		sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-		sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-		sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-		sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-		sampDesc.MaxAnisotropy = 16;
-		sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-		sampDesc.MinLOD = 0.0f;
-		sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-		device->CreateSamplerState(&sampDesc, m_samplerState.ReleaseAndGetAddressOf());
-
 	}
 
 	

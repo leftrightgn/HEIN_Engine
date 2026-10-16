@@ -3,6 +3,7 @@
 #include "Framework/GameContext.h"
 #include <Components/TransformComponent.h>
 #include <Components/SocketAttachmentComponent.h>
+#include <Components/ColliderComponent/ColliderComponent.h>
 
 
 // LifeCycle
@@ -313,6 +314,19 @@ void HEIN::ActorManager::ClearAllActors()
 {
     m_actors.clear();
     m_pendingDestorys.clear(); 
+}
+
+void HEIN::ActorManager::ReleaseEditorResources()
+{
+    for (auto& pair : m_actors)
+    {
+        if (!pair.second) continue;
+        std::vector<ColliderComponent*> colliders = pair.second->GetComponents<ColliderComponent>();
+        for (auto* col : colliders)
+        {
+            if (col) col->ReleaseDebugResources();
+        }
+    }
 }
 
 bool HEIN::ActorManager::IsDescendantOf(ActorID potentialChild, ActorID potentialParent) const

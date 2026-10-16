@@ -12,20 +12,23 @@ HEIN::DebugCollisionRenderer::DebugCollisionRenderer(
 	, m_lineActive(lineActive)
 	, m_collisionMax(collisionMax)
 {
-	m_spheres.reserve(m_collisionMax);
-	m_aabb.reserve(m_collisionMax);
-	m_obb.reserve(m_collisionMax);
-	m_meshes.reserve(m_collisionMax);
-	m_lineSegments.reserve(m_collisionMax);
 }
 
 void HEIN::DebugCollisionRenderer::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-	m_modelSphere = DirectX::GeometricPrimitive::CreateSphere(context, 2.0f, 8);
+	m_device = device;
+	m_context = context;
+}
 
-	m_modelBox = DirectX::GeometricPrimitive::CreateCube(context);
+void HEIN::DebugCollisionRenderer::EnsureResourcesCreated()
+{
+	if (m_gpuInitialized || !m_device || !m_context) return;
 
-	m_modelEffect = std::make_unique<DirectX::NormalMapEffect>(device);
+	m_modelSphere = DirectX::GeometricPrimitive::CreateSphere(m_context, 2.0f, 8);
+
+	m_modelBox = DirectX::GeometricPrimitive::CreateCube(m_context);
+
+	m_modelEffect = std::make_unique<DirectX::NormalMapEffect>(m_device);
 	m_modelEffect->SetVertexColorEnabled(false);
 	m_modelEffect->SetBiasedVertexNormals(false);
 	m_modelEffect->SetInstancingEnabled(true);
@@ -35,13 +38,13 @@ void HEIN::DebugCollisionRenderer::Initialize(ID3D11Device* device, ID3D11Device
 	m_modelEffect->EnableDefaultLighting();
 	m_modelEffect->SetWorld(DirectX::SimpleMath::Matrix::Identity);
 
-	m_lineEffect = std::make_unique<DirectX::BasicEffect>(device);
+	m_lineEffect = std::make_unique<DirectX::BasicEffect>(m_device);
 	m_lineEffect->SetVertexColorEnabled(true);
 	m_lineEffect->SetTextureEnabled(false);
 	m_lineEffect->SetLightingEnabled(false);
 	m_lineEffect->SetWorld(DirectX::SimpleMath::Matrix::Identity);
 
-	m_meshEffect = std::make_unique<DirectX::BasicEffect>(device);
+	m_meshEffect = std::make_unique<DirectX::BasicEffect>(m_device);
 	m_meshEffect->SetVertexColorEnabled(false);
 	m_meshEffect->SetTextureEnabled(false);
 	m_meshEffect->SetLightingEnabled(false);
@@ -56,7 +59,7 @@ void HEIN::DebugCollisionRenderer::Initialize(ID3D11Device* device, ID3D11Device
 		{ "InstMatrix",  2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
 	};
 	DX::ThrowIfFailed(
-		CreateInputLayoutFromEffect(device, m_modelEffect.get(),
+		CreateInputLayoutFromEffect(m_device, m_modelEffect.get(),
 			c_InputElements, std::size(c_InputElements),
 			m_modelInputLayout.ReleaseAndGetAddressOf())
 	);
@@ -67,25 +70,25 @@ void HEIN::DebugCollisionRenderer::Initialize(ID3D11Device* device, ID3D11Device
 		D3D11_USAGE_DYNAMIC,
 		D3D11_CPU_ACCESS_WRITE);
 	DX::ThrowIfFailed(
-		device->CreateBuffer(&desc, nullptr,
+		m_device->CreateBuffer(&desc, nullptr,
 			m_instancedVB.ReleaseAndGetAddressOf())
 	);
 
-	m_meshBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPosition>>(context);
+	m_meshBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPosition>>(m_context);
 
 	DX::ThrowIfFailed(
-		CreateInputLayoutFromEffect<DirectX::VertexPosition>(device, m_meshEffect.get(),
+		CreateInputLayoutFromEffect<DirectX::VertexPosition>(m_device, m_meshEffect.get(),
 			m_meshInputLayout.ReleaseAndGetAddressOf())
 	);
 
-	m_primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+	m_primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(m_context);
 
 	DX::ThrowIfFailed(
-		CreateInputLayoutFromEffect<DirectX::VertexPositionColor>(device, m_lineEffect.get(),
+		CreateInputLayoutFromEffect<DirectX::VertexPositionColor>(m_device, m_lineEffect.get(),
 			m_lineInputLayout.ReleaseAndGetAddressOf())
 	);
 
-
+	m_gpuInitialized = true;
 }
 
 void HEIN::DebugCollisionRenderer::RenderAndFlush(
@@ -98,6 +101,13 @@ void HEIN::DebugCollisionRenderer::RenderAndFlush(
 	float alpha
 )
 {
+	EnsureResourcesCreated();
+	if (!m_gpuInitialized)
+	{
+		Clear();
+		return;
+	}
+
 	DirectX::SimpleMath::Color color = baseColor;
 	color.w = alpha;
 
@@ -125,6 +135,29 @@ void HEIN::DebugCollisionRenderer::Clear()
 	m_obb.clear();
 	m_meshes.clear();
 	m_lineSegments.clear();
+}
+
+void HEIN::DebugCollisionRenderer::ReleaseDebugMemory()
+{
+	Clear();
+	m_spheres.shrink_to_fit();
+	m_aabb.shrink_to_fit();
+	m_obb.shrink_to_fit();
+	m_meshes.shrink_to_fit();
+	m_lineSegments.shrink_to_fit();
+
+	m_modelSphere.reset();
+	m_modelBox.reset();
+	m_modelEffect.reset();
+	m_modelInputLayout.Reset();
+	m_meshEffect.reset();
+	m_meshInputLayout.Reset();
+	m_meshBatch.reset();
+	m_instancedVB.Reset();
+	m_primitiveBatch.reset();
+	m_lineEffect.reset();
+	m_lineInputLayout.Reset();
+	m_gpuInitialized = false;
 }
 
 void HEIN::DebugCollisionRenderer::DrawSolidShapes(

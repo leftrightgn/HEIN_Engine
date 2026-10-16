@@ -52,6 +52,7 @@ namespace HEIN
 
 		const std::vector<Triangle>& GetWorldTriangles() const{ return m_worldTriangles; }
 		bool IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const override;
+		void ReleaseDebugResources() override;
 	};
 }
 

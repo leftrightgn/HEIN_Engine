@@ -7,6 +7,7 @@ namespace HEIN {
     class ShadowSystem {
     public:
         void Initialize(ID3D11Device* device, int width, int height);
+        void Release();
         void BindShadowMap(ID3D11DeviceContext* context);
         void UnbindShadowMap(ID3D11DeviceContext* context);
         ID3D11ShaderResourceView* GetShadowMapSRV() const { return m_shadowSRV.Get(); }
