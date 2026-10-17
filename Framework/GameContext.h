@@ -22,6 +22,13 @@ namespace HEIN {
 	class ActorManager;
 }
 
+enum class EditorViewportLayout
+{
+	SceneViewOnly = 0, // Editing view: Debug/Editor Camera + Colliders + Frustums + ImGuizmo (NO Game HUD!)
+	GameViewOnly  = 1, // Player view: Main Gameplay Camera + Game HUD + Scene Transitions (NO Colliders/Gizmos!)
+	SplitSideBySide = 2 // Unity-style Split View: Left half = Scene View, Right half = Game View
+};
+
 /**
  * @brief Common resources passed to each scene.
  * Describe common resources passed to each scene here.
@@ -72,6 +79,10 @@ struct GameContext
 	HEIN::ShadowSystem* shadowSystem = nullptr;
 
 	bool isEditorMode = false;
+	bool showColliders = false;
 	bool showUI = true;
+	bool isSceneViewPass = false;
+	EditorViewportLayout viewportLayout = EditorViewportLayout::SceneViewOnly;
 	bool enableFrustumCulling = true;
 };
+

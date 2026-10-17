@@ -141,6 +141,7 @@ namespace HEIN
 
     void ProceduralAnimationComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
     {
+        if (!gameContext.isEditorMode || !gameContext.showColliders) return;
         if (gameContext.debugCollisionRenderer && !m_debugLines.empty())
         {
             for (const auto& line : m_debugLines)

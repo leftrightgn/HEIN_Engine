@@ -192,8 +192,9 @@ void HEIN::ColliderComponent::DrawGizmo(
 {
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-    ImGuiIO& io = ImGui::GetIO();
-    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+    float vpX = 0.0f, vpY = 0.0f, vpW = 1280.0f, vpH = 720.0f;
+    HEIN::DebugUIManager::GetActiveViewportRect(vpX, vpY, vpW, vpH);
+    ImGuizmo::SetRect(vpX, vpY, vpW, vpH);
     ImGuizmo::SetGizmoSizeClipSpace(0.2f);
 
     DirectX::SimpleMath::Matrix worldMat = GetCalculateWorldMatrix();

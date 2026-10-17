@@ -13,6 +13,8 @@
 #include <Components/UIButtonComponent.h>
 #include <Components/AnimationEditorComponent.h>
 #include <Windows.h>
+#include <commdlg.h>
+#include <filesystem>
 #include <vector>
 #include <Components/TransformComponent.h>
 #include <Camera/CameraController.h>
@@ -20,6 +22,104 @@
 namespace HEIN
 {
 	IGizmoEditable* g_ActiveGizmoTarget = nullptr;
+
+	namespace
+	{
+		float s_activeVpX = 0.0f;
+		float s_activeVpY = 0.0f;
+		float s_activeVpW = 0.0f;
+		float s_activeVpH = 0.0f;
+	}
+
+	DebugUIManager::~DebugUIManager()
+	{
+		g_ActiveGizmoTarget = nullptr;
+		s_activeVpX = 0.0f;
+		s_activeVpY = 0.0f;
+		s_activeVpW = 0.0f;
+		s_activeVpH = 0.0f;
+	}
+
+	void DebugUIManager::GetActiveViewportRect(float& outX, float& outY, float& outW, float& outH)
+	{
+		if (s_activeVpW > 10.0f && s_activeVpH > 10.0f)
+		{
+			outX = s_activeVpX;
+			outY = s_activeVpY;
+			outW = s_activeVpW;
+			outH = s_activeVpH;
+		}
+		else
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			outX = 0.0f;
+			outY = 0.0f;
+			outW = (io.DisplaySize.x > 0.0f) ? io.DisplaySize.x : 1280.0f;
+			outH = (io.DisplaySize.y > 0.0f) ? io.DisplaySize.y : 720.0f;
+		}
+	}
+
+	void DebugUIManager::SetActiveViewportRect(float x, float y, float w, float h)
+	{
+		s_activeVpX = x;
+		s_activeVpY = y;
+		s_activeVpW = w;
+		s_activeVpH = h;
+	}
+
+	D3D11_VIEWPORT DebugUIManager::GetCenterViewport(const GameContext& gameContext) const
+	{
+		D3D11_VIEWPORT fullVp = gameContext.deviceResources.GetScreenViewport();
+		if (!m_isVisible)
+		{
+			return fullVp;
+		}
+
+		float screenW = fullVp.Width;
+		float screenH = fullVp.Height;
+		float hierarchyWidth = std::floor(screenW * 0.14f);
+		float toolbarHeight = 80.0f;
+		float inspectorWidth = (m_inspectorWidth > 100.0f) ? m_inspectorWidth : std::floor(screenW * 0.24f);
+		if (inspectorWidth > screenW - hierarchyWidth - 100.0f)
+		{
+			inspectorWidth = std::max(100.0f, screenW - hierarchyWidth - 100.0f);
+		}
+
+		D3D11_VIEWPORT vp = {};
+		vp.TopLeftX = hierarchyWidth;
+		vp.TopLeftY = toolbarHeight;
+		vp.Width = std::max(100.0f, std::floor(screenW - hierarchyWidth - inspectorWidth));
+		vp.Height = std::max(100.0f, std::floor(screenH - toolbarHeight));
+		vp.MinDepth = 0.0f;
+		vp.MaxDepth = 1.0f;
+		return vp;
+	}
+
+	D3D11_VIEWPORT DebugUIManager::GetSceneViewport(const GameContext& gameContext) const
+	{
+		D3D11_VIEWPORT center = GetCenterViewport(gameContext);
+		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
+		{
+			D3D11_VIEWPORT vp = center;
+			vp.Width = std::floor(center.Width * 0.5f);
+			return vp;
+		}
+		return center;
+	}
+
+	D3D11_VIEWPORT DebugUIManager::GetGameViewport(const GameContext& gameContext) const
+	{
+		D3D11_VIEWPORT center = GetCenterViewport(gameContext);
+		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
+		{
+			float leftW = std::floor(center.Width * 0.5f);
+			D3D11_VIEWPORT vp = center;
+			vp.TopLeftX = center.TopLeftX + leftW;
+			vp.Width = center.Width - leftW;
+			return vp;
+		}
+		return center;
+	}
 
 	void DebugUIManager::Update(
 		const GameContext& gameContext,
@@ -33,6 +133,28 @@ namespace HEIN
 		{
 			m_isVisible = !m_isVisible;
 		}
+
+		if (gameContext.keyboardTracker.pressed.F2)
+		{
+			EditorViewportLayout nextLayout;
+			switch (m_viewportLayout)
+			{
+			case EditorViewportLayout::SceneViewOnly:
+				nextLayout = EditorViewportLayout::GameViewOnly;
+				break;
+			case EditorViewportLayout::GameViewOnly:
+				nextLayout = EditorViewportLayout::SplitSideBySide;
+				break;
+			case EditorViewportLayout::SplitSideBySide:
+			default:
+				nextLayout = EditorViewportLayout::SceneViewOnly;
+				break;
+			}
+			SetViewportLayout(nextLayout);
+		}
+
+		D3D11_VIEWPORT sceneVp = GetSceneViewport(gameContext);
+		SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
 
 		if (!m_isVisible) return;
 
@@ -79,7 +201,24 @@ namespace HEIN
 			if (gameContext.keyboardTracker.pressed.E) m_currentGinzmoOperation = ImGuizmo::ROTATE;
 			if (gameContext.keyboardTracker.pressed.R) m_currentGinzmoOperation = ImGuizmo::SCALE;
 		}
-		if (gameContext.mouseButtonTracker.leftButton == DirectX::Mouse::ButtonStateTracker::PRESSED &&
+
+		if (m_rightPanelMode == RightPanelMode::SceneTransition && !ImGui::GetIO().WantCaptureKeyboard)
+		{
+			if (gameContext.keyboardTracker.pressed.F5)
+			{
+				if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
+				{
+					SetViewportLayout(EditorViewportLayout::GameViewOnly);
+				}
+				if (gameContext.sceneManager)
+				{
+					gameContext.sceneManager->PreviewTransition(m_editorTransitionDesc);
+				}
+			}
+		}
+
+		if (m_viewportLayout != EditorViewportLayout::GameViewOnly &&
+			gameContext.mouseButtonTracker.leftButton == DirectX::Mouse::ButtonStateTracker::PRESSED &&
 			!ImGui::GetIO().WantCaptureMouse)
 		{
 			double currentTime = gameContext.timer.GetTotalSeconds();
@@ -88,11 +227,14 @@ namespace HEIN
 				float mouseX = static_cast<float>(gameContext.mouseState.x);
 				float mouseY = static_cast<float>(gameContext.mouseState.y);
 
-				RECT size = gameContext.deviceResources.GetOutputSize();
-				float screenWidth = static_cast<float>(size.right - size.left);
-				float screenHeight = static_cast<float>(size.bottom - size.top);
+				if (mouseX < sceneVp.TopLeftX || mouseX > sceneVp.TopLeftX + sceneVp.Width ||
+					mouseY < sceneVp.TopLeftY || mouseY > sceneVp.TopLeftY + sceneVp.Height)
+				{
+					m_lastleftClickTime = -1.0;
+					return;
+				}
 
-				DirectX::SimpleMath::Viewport viewport(0.0f, 0.0f, screenWidth, screenHeight);
+				DirectX::SimpleMath::Viewport viewport(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
 				DirectX::SimpleMath::Matrix world = DirectX::SimpleMath::Matrix::Identity;
 
 				// Unproject screen coordinates to 3D space
@@ -177,14 +319,16 @@ namespace HEIN
 						}
 					}
 
-					// 2D Screen Picking for UI Button Component
+					// 2D Screen Picking for UI Button Component (mapped from center viewport to 1280x720 reference canvas)
 					auto* uiBtn = actor->GetComponent<HEIN::UIButtonComponent>();
 					if (uiBtn != nullptr)
 					{
+						float refMouseX = (mouseX - sceneVp.TopLeftX) / (sceneVp.Width / 1280.0f);
+						float refMouseY = (mouseY - sceneVp.TopLeftY) / (sceneVp.Height / 720.0f);
 						DirectX::SimpleMath::Vector2 bPos = uiBtn->GetPosition();
 						DirectX::SimpleMath::Vector2 bSize = uiBtn->GetSize();
-						if (mouseX >= bPos.x && mouseX <= bPos.x + bSize.x &&
-							mouseY >= bPos.y && mouseY <= bPos.y + bSize.y)
+						if (refMouseX >= bPos.x && refMouseX <= bPos.x + bSize.x &&
+							refMouseY >= bPos.y && refMouseY <= bPos.y + bSize.y)
 						{
 							hit = true;
 							actorClosestHit = -1.0f; // UI always takes top priority over 3D geometry
@@ -244,6 +388,9 @@ namespace HEIN
 			g_ActiveGizmoTarget = nullptr;
 			return;
 		}
+
+		m_rightPanelMode = RightPanelMode::Inspector;
+
 		if (auto* cam = actor->GetComponent<HEIN::CameraController>())
 		{
 			g_ActiveGizmoTarget = cam;
@@ -427,7 +574,7 @@ namespace HEIN
 		ImGui::SetNextWindowSizeConstraints(ImVec2(100.0f, screenH), ImVec2(screenW, screenH));
 
 		// Set the starting size (only applies the very first time it opens)
-		ImGui::SetNextWindowSize(ImVec2(screenW * 0.25f, screenH), ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowSize(ImVec2(std::floor(screenW * 0.24f), screenH), ImGuiCond_FirstUseEver);
 
 		// The last parameter ImVec2(1.0f, 0.0f) is the Pivot (1.0 = Right edge, 0.0 = Top edge)
 		ImGui::SetNextWindowPos(ImVec2(screenW, 0.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
@@ -440,9 +587,63 @@ namespace HEIN
 		
 		ImVec2 inspectorPos = ImGui::GetWindowPos();
 		ImVec2 inspectorSize = ImGui::GetWindowSize();
+		m_inspectorWidth = inspectorSize.x;
 
-		// Ctrl+D shortcut to duplicate selected actor
-		if (!ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false))
+		D3D11_VIEWPORT sceneVp = GetSceneViewport(gameContext);
+		SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+
+		// Draw subtle Unity-style border around the dedicated Center Viewport
+		if (ImDrawList* bgList = ImGui::GetBackgroundDrawList())
+		{
+			ImU32 vpBorderCol = m_isSceneViewActive ? IM_COL32(55, 130, 210, 180) : IM_COL32(60, 175, 95, 180);
+			bgList->AddRect(
+				ImVec2(sceneVp.TopLeftX, sceneVp.TopLeftY),
+				ImVec2(sceneVp.TopLeftX + sceneVp.Width, sceneVp.TopLeftY + sceneVp.Height),
+				vpBorderCol, 0.0f, 0, 1.5f
+			);
+		}
+
+		// Mode Tabs: [ Inspector ]  [ Scene Transition ]
+		if (m_rightPanelMode == RightPanelMode::Inspector)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.85f, 1.0f));
+			ImGui::Button("Inspector", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f - 2.0f, 26));
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("Inspector", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f - 2.0f, 26)))
+			{
+				m_rightPanelMode = RightPanelMode::Inspector;
+			}
+		}
+
+		ImGui::SameLine();
+
+		if (m_rightPanelMode == RightPanelMode::SceneTransition)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.45f, 0.15f, 1.0f));
+			ImGui::Button("Scene Transition", ImVec2(-1, 26));
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("Scene Transition", ImVec2(-1, 26)))
+			{
+				m_rightPanelMode = RightPanelMode::SceneTransition;
+			}
+		}
+
+		ImGui::Separator();
+
+		if (m_rightPanelMode == RightPanelMode::SceneTransition)
+		{
+			RenderSceneTransitionPanel(gameContext);
+		}
+		else
+		{
+			// Ctrl+D shortcut to duplicate selected actor
+			if (!ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false))
 		{
 			if (m_selectedActor != nullptr)
 			{
@@ -581,18 +782,19 @@ namespace HEIN
 				// If a valid editable target is selected (e.g., TransformComponent, CameraController),
 				// this overlays interactive translation, rotation, or scaling handles directly onto 
 				// the D3D11 scene view. Interactions modify the component's underlying coordinate matrices.
-				if (g_ActiveGizmoTarget != nullptr)
+				if (m_viewportLayout != EditorViewportLayout::GameViewOnly && g_ActiveGizmoTarget != nullptr)
 				{
 					g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
 				}
 			}
 
 		}
+		} // end if (m_rightPanelMode == RightPanelMode::SceneTransition) ... else
 		ImGui::End();
 
 		ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
 
-		float hierarchyWidth = screenW * 0.12f;
+		float hierarchyWidth = std::floor(screenW * 0.14f);
 		float toolbarWidth = inspectorPos.x - hierarchyWidth;
 		if (toolbarWidth < 10.0f) toolbarWidth = 10.0f; // Ensure a minimum width
 
@@ -600,9 +802,74 @@ namespace HEIN
 		ImGui::SetNextWindowSize(ImVec2(toolbarWidth, 80.0f), ImGuiCond_Always);
 
 		ImGui::Begin("ToolBar", nullptr, toolbarFlags);
-		if (ImGui::Button("PLAY")) currentAction = HEIN::EditorAction::PlayPressed;
+		if (ImGui::Button("PLAY (Exit Editor)")) currentAction = HEIN::EditorAction::PlayPressed;
 		ImGui::SameLine();
-		if (ImGui::Button("STOP")) 	currentAction = HEIN::EditorAction::StopPressed;
+		if (ImGui::Button("STOP (Pause)")) currentAction = HEIN::EditorAction::StopPressed;
+		ImGui::SameLine();
+
+		// Unity-style Scene View vs Game View layout selector tabs (F2)
+		bool isSceneOnly = (m_viewportLayout == EditorViewportLayout::SceneViewOnly);
+		bool isGameOnly  = (m_viewportLayout == EditorViewportLayout::GameViewOnly);
+		bool isSplit     = (m_viewportLayout == EditorViewportLayout::SplitSideBySide);
+
+		if (isSceneOnly)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.85f, 1.0f));
+			ImGui::Button("[ Scene ] (F2)");
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("[ Scene ] (F2)"))
+			{
+				SetViewportLayout(EditorViewportLayout::SceneViewOnly);
+			}
+		}
+
+		ImGui::SameLine();
+
+		if (isGameOnly)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.65f, 0.35f, 1.0f));
+			ImGui::Button("[ Game ]");
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("[ Game ]"))
+			{
+				SetViewportLayout(EditorViewportLayout::GameViewOnly);
+			}
+		}
+
+		ImGui::SameLine();
+
+		if (isSplit)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.35f, 0.85f, 1.0f));
+			ImGui::Button("[ Split: Scene | Game ]");
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("[ Split: Scene | Game ]"))
+			{
+				SetViewportLayout(EditorViewportLayout::SplitSideBySide);
+			}
+		}
+
+		ImGui::SameLine();
+		if (m_rightPanelMode == RightPanelMode::SceneTransition)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.45f, 0.15f, 1.0f));
+			if (ImGui::Button("INSPECTOR")) m_rightPanelMode = RightPanelMode::Inspector;
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("SCENE CHANGER")) m_rightPanelMode = RightPanelMode::SceneTransition;
+		}
+
 		ImGui::SameLine();
 		if (ImGui::Button("SAVE SCENE")) currentAction = HEIN::EditorAction::SavePressed;
 		ImGui::SameLine();
@@ -614,7 +881,7 @@ namespace HEIN
 		ImGui::SameLine();
 		if (ImGui::Button("ANIMATOR")) m_showAnimatorWindow = !m_showAnimatorWindow;
 		ImGui::SameLine();
-		ImGui::Checkbox("Show Viewport", &m_showViewportPreview);
+		ImGui::Checkbox("PiP Preview", &m_showViewportPreview);
 		ImGui::SameLine();
 		ImGui::Checkbox("Show Colliders", &m_showColliders);
 		ImGui::SameLine();
@@ -815,6 +1082,44 @@ namespace HEIN
 			ImGui::End();
 		}
 
+		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
+		{
+			D3D11_VIEWPORT sceneVp = GetSceneViewport(gameContext);
+			D3D11_VIEWPORT gameVp = GetGameViewport(gameContext);
+			ImDrawList* fg = ImGui::GetForegroundDrawList();
+			if (fg)
+			{
+				// Subtle vertical divider line between Scene View and Game View
+				fg->AddLine(
+					ImVec2(gameVp.TopLeftX, sceneVp.TopLeftY),
+					ImVec2(gameVp.TopLeftX, sceneVp.TopLeftY + sceneVp.Height),
+					IM_COL32(35, 35, 35, 255), 2.0f
+				);
+
+				// Left: [ Scene View ] badge
+				fg->AddRectFilled(
+					ImVec2(sceneVp.TopLeftX + 8.0f, sceneVp.TopLeftY + 8.0f),
+					ImVec2(sceneVp.TopLeftX + 106.0f, sceneVp.TopLeftY + 28.0f),
+					IM_COL32(20, 20, 20, 200), 4.0f
+				);
+				fg->AddText(
+					ImVec2(sceneVp.TopLeftX + 16.0f, sceneVp.TopLeftY + 11.0f),
+					IM_COL32(90, 180, 255, 255), "Scene View"
+				);
+
+				// Right: [ Game View ] badge
+				fg->AddRectFilled(
+					ImVec2(gameVp.TopLeftX + 8.0f, gameVp.TopLeftY + 8.0f),
+					ImVec2(gameVp.TopLeftX + 106.0f, gameVp.TopLeftY + 28.0f),
+					IM_COL32(20, 20, 20, 200), 4.0f
+				);
+				fg->AddText(
+					ImVec2(gameVp.TopLeftX + 16.0f, gameVp.TopLeftY + 11.0f),
+					IM_COL32(100, 220, 130, 255), "Game View"
+				);
+			}
+		}
+
 		return currentAction;
 	}
 
@@ -895,6 +1200,433 @@ namespace HEIN
 			}
 			ImGui::End();
 			ImGui::PopStyleColor(3);
+		}
+	}
+
+	void DebugUIManager::RenderSceneTransitionPanel(GameContext& gameContext)
+	{
+		if (!gameContext.sceneManager)
+		{
+			ImGui::TextDisabled("SceneManager not available in GameContext.");
+			return;
+		}
+
+		if (!m_hasLoadedEditorDesc)
+		{
+			m_editorTransitionDesc = gameContext.sceneManager->GetDefaultTransition();
+			m_hasLoadedEditorDesc = true;
+		}
+
+		float dt = static_cast<float>(gameContext.timer.GetElapsedSeconds());
+		if (m_transitionStatusTimer > 0.0f)
+		{
+			m_transitionStatusTimer -= dt;
+			if (m_transitionStatusTimer <= 0.0f)
+			{
+				m_transitionStatusMessage.clear();
+			}
+		}
+
+		ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1.0f), "Scene Transition Asset Settings");
+		ImGui::TextDisabled("Configure full-screen fade, tint, hold, and flipbook effects.");
+		ImGui::Separator();
+
+		// 1. Transition Style Selector
+		if (m_editorTransitionDesc.texturePath.empty())
+		{
+			m_transitionStyleIndex = 0; // Solid Color Fade
+		}
+		else if (m_editorTransitionDesc.columns <= 1 && m_editorTransitionDesc.rows <= 1 && m_editorTransitionDesc.totalFrames <= 1)
+		{
+			m_transitionStyleIndex = 1; // Static Image (.dds)
+		}
+		else
+		{
+			m_transitionStyleIndex = 2; // Animated Video Flipbook (.dds Sprite Sheet)
+		}
+
+		ImGui::Text("Transition Style:");
+		if (ImGui::RadioButton("Solid Color Fade", &m_transitionStyleIndex, 0))
+		{
+			m_editorTransitionDesc.texturePath = L"";
+		}
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Static Image", &m_transitionStyleIndex, 1))
+		{
+			if (m_editorTransitionDesc.texturePath.empty())
+			{
+				m_editorTransitionDesc.texturePath = L"Resources/Textures/fade.dds";
+			}
+			m_editorTransitionDesc.columns = 1;
+			m_editorTransitionDesc.rows = 1;
+			m_editorTransitionDesc.totalFrames = 1;
+		}
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Flipbook Sheet", &m_transitionStyleIndex, 2))
+		{
+			if (m_editorTransitionDesc.texturePath.empty())
+			{
+				m_editorTransitionDesc.texturePath = L"Resources/Textures/transition_sheet.dds";
+			}
+			if (m_editorTransitionDesc.columns <= 1) m_editorTransitionDesc.columns = 4;
+			if (m_editorTransitionDesc.rows <= 1) m_editorTransitionDesc.rows = 4;
+			if (m_editorTransitionDesc.totalFrames <= 1) m_editorTransitionDesc.totalFrames = 16;
+		}
+
+		ImGui::Separator();
+
+		// 2. Texture File Picker (shown for styles 1 and 2)
+		if (m_transitionStyleIndex > 0)
+		{
+			ImGui::Text("Texture Path (.dds):");
+			std::string texturePathStr(m_editorTransitionDesc.texturePath.begin(), m_editorTransitionDesc.texturePath.end());
+			char pathBuf[512] = {};
+			strcpy_s(pathBuf, sizeof(pathBuf), texturePathStr.c_str());
+
+			if (ImGui::InputText("##TexturePathInput", pathBuf, sizeof(pathBuf)))
+			{
+				m_editorTransitionDesc.texturePath = std::wstring(pathBuf, pathBuf + strlen(pathBuf));
+			}
+
+			if (ImGui::Button("Browse .dds..."))
+			{
+				OPENFILENAMEW ofn = {};
+				wchar_t szFile[MAX_PATH] = {};
+				ofn.lStructSize = sizeof(ofn);
+				ofn.hwndOwner = nullptr;
+				ofn.lpstrFile = szFile;
+				ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
+				ofn.lpstrFilter = L"DDS Textures (*.dds)\0*.dds\0All Files (*.*)\0*.*\0";
+				ofn.nFilterIndex = 1;
+				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+				if (GetOpenFileNameW(&ofn))
+				{
+					std::filesystem::path p(szFile);
+					std::wstring ws = p.lexically_normal().wstring();
+					// Find "Resources" or "Dual/Resources"
+					size_t pos = ws.find(L"Resources");
+					if (pos != std::wstring::npos)
+					{
+						ws = ws.substr(pos);
+					}
+					for (wchar_t& c : ws)
+					{
+						if (c == L'\\') c = L'/';
+					}
+					m_editorTransitionDesc.texturePath = ws;
+				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Clear to Solid Fade"))
+			{
+				m_editorTransitionDesc.texturePath = L"";
+				m_transitionStyleIndex = 0;
+			}
+
+			ImGui::Separator();
+		}
+
+		// 3. Timing Controls
+		ImGui::Text("Transition Timings:");
+		ImGui::DragFloat("Fade Out Duration", &m_editorTransitionDesc.fadeOutDuration, 0.05f, 0.05f, 5.0f, "%.2fs");
+		if (ImGui::DragFloat("Min Loading Hold Duration", &m_editorTransitionDesc.minLoadingHoldDuration, 0.05f, 0.1f, 10.0f, "%.2fs"))
+		{
+			m_editorTransitionDesc.holdDuration = m_editorTransitionDesc.minLoadingHoldDuration;
+		}
+		ImGui::DragFloat("Fade In Duration", &m_editorTransitionDesc.fadeInDuration, 0.05f, 0.05f, 5.0f, "%.2fs");
+
+		ImGui::Separator();
+
+		// 4. Color Picker
+		ImGui::Text("Color & Tint:");
+		ImGui::ColorEdit4("Tint / Fade Color", &m_editorTransitionDesc.tintColor.x);
+
+		ImGui::Separator();
+
+		// 5. Flipbook / Video Settings (shown when Flipbook mode is active)
+		if (m_transitionStyleIndex == 2 || ImGui::CollapsingHeader("Flipbook / Video Settings"))
+		{
+			ImGui::DragInt("Columns", &m_editorTransitionDesc.columns, 1, 1, 32);
+			ImGui::DragInt("Rows", &m_editorTransitionDesc.rows, 1, 1, 32);
+			ImGui::DragInt("Total Frames", &m_editorTransitionDesc.totalFrames, 1, 1, 1024);
+			ImGui::DragFloat("Playback FPS", &m_editorTransitionDesc.fps, 0.5f, 1.0f, 120.0f, "%.1f FPS");
+			ImGui::Checkbox("Loop Animation", &m_editorTransitionDesc.loopAnimation);
+			ImGui::Separator();
+		}
+
+		// 6. Versatile Elden Ring Loading Bar Controls
+		if (ImGui::CollapsingHeader("Loading Bar Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Checkbox("Show Loading Bar", &m_editorTransitionDesc.showLoadingBar);
+
+			if (m_editorTransitionDesc.showLoadingBar)
+			{
+				// Orientation combo
+				const char* orientationNames[] = {
+					"Horizontal (Left -> Right)",
+					"Horizontal (Right -> Left)",
+					"Vertical (Bottom -> Top)",
+					"Vertical (Top -> Bottom)",
+					"Center Horizontal",
+					"Center Vertical"
+				};
+				int currentOri = static_cast<int>(m_editorTransitionDesc.barOrientation);
+				if (ImGui::Combo("Orientation", &currentOri, orientationNames, IM_ARRAYSIZE(orientationNames)))
+				{
+					m_editorTransitionDesc.barOrientation = static_cast<LoadingBarOrientation>(currentOri);
+				}
+
+				// Style combo
+				const char* styleNames[] = {
+					"Elden Ring Needle",
+					"Solid Fill",
+					"Segmented",
+					"Custom Textured"
+				};
+				int currentStyle = static_cast<int>(m_editorTransitionDesc.barStyle);
+				if (ImGui::Combo("Bar Style", &currentStyle, styleNames, IM_ARRAYSIZE(styleNames)))
+				{
+					m_editorTransitionDesc.barStyle = static_cast<LoadingBarStyle>(currentStyle);
+				}
+
+				ImGui::SliderFloat2("Screen Anchor (0..1)", &m_editorTransitionDesc.barNormalizedPos.x, 0.0f, 1.0f, "%.3f");
+				ImGui::DragFloat("Bar Length", &m_editorTransitionDesc.barLength, 1.0f, 50.0f, 1600.0f, "%.0f px");
+				ImGui::DragFloat("Bar Thickness", &m_editorTransitionDesc.barThickness, 0.5f, 1.0f, 60.0f, "%.1f px");
+
+				ImGui::Checkbox("Show End-Caps", &m_editorTransitionDesc.showEndCaps);
+				if (m_editorTransitionDesc.showEndCaps)
+				{
+					ImGui::SameLine();
+					ImGui::SetNextItemWidth(100);
+					ImGui::DragFloat("Length##CapLen", &m_editorTransitionDesc.endCapLength, 0.5f, 2.0f, 60.0f, "%.0f px");
+					ImGui::SameLine();
+					ImGui::SetNextItemWidth(80);
+					ImGui::DragFloat("Thick##CapThick", &m_editorTransitionDesc.endCapThickness, 0.5f, 1.0f, 20.0f, "%.1f px");
+				}
+
+				ImGui::Checkbox("Show Needle", &m_editorTransitionDesc.showNeedle);
+				if (m_editorTransitionDesc.showNeedle)
+				{
+					ImGui::SameLine();
+					ImGui::SetNextItemWidth(100);
+					ImGui::DragFloat("Length##NeedleLen", &m_editorTransitionDesc.needleLength, 0.5f, 2.0f, 80.0f, "%.0f px");
+					ImGui::SameLine();
+					ImGui::SetNextItemWidth(80);
+					ImGui::DragFloat("Thick##NeedleThick", &m_editorTransitionDesc.needleThickness, 0.5f, 1.0f, 20.0f, "%.1f px");
+					ImGui::DragFloat("Needle Pulse Speed", &m_editorTransitionDesc.needlePulseSpeed, 0.1f, 0.0f, 20.0f, "%.1f");
+				}
+
+				if (m_editorTransitionDesc.barStyle == LoadingBarStyle::Segmented)
+				{
+					ImGui::DragInt("Segment Count", &m_editorTransitionDesc.segmentCount, 1, 2, 60);
+				}
+
+				ImGui::Checkbox("Show Percentage Readout", &m_editorTransitionDesc.showPercentageText);
+
+				ImGui::ColorEdit4("Track Color", &m_editorTransitionDesc.barTrackColor.x);
+				ImGui::ColorEdit4("Fill Color", &m_editorTransitionDesc.barFillColor.x);
+				ImGui::ColorEdit4("Needle Color", &m_editorTransitionDesc.barNeedleColor.x);
+
+				if (m_editorTransitionDesc.barStyle == LoadingBarStyle::CustomTextured ||
+					ImGui::TreeNode("Custom Bar Textures (.dds)"))
+				{
+					auto DrawTexPicker = [&](const char* label, std::wstring& targetPath)
+					{
+						std::string s(targetPath.begin(), targetPath.end());
+						char buf[512] = {};
+						strcpy_s(buf, sizeof(buf), s.c_str());
+						ImGui::Text("%s:", label);
+						if (ImGui::InputText((std::string("##Input") + label).c_str(), buf, sizeof(buf)))
+						{
+							targetPath = std::wstring(buf, buf + strlen(buf));
+						}
+						ImGui::SameLine();
+						if (ImGui::Button((std::string("Browse##") + label).c_str()))
+						{
+							OPENFILENAMEW ofn = {};
+							wchar_t szFile[MAX_PATH] = {};
+							ofn.lStructSize = sizeof(ofn);
+							ofn.hwndOwner = nullptr;
+							ofn.lpstrFile = szFile;
+							ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
+							ofn.lpstrFilter = L"DDS Textures (*.dds)\0*.dds\0All Files (*.*)\0*.*\0";
+							ofn.nFilterIndex = 1;
+							ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+							if (GetOpenFileNameW(&ofn))
+							{
+								std::filesystem::path p(szFile);
+								std::wstring ws = p.lexically_normal().wstring();
+								size_t pos = ws.find(L"Resources");
+								if (pos != std::wstring::npos) ws = ws.substr(pos);
+								for (wchar_t& c : ws) if (c == L'\\') c = L'/';
+								targetPath = ws;
+							}
+						}
+						ImGui::SameLine();
+						if (ImGui::Button((std::string("Clear##") + label).c_str()))
+						{
+							targetPath = L"";
+						}
+					};
+
+					DrawTexPicker("Bar Track Texture", m_editorTransitionDesc.barTrackTexturePath);
+					DrawTexPicker("Bar Fill Texture", m_editorTransitionDesc.barFillTexturePath);
+					DrawTexPicker("Bar Needle Texture", m_editorTransitionDesc.barNeedleTexturePath);
+
+					if (m_editorTransitionDesc.barStyle != LoadingBarStyle::CustomTextured)
+					{
+						ImGui::TreePop();
+					}
+				}
+			}
+			ImGui::Separator();
+		}
+
+		// 7. Lore / Gameplay Tips Controls
+		if (ImGui::CollapsingHeader("Lore & Gameplay Tips Cycler", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Checkbox("Show Gameplay Tips", &m_editorTransitionDesc.showTips);
+			if (m_editorTransitionDesc.showTips)
+			{
+				ImGui::SliderFloat2("Tips Anchor (0..1)", &m_editorTransitionDesc.tipNormalizedPos.x, 0.0f, 1.0f, "%.3f");
+
+				ImGui::Text("Active Tips List (%d total):", static_cast<int>(m_editorTransitionDesc.tips.size()));
+				int tipToRemove = -1;
+				for (size_t i = 0; i < m_editorTransitionDesc.tips.size(); ++i)
+				{
+					ImGui::PushID(static_cast<int>(i));
+					char titleBuf[128] = {};
+					char descBuf[512] = {};
+					strcpy_s(titleBuf, sizeof(titleBuf), m_editorTransitionDesc.tips[i].title.c_str());
+					strcpy_s(descBuf, sizeof(descBuf), m_editorTransitionDesc.tips[i].description.c_str());
+
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 60.0f);
+					if (ImGui::InputText("Title", titleBuf, sizeof(titleBuf)))
+					{
+						m_editorTransitionDesc.tips[i].title = titleBuf;
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Delete"))
+					{
+						tipToRemove = static_cast<int>(i);
+					}
+
+					if (ImGui::InputTextMultiline("Description", descBuf, sizeof(descBuf), ImVec2(-1, 44)))
+					{
+						m_editorTransitionDesc.tips[i].description = descBuf;
+					}
+					ImGui::Separator();
+					ImGui::PopID();
+				}
+
+				if (tipToRemove >= 0 && tipToRemove < static_cast<int>(m_editorTransitionDesc.tips.size()))
+				{
+					m_editorTransitionDesc.tips.erase(m_editorTransitionDesc.tips.begin() + tipToRemove);
+				}
+
+				if (ImGui::Button("+ Add New Tip"))
+				{
+					m_editorTransitionDesc.tips.push_back({ "New Tip Title", "Enter helpful gameplay tip or world lore here." });
+				}
+			}
+			ImGui::Separator();
+		}
+
+		// 8. Action Buttons
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.65f, 0.35f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.75f, 0.45f, 1.0f));
+		if (ImGui::Button("Preview Transition (F5 / Space)", ImVec2(-1, 32)))
+		{
+			if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
+			{
+				SetViewportLayout(EditorViewportLayout::GameViewOnly);
+			}
+			gameContext.sceneManager->PreviewTransition(m_editorTransitionDesc);
+		}
+		ImGui::PopStyleColor(2);
+
+		ImGui::Spacing();
+
+		// Test Switch Scene
+		auto sceneNames = gameContext.sceneManager->GetRegisteredSceneNames();
+		if (sceneNames.empty())
+		{
+			sceneNames = { "TitleScene", "GameScene" };
+		}
+
+		if (m_selectedTargetSceneIndex < 0 || m_selectedTargetSceneIndex >= static_cast<int>(sceneNames.size()))
+		{
+			m_selectedTargetSceneIndex = 0;
+		}
+
+		if (ImGui::BeginCombo("Target Scene", sceneNames[m_selectedTargetSceneIndex].c_str()))
+		{
+			for (int i = 0; i < static_cast<int>(sceneNames.size()); ++i)
+			{
+				bool isSelected = (m_selectedTargetSceneIndex == i);
+				if (ImGui::Selectable(sceneNames[i].c_str(), isSelected))
+				{
+					m_selectedTargetSceneIndex = i;
+				}
+				if (isSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.4f, 0.15f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.5f, 0.2f, 1.0f));
+		if (ImGui::Button("Test Switch Scene", ImVec2(-1, 28)))
+		{
+			if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
+			{
+				SetViewportLayout(EditorViewportLayout::GameViewOnly);
+			}
+			if (m_selectedTargetSceneIndex >= 0 && m_selectedTargetSceneIndex < static_cast<int>(sceneNames.size()))
+			{
+				gameContext.sceneManager->LoadScene(sceneNames[m_selectedTargetSceneIndex], m_editorTransitionDesc);
+			}
+		}
+		ImGui::PopStyleColor(2);
+
+		ImGui::Spacing();
+
+		// Save & Reset Buttons
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.85f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.65f, 0.95f, 1.0f));
+		if (ImGui::Button("Save Transition Asset", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f - 2.0f, 28)))
+		{
+			gameContext.sceneManager->SetDefaultTransition(m_editorTransitionDesc);
+			bool success = gameContext.sceneManager->SaveTransitionConfig();
+			if (success)
+			{
+				m_transitionStatusMessage = "Saved to Resources/Data/SceneTransition.json!";
+			}
+			else
+			{
+				m_transitionStatusMessage = "Failed to save SceneTransition.json!";
+			}
+			m_transitionStatusTimer = 3.5f;
+		}
+		ImGui::PopStyleColor(2);
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Reset to Default", ImVec2(-1, 28)))
+		{
+			m_editorTransitionDesc = gameContext.sceneManager->GetDefaultTransition();
+			m_transitionStatusMessage = "Reset to default transition settings.";
+			m_transitionStatusTimer = 2.0f;
+		}
+
+		if (!m_transitionStatusMessage.empty())
+		{
+			ImGui::Spacing();
+			ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.4f, 1.0f), "%s", m_transitionStatusMessage.c_str());
 		}
 	}
 }

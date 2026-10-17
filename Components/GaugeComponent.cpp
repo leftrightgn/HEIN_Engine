@@ -7,6 +7,7 @@
 #include "DebugingTools/EditorUtils.h"
 #include "DebugingTools/DebugUIManager.h"
 #include "HealthComponent.h"
+#include "StaticModelComponent.h"
 #include <ImGui/imgui.h>
 #include <ImGui/imgui_stdlib.h>
 #include <ImGui/ImGuizmo.h>
@@ -62,13 +63,8 @@ namespace
         srv.Reset();
         if (path.empty()) return;
         
-        HRESULT hr = DirectX::CreateDDSTextureFromFile(
-            device, path.c_str(), nullptr, srv.ReleaseAndGetAddressOf());
-        if (FAILED(hr))
-        {
-            hr = DirectX::CreateWICTextureFromFile(
-                device, path.c_str(), nullptr, srv.ReleaseAndGetAddressOf());
-        }
+        // Shared cache: multiple actors use the same gauge frame/fill textures
+        HEIN::TryLoadCachedTextureFile(device, path, srv.ReleaseAndGetAddressOf());
     }
 
     const char* GaugeTypeToStr(HEIN::GaugeType t)
@@ -194,7 +190,13 @@ bool HEIN::GaugeComponent::WorldToScreenPoint(
 
     DirectX::SimpleMath::Matrix view = gameContext.mainCamera->GetView();
 
-    D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
+    D3D11_VIEWPORT vp = {};
+    UINT numVp = 1;
+    gameContext.deviceResources.GetD3DDeviceContext()->RSGetViewports(&numVp, &vp);
+    if (vp.Width <= 0.0f || vp.Height <= 0.0f)
+    {
+        vp = gameContext.deviceResources.GetScreenViewport();
+    }
     float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
     float fov = gameContext.mainCamera->GetFov();
     if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
@@ -317,6 +319,7 @@ void HEIN::GaugeComponent::SyncBoundBars(GameContext& gameContext)
 // ============================================================================
 void HEIN::GaugeComponent::Draw2D(GameContext& gameContext)
 {
+    if (!m_isVisible || m_bars.empty() || !gameContext.showUI || gameContext.isSceneViewPass) return;
     Draw(gameContext, DirectX::SimpleMath::Matrix::Identity,
          DirectX::SimpleMath::Matrix::Identity,
          DirectX::SimpleMath::Matrix::Identity);
@@ -328,7 +331,7 @@ void HEIN::GaugeComponent::Draw(
     const DirectX::SimpleMath::Matrix& /*view*/,
     const DirectX::SimpleMath::Matrix& /*proj*/)
 {
-    if (!m_isVisible || m_bars.empty() || !gameContext.showUI) return;
+    if (!m_isVisible || m_bars.empty() || !gameContext.showUI || gameContext.isSceneViewPass) return;
 
     // Auto-sync bound bar values from data source components
     SyncBoundBars(gameContext);
@@ -606,6 +609,8 @@ void HEIN::GaugeComponent::DrawBar(
     context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
 
     // 4) Label and Value text using ImGui draw list (always on top)
+    if (!gameContext.showUI || gameContext.isSceneViewPass) return;
+
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
     if (drawList)
     {
@@ -1271,19 +1276,18 @@ void HEIN::GaugeComponent::DrawGizmo(
 
     ImGuizmo::SetOrthographic(true);
     ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-    ImGuiIO& io = ImGui::GetIO();
-    float displayW = (io.DisplaySize.x > 0.0f) ? io.DisplaySize.x : kRefWidth;
-    float displayH = (io.DisplaySize.y > 0.0f) ? io.DisplaySize.y : kRefHeight;
+    float vpX = 0.0f, vpY = 0.0f, displayW = kRefWidth, displayH = kRefHeight;
+    HEIN::DebugUIManager::GetActiveViewportRect(vpX, vpY, displayW, displayH);
 
     float scaleX = displayW / kRefWidth;
     float scaleY = displayH / kRefHeight;
 
-    ImGuizmo::SetRect(0, 0, displayW, displayH);
+    ImGuizmo::SetRect(vpX, vpY, displayW, displayH);
     ImGuizmo::SetGizmoSizeClipSpace(0.12f);
 
     DirectX::SimpleMath::Matrix orthoView = DirectX::SimpleMath::Matrix::Identity;
     DirectX::SimpleMath::Matrix orthoProj = DirectX::SimpleMath::Matrix::CreateOrthographicOffCenter(
-        0.0f, displayW, displayH, 0.0f, -1000.0f, 1000.0f
+        vpX, vpX + displayW, vpY + displayH, vpY, -1000.0f, 1000.0f
     );
 
     // Compute bounding box of all bars combined
@@ -1291,8 +1295,8 @@ void HEIN::GaugeComponent::DrawGizmo(
     float maxX = -99999.0f, maxY = -99999.0f;
     for (const auto& bar : m_bars)
     {
-        float bx = (m_screenPosition.x + bar.offset.x) * scaleX;
-        float by = (m_screenPosition.y + bar.offset.y) * scaleY;
+        float bx = vpX + (m_screenPosition.x + bar.offset.x) * scaleX;
+        float by = vpY + (m_screenPosition.y + bar.offset.y) * scaleY;
         float bw = bar.size.x * scaleX;
         float bh = bar.size.y * scaleY;
         minX = std::min(minX, bx);
@@ -1303,8 +1307,8 @@ void HEIN::GaugeComponent::DrawGizmo(
 
     if (m_bars.empty())
     {
-        minX = m_screenPosition.x * scaleX;
-        minY = m_screenPosition.y * scaleY;
+        minX = vpX + m_screenPosition.x * scaleX;
+        minY = vpY + m_screenPosition.y * scaleY;
         maxX = minX + 200.0f * scaleX;
         maxY = minY + 20.0f * scaleY;
     }
@@ -1331,8 +1335,8 @@ void HEIN::GaugeComponent::DrawGizmo(
         DirectX::SimpleMath::Quaternion newRot;
         if (worldMat.Decompose(newScale, newRot, newPos))
         {
-            float newMinX = newPos.x - std::abs(newScale.x) * 0.5f;
-            float newMinY = newPos.y - std::abs(newScale.y) * 0.5f;
+            float newMinX = (newPos.x - vpX) - std::abs(newScale.x) * 0.5f;
+            float newMinY = (newPos.y - vpY) - std::abs(newScale.y) * 0.5f;
             m_screenPosition.x = newMinX / scaleX - (m_bars.empty() ? 0.0f : m_bars[0].offset.x);
             m_screenPosition.y = newMinY / scaleY - (m_bars.empty() ? 0.0f : m_bars[0].offset.y);
         }
