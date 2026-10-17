@@ -52,7 +52,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColl
     float len = d.Length();
 
     // Projection lambda: clamps any 3D coordinate to the AABB boundary volume [-extents, extents]
-    std::function<DirectX::SimpleMath::Vector3(const DirectX::SimpleMath::Vector3&)> clampToAABB =
+    auto clampToAABB =
         [&extents](const DirectX::SimpleMath::Vector3& p) -> DirectX::SimpleMath::Vector3
         {
             return DirectX::SimpleMath::Vector3(
@@ -147,7 +147,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsAABB(HEIN::CapsuleCol
     float len = d.Length();
     
     // Clamp point to AABB
-    std::function<DirectX::SimpleMath::Vector3(const DirectX::SimpleMath::Vector3&)> clampToAABB =
+    auto clampToAABB =
         [&aabbPos, &extents](const DirectX::SimpleMath::Vector3& p) -> DirectX::SimpleMath::Vector3
         {
             return DirectX::SimpleMath::Vector3(

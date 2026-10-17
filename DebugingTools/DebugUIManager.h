@@ -1,13 +1,18 @@
 #pragma once
 #include "Framework/GameContext.h"
 #include "Entities/Actor.h"
+#include "Scene/SceneManager.h"
 #include <ImGui/imgui.h>
 #include <ImGui/ImGuizmo.h>
 
-
-
 namespace HEIN
 {
+	enum class RightPanelMode
+	{
+		Inspector,
+		SceneTransition
+	};
+
 	enum class EditorAction
 	{
 		None,
@@ -44,7 +49,9 @@ namespace HEIN
 	{
 	private:
 		bool m_isVisible = true;
-		bool m_showViewportPreview = true;
+		bool m_showViewportPreview = false;
+		bool m_isSceneViewActive = true;
+		EditorViewportLayout m_viewportLayout = EditorViewportLayout::SceneViewOnly;
 		bool m_showAnimatorWindow = false;
 		bool m_showColliders = true;
 		bool m_showUI = true;
@@ -58,14 +65,51 @@ namespace HEIN
 
 		DirectX::SimpleMath::Vector2 m_viewportPos = DirectX::SimpleMath::Vector2(0.0f, 0.0f);
 		DirectX::SimpleMath::Vector2 m_viewportSize = DirectX::SimpleMath::Vector2(400.0f, 225.0f);
-		bool m_isViewportVisibleInUI = true;
+		bool m_isViewportVisibleInUI = false;
+		float m_inspectorWidth = 0.0f;
+
+		// Right Panel Mode (Inspector vs Scene Transition)
+		RightPanelMode m_rightPanelMode = RightPanelMode::Inspector;
+		SceneTransitionDesc m_editorTransitionDesc;
+		bool m_hasLoadedEditorDesc = false;
+		std::string m_transitionStatusMessage;
+		float m_transitionStatusTimer = 0.0f;
+		int m_selectedTargetSceneIndex = 0;
+		int m_transitionStyleIndex = 0;
 
 	public:
 		DebugUIManager() = default;
-		~DebugUIManager() = default;
+		~DebugUIManager();
+
+		RightPanelMode GetRightPanelMode() const { return m_rightPanelMode; }
+		void SetRightPanelMode(RightPanelMode mode) { m_rightPanelMode = mode; }
+		void RenderSceneTransitionPanel(GameContext& gameContext);
+
+		static void GetActiveViewportRect(float& outX, float& outY, float& outW, float& outH);
+		static void SetActiveViewportRect(float x, float y, float w, float h);
+
+		D3D11_VIEWPORT GetCenterViewport(const GameContext& gameContext) const;
+		D3D11_VIEWPORT GetSceneViewport(const GameContext& gameContext) const;
+		D3D11_VIEWPORT GetGameViewport(const GameContext& gameContext) const;
+
+		EditorViewportLayout GetViewportLayout() const { return m_viewportLayout; }
+		void SetViewportLayout(EditorViewportLayout layout)
+		{
+			m_viewportLayout = layout;
+			m_isSceneViewActive = (layout != EditorViewportLayout::GameViewOnly);
+		}
+
+		bool IsUIVisible() const { return m_isVisible; }
 
 		bool IsViewportPreviewEnabled() const { return m_showViewportPreview; }
 		void SetViewportPreviewEnabled(bool enabled) { m_showViewportPreview = enabled; }
+
+		bool IsSceneViewActive() const { return m_isSceneViewActive; }
+		void SetSceneViewActive(bool active)
+		{
+			m_isSceneViewActive = active;
+			m_viewportLayout = active ? EditorViewportLayout::SceneViewOnly : EditorViewportLayout::GameViewOnly;
+		}
 
 		bool IsShowCollidersEnabled() const { return m_showColliders; }
 		void SetShowCollidersEnabled(bool enabled) { m_showColliders = enabled; }

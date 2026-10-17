@@ -7,6 +7,7 @@
 #include <DebugingTools/EditorUtils.h>
 #include <DDSTextureLoader.h>
 #include <WICTextureLoader.h>
+#include "Components/StaticModelComponent.h"
 
 namespace
 {
@@ -62,11 +63,8 @@ void HEIN::UIButtonComponent::Initialize(GameContext& gameContext, const wchar_t
         srv.Reset();
         if (path.empty()) return;
 
-        HRESULT hr = DirectX::CreateDDSTextureFromFile(device, path.c_str(), nullptr, srv.ReleaseAndGetAddressOf());
-        if (FAILED(hr))
-        {
-            hr = DirectX::CreateWICTextureFromFile(device, path.c_str(), nullptr, srv.ReleaseAndGetAddressOf());
-        }
+        // Shared cache: Hover and Pressed often reference the same file
+        HEIN::TryLoadCachedTextureFile(device, path, srv.ReleaseAndGetAddressOf());
     };
 
     loadTexture(m_normalTexPath, m_normalTexture);
@@ -156,12 +154,13 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
 
 void HEIN::UIButtonComponent::Draw2D(GameContext& gameContext)
 {
+    if (!m_isVisible || !gameContext.showUI || gameContext.isSceneViewPass) return;
     Draw(gameContext, DirectX::SimpleMath::Matrix::Identity, DirectX::SimpleMath::Matrix::Identity, DirectX::SimpleMath::Matrix::Identity);
 }
 
 void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
 {
-    if (!m_isVisible || !gameContext.showUI) return;
+    if (!m_isVisible || !gameContext.showUI || gameContext.isSceneViewPass) return;
 
     // Query current active viewport to support responsive scaling in full view, windowed mode, and sub-viewports
     D3D11_VIEWPORT vp = {};
@@ -454,24 +453,23 @@ void HEIN::UIButtonComponent::DrawGizmo(
 {
     ImGuizmo::SetOrthographic(true);
     ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-    ImGuiIO& io = ImGui::GetIO();
-    float displayW = (io.DisplaySize.x > 0.0f) ? io.DisplaySize.x : kRefWidth;
-    float displayH = (io.DisplaySize.y > 0.0f) ? io.DisplaySize.y : kRefHeight;
+    float vpX = 0.0f, vpY = 0.0f, displayW = kRefWidth, displayH = kRefHeight;
+    HEIN::DebugUIManager::GetActiveViewportRect(vpX, vpY, displayW, displayH);
 
     float scaleX = displayW / kRefWidth;
     float scaleY = displayH / kRefHeight;
 
-    ImGuizmo::SetRect(0, 0, displayW, displayH);
+    ImGuizmo::SetRect(vpX, vpY, displayW, displayH);
     ImGuizmo::SetGizmoSizeClipSpace(0.12f);
 
-    // 2D Orthographic View & Projection for pixel screen space
+    // 2D Orthographic View & Projection for pixel screen space inside the active viewport
     DirectX::SimpleMath::Matrix orthoView = DirectX::SimpleMath::Matrix::Identity;
     DirectX::SimpleMath::Matrix orthoProj = DirectX::SimpleMath::Matrix::CreateOrthographicOffCenter(
-        0.0f, displayW, displayH, 0.0f, -1000.0f, 1000.0f
+        vpX, vpX + displayW, vpY + displayH, vpY, -1000.0f, 1000.0f
     );
 
-    float screenPosX = m_position.x * scaleX;
-    float screenPosY = m_position.y * scaleY;
+    float screenPosX = vpX + m_position.x * scaleX;
+    float screenPosY = vpY + m_position.y * scaleY;
     float screenSizeX = m_size.x * scaleX;
     float screenSizeY = m_size.y * scaleY;
 
@@ -497,8 +495,8 @@ void HEIN::UIButtonComponent::DrawGizmo(
         {
             float newSizeX = std::max(10.0f, std::abs(newScale.x));
             float newSizeY = std::max(10.0f, std::abs(newScale.y));
-            float newScreenPosX = newPos.x - newSizeX * 0.5f;
-            float newScreenPosY = newPos.y - newSizeY * 0.5f;
+            float newScreenPosX = (newPos.x - vpX) - newSizeX * 0.5f;
+            float newScreenPosY = (newPos.y - vpY) - newSizeY * 0.5f;
 
             m_size.x = newSizeX / scaleX;
             m_size.y = newSizeY / scaleY;

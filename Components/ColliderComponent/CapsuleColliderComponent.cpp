@@ -65,7 +65,7 @@ void HEIN::CapsuleColliderComponent::Draw(
 	const DirectX::SimpleMath::Matrix& proj
 )
 {
-	if (gameContext.debugCollisionRenderer == nullptr) return;
+	if (!gameContext.isEditorMode || !gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;
 
 	SyncColliderState();
 

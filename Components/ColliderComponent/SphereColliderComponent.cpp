@@ -62,7 +62,7 @@ void HEIN::SphereColliderComponent::SyncColliderState()
 
 void HEIN::SphereColliderComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
 {
-    if (gameContext.debugCollisionRenderer == nullptr) return;
+    if (!gameContext.isEditorMode || !gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;
 
     SyncColliderState();
 

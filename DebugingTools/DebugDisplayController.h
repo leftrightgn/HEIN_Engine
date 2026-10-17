@@ -15,6 +15,7 @@ namespace HEIN
 	
 		bool m_isVisible;
 		bool m_isMagnified;
+		bool m_justInitialized = false;
 
 		DirectX::SimpleMath::Matrix m_projMatrix;
 
@@ -69,6 +70,12 @@ namespace HEIN
 
 		bool IsShowUIEnabled() const { return m_debugUI.IsShowUIEnabled(); }
 		void SetShowUIEnabled(bool enabled) { m_debugUI.SetShowUIEnabled(enabled); }
+
+		RightPanelMode GetRightPanelMode() const { return m_debugUI.GetRightPanelMode(); }
+		void SetRightPanelMode(RightPanelMode mode) { m_debugUI.SetRightPanelMode(mode); }
+
+		EditorViewportLayout GetViewportLayout() const { return m_debugUI.GetViewportLayout(); }
+		void SetViewportLayout(EditorViewportLayout layout) { m_debugUI.SetViewportLayout(layout); }
 	};
 }
 
