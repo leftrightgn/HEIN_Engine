@@ -34,13 +34,16 @@ void HEIN::ActorManager::DestroyID(ActorID id)
     // Don't destroy immediately Put in the pending lists
     m_pendingDestorys.push_back(id);
 
-    // Cascade destroy to any actor that is owned by or a child of this actor
+    // Cascade destroy to any actor that is a child of this actor
     for (const auto& pair : m_actors)
     {
-        if ((pair.second->GetOwnerID() != INVALID_ACTOR_ID && pair.second->GetOwnerID() == id) ||
-            (pair.second->GetParentID() != INVALID_ACTOR_ID && pair.second->GetParentID() == id))
+        if (pair.second->GetParentID() != INVALID_ACTOR_ID && pair.second->GetParentID() == id)
         {
             DestroyID(pair.second->GetID());
+        }
+        else if (pair.second->GetOwnerID() != INVALID_ACTOR_ID && pair.second->GetOwnerID() == id)
+        {
+            pair.second->SetOwnerID(INVALID_ACTOR_ID);
         }
     }
 }
@@ -66,6 +69,31 @@ HEIN::Actor* HEIN::ActorManager::GetActorByName(const std::wstring& name)
         }
     }
     return nullptr;
+}
+
+HEIN::Actor* HEIN::ActorManager::GetFirstActorByType(ActorType type) const
+{
+    for (const auto& [id, actor] : m_actors)
+    {
+        if (actor && actor->GetActorType() == type)
+        {
+            return actor.get();
+        }
+    }
+    return nullptr;
+}
+
+std::vector<HEIN::Actor*> HEIN::ActorManager::GetActorsByType(ActorType type) const
+{
+    std::vector<Actor*> result;
+    for (const auto& [id, actor] : m_actors)
+    {
+        if (actor && actor->GetActorType() == type)
+        {
+            result.push_back(actor.get());
+        }
+    }
+    return result;
 }
 
 // Game Loop
@@ -104,7 +132,7 @@ void HEIN::ActorManager::DrawAll(
     const DirectX::SimpleMath::Matrix& proj
 )
 {
-    // Pass 1a: Draw all opaque 3D components for non-ghost actors
+    // Draw all opaque 3D components for non-ghost actors
     for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
     {
         if (pair.second && pair.second->GetActorType() != HEIN::ActorType::Ghost)
@@ -113,7 +141,7 @@ void HEIN::ActorManager::DrawAll(
         }
     }
 
-    // Pass 1b: Draw transparent/ghost actors after opaque world geometry
+    // Draw transparent/ghost actors after opaque world geometry
     for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
     {
         if (pair.second && pair.second->GetActorType() == HEIN::ActorType::Ghost)
@@ -122,7 +150,16 @@ void HEIN::ActorManager::DrawAll(
         }
     }
 
-    // Pass 2: Draw all 2D UI components on top of 3D geometry
+    // Draw transparent 3D VFX (e.g. Weapon Ribbon Trails) after all opaque geometry
+    for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)
+    {
+        if (pair.second)
+        {
+            pair.second->DrawTransparent(gameContext, view, proj);
+        }
+    }
+
+    // Draw all 2D UI components on top of 3D geometry
     if (gameContext.showUI)
     {
         for (std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : m_actors)

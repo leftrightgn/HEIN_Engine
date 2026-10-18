@@ -259,13 +259,28 @@ void AnimationSDKMESH::Apply(const DirectX::Model& model, size_t nbones, XMMATRI
 
     // Calculate keyframe interpolation
     float timeInTicks = static_cast<float>(header->AnimationFPS) * static_cast<float>(m_animTime);
-    uint32_t tick1 = static_cast<uint32_t>(timeInTicks) % header->NumAnimationKeys;
+    if (timeInTicks < 0.0f) timeInTicks = 0.0f;
 
-    // Smooth interpolation when looping (if last frame, set next frame to 0)
-    uint32_t tick2 = (tick1 + 1 < header->NumAnimationKeys) ? (tick1 + 1) : 0;
+    uint32_t tick1 = 0;
+    uint32_t tick2 = 0;
+    float lerpFactor = 0.0f;
 
-    // Set interpolation factor
-    float lerpFactor = timeInTicks - std::floor(timeInTicks);
+    if (!m_isLooping && header->NumAnimationKeys > 0 && timeInTicks >= static_cast<float>(header->NumAnimationKeys - 1))
+    {
+        tick1 = header->NumAnimationKeys - 1;
+        tick2 = tick1;
+        lerpFactor = 0.0f;
+    }
+    else
+    {
+        tick1 = static_cast<uint32_t>(timeInTicks) % header->NumAnimationKeys;
+
+        // Smooth interpolation when looping (if last frame, set next frame to 0)
+        tick2 = (tick1 + 1 < header->NumAnimationKeys) ? (tick1 + 1) : (m_isLooping ? 0 : tick1);
+
+        // Set interpolation factor
+        lerpFactor = timeInTicks - std::floor(timeInTicks);
+    }
 
     for (size_t j = 0; j < nbones; ++j)
     {
