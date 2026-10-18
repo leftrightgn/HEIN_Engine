@@ -31,6 +31,8 @@ namespace HEIN
 		Actor* GetActor(ActorID id);
 		bool HasActor(ActorID id) const { return m_actors.find(id) != m_actors.end(); }
 		Actor* GetActorByName(const std::wstring& name);
+		Actor* GetFirstActorByType(ActorType type) const;
+		std::vector<Actor*> GetActorsByType(ActorType type) const;
 
 		void UpdateAll(float deltaTime);
 

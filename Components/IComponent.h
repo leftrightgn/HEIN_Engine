@@ -64,6 +64,16 @@ namespace HEIN
 			GameContext& gameContext, 
 			const DirectX::SimpleMath::Matrix& lightViewProj
 		) {}
+
+		/**
+		 * @brief Draws transparent 3D VFX (e.g. weapon ribbon trails) after all opaque 3D geometry.
+		 */
+		virtual void DrawTransparent(
+			GameContext& /*gameContext*/,
+			const DirectX::SimpleMath::Matrix& /*world*/,
+			const DirectX::SimpleMath::Matrix& /*view*/,
+			const DirectX::SimpleMath::Matrix& /*proj*/
+		) {}
 		/** @brief Checks if this component requires 2D drawing. */
 		virtual bool Is2D() const { return false; }
 		

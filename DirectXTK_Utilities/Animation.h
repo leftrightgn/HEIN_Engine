@@ -34,6 +34,10 @@ namespace DX
         // Set animation end time
         void SetEndTime(const double& endTime) { m_endTime = endTime; }
 
+        // Get/Set whether this animation clip loops or clamps at its final frame
+        bool IsLooping() const { return m_isLooping; }
+        void SetLooping(bool isLooping) { m_isLooping = isLooping; }
+
         // Get AnimData
         uint8_t* GetAnimData() { return m_animData.get(); }
         // Get specified BoneToTrack
@@ -96,6 +100,8 @@ namespace DX
         DirectX::XMMATRIX* m_boneTransforms;
         // Blend factor
         float m_blendFactor;
+        // Whether the animation loops or clamps at the last keyframe
+        bool m_isLooping = true;
     };
 
     class AnimationCMO

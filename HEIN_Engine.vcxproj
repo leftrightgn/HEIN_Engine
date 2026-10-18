@@ -212,6 +212,7 @@
     <ClInclude Include="Components\TerrainComponent.h" />
     <ClInclude Include="Components\GaugeComponent.h" />
     <ClInclude Include="Components\UIButtonComponent.h" />
+    <ClInclude Include="Components\WeaponTrailComponent.h" />
     <ClInclude Include="DebugingTools\EditorUtils.h" />
     <ClInclude Include="Factory\ComponentFactory.h" />
     <ClInclude Include="pch.h" />
@@ -228,6 +229,7 @@
     <ClCompile Include="Components\TerrainComponent.cpp" />
     <ClCompile Include="Components\GaugeComponent.cpp" />
     <ClCompile Include="Components\UIButtonComponent.cpp" />
+    <ClCompile Include="Components\WeaponTrailComponent.cpp" />
     <ClCompile Include="Components\LightComponent.cpp" />
     <ClCompile Include="DebugingTools\EditorUtils.cpp" />
     <ClCompile Include="pch.cpp">
@@ -318,6 +320,26 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
+    <FxCompile Include="Shaders\WeaponTrail_VS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shaders\WeaponTrail_PS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>
@@ -364,6 +386,7 @@
     <ClInclude Include="Common\EventManager.h" />
     <ClInclude Include="Common\InputManager.h" />
     <ClInclude Include="Common\PhysicsSystem.h" />
+    <ClInclude Include="Common\SkeletonProfile.h" />
     <ClInclude Include="Common\StepTimer.h" />
     <ClInclude Include="Components\BoneLinkComponent.h" />
     <ClInclude Include="Components\IComponent.h" />
