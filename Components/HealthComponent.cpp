@@ -33,7 +33,6 @@ void HEIN::HealthComponent::ApplyDamage(float damage)
 	if (m_currentHealth > 0.0f && !IsInvincible())
 	{
 		m_currentHealth -= damage;
-		m_invincibilityTimer = 0.5f;
 
 		if (m_enableHitFlash && m_owner != nullptr)
 		{

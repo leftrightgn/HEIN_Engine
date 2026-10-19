@@ -17,9 +17,10 @@ namespace HEIN
     enum class GaugeType
     {
         HP = 0,
-        Dodge = 1,
-        Block = 2,
-        Custom = 3
+        Stamina = 1,
+        Dodge = 2,
+        Block = 3,
+        Custom = 4
     };
 
     /**
@@ -79,7 +80,7 @@ namespace HEIN
         bool fillTexMatchesFrame = true;
 
         // Auto-bind: when true, values are automatically synced from data source components.
-        // HP reads from HealthComponent; Dodge/Block are pushed by game-side CombatBlackBoard.
+        // HP reads from HealthComponent; Stamina (and legacy Dodge/Block) are pushed by game-side CombatBlackBoard.
         // Custom type always requires manual SetValue().
         bool autoBind = true;
 
@@ -122,7 +123,7 @@ namespace HEIN
      * All settings serialize to JSON for the level editor pipeline.
      * 
      * Usage examples:
-     * - Player actor: Add GaugeComponent with ScreenSpace mode, add HP/Dodge/Block bars.
+     * - Player actor: Add GaugeComponent with ScreenSpace mode, add HP/Stamina bars.
      * - Enemy actor: Add GaugeComponent with WorldToScreen mode, set worldOffset to above head.
      *   The bars follow the enemy in 3D space, projected to 2D each frame.
      */
