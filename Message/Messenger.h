@@ -56,6 +56,11 @@ namespace HEIN
 		void UnRegister(int actorID);
 
 		/// <summary>
+		/// Removes a specific observer instance across all actor subscriptions.
+		/// </summary>
+		void UnRegisterObserver(IObserver* observer);
+
+		/// <summary>
 		/// Immediately broadcasts a message to all observers subscribed to the given actorID.
 		/// </summary>
 		void Notify(int actorID, Message::MessageID messageID);

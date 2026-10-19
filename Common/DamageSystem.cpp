@@ -18,71 +18,59 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 
 	if (actorA == nullptr || actorB == nullptr) return;
 
-	HEIN::DamageDealerComponent* dealerA = actorA->GetComponent<HEIN::DamageDealerComponent>();
-	HEIN::HealthComponent* victimB = actorB->GetComponent<HEIN::HealthComponent>();
-
-	if (dealerA != nullptr && victimB != nullptr)
+	auto ProcessHit = [&](HEIN::Actor* weaponActor, HEIN::DamageDealerComponent* dealer, HEIN::Actor* victimActor, HEIN::HealthComponent* victimHealth)
 	{
-		ActorID ownerA = actorA->GetOwnerID();
-		if (ownerA == INVALID_ACTOR_ID) ownerA = actorA->GetParentID();
+		if (dealer == nullptr || victimHealth == nullptr) return;
 
-		if (ownerA != actorB->GetID())
+		ActorID attackerID = weaponActor->GetOwnerID();
+		if (attackerID == INVALID_ACTOR_ID) attackerID = weaponActor->GetParentID();
+
+		if (attackerID == victimActor->GetID()) return;
+
+		// One Attack = One Time Damage: strictly ignore if this swing already registered a hit on this victim
+		if (!dealer->IsActive() || victimHealth->IsInvincible() || dealer->HasHitActor(victimActor->GetID()))
 		{
-			if (dealerA->IsActive() && !victimB->IsInvincible())
-			{
-				float damage = dealerA->GetDamageAmount();
-				bool applyDamage = true;
-				if (s_damageInterceptor)
-				{
-					Actor* attacker = actorManager.GetActor(ownerA);
-					if (!attacker) attacker = actorA;
-					applyDamage = s_damageInterceptor(attacker, actorB, dealerA, damage);
-				}
-				if (applyDamage)
-				{
-					victimB->ApplyDamage(damage);
-					Messenger::GetInstance()->Notify(ownerA, Message::ATTACK_HIT_CONFIRMED);
+			return;
+		}
 
-					if (dealerA->CausesStun())
-					{
-						Messenger::GetInstance()->Notify(actorB->GetID(), Message::HIT_STUN);
-					}
-				}
+		// Immediately lock in this victim for the remainder of this swing
+		dealer->RegisterHitActor(victimActor->GetID());
+
+		Actor* attacker = actorManager.GetActor(attackerID);
+		if (!attacker) attacker = weaponActor;
+
+		float damage = dealer->GetDamageAmount();
+		bool applyDamage = true;
+		if (s_damageInterceptor)
+		{
+			applyDamage = s_damageInterceptor(attacker, victimActor, dealer, damage);
+		}
+
+		// Trigger Symmetric Hitstop (Hit Freeze) on both Attacker and Defender at the exact moment of impact
+		int hitstopFrames = dealer->GetHitstopFrames();
+		if (victimHealth->GetCurrentHealth() <= damage)
+		{
+			// Fatal blow: enhance impact freeze to at least 14 frames for dramatic killing blow
+			hitstopFrames = std::max(hitstopFrames, 14);
+		}
+		if (hitstopFrames > 0)
+		{
+			if (attacker) attacker->TriggerHitstopFrames(hitstopFrames);
+			victimActor->TriggerHitstopFrames(hitstopFrames);
+		}
+
+		if (applyDamage)
+		{
+			victimHealth->ApplyDamage(damage);
+			Messenger::GetInstance()->Notify(attackerID, Message::ATTACK_HIT_CONFIRMED);
+
+			if (dealer->CausesStun())
+			{
+				Messenger::GetInstance()->Notify(victimActor->GetID(), Message::HIT_STUN);
 			}
 		}
-	}
+	};
 
-	HEIN::DamageDealerComponent* dealerB = actorB->GetComponent<HEIN::DamageDealerComponent>();
-	HEIN::HealthComponent* victimA = actorA->GetComponent<HEIN::HealthComponent>();
-
-	if (dealerB != nullptr && victimA != nullptr)
-	{
-		ActorID ownerB = actorB->GetOwnerID();
-		if (ownerB == INVALID_ACTOR_ID) ownerB = actorB->GetParentID();
-
-		if (ownerB != actorA->GetID())
-		{
-			if (dealerB->IsActive() && !victimA->IsInvincible())
-			{
-				float damage = dealerB->GetDamageAmount();
-				bool applyDamage = true;
-				if (s_damageInterceptor)
-				{
-					Actor* attacker = actorManager.GetActor(ownerB);
-					if (!attacker) attacker = actorB;
-					applyDamage = s_damageInterceptor(attacker, actorA, dealerB, damage);
-				}
-				if (applyDamage)
-				{
-					victimA->ApplyDamage(damage);
-					Messenger::GetInstance()->Notify(ownerB, Message::ATTACK_HIT_CONFIRMED);
-
-					if (dealerB->CausesStun())
-					{
-						Messenger::GetInstance()->Notify(actorA->GetID(), Message::HIT_STUN);
-					}
-				}
-			}
-		}
-	}
+	ProcessHit(actorA, actorA->GetComponent<HEIN::DamageDealerComponent>(), actorB, actorB->GetComponent<HEIN::HealthComponent>());
+	ProcessHit(actorB, actorB->GetComponent<HEIN::DamageDealerComponent>(), actorA, actorA->GetComponent<HEIN::HealthComponent>());
 }

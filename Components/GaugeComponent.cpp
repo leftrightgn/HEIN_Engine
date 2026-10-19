@@ -71,10 +71,11 @@ namespace
     {
         switch (t)
         {
-            case HEIN::GaugeType::HP:     return "HP";
-            case HEIN::GaugeType::Dodge:  return "Dodge";
-            case HEIN::GaugeType::Block:  return "Block";
-            case HEIN::GaugeType::Custom: return "Custom";
+            case HEIN::GaugeType::HP:      return "HP";
+            case HEIN::GaugeType::Stamina: return "Stamina";
+            case HEIN::GaugeType::Dodge:   return "Dodge";
+            case HEIN::GaugeType::Block:   return "Block";
+            case HEIN::GaugeType::Custom:  return "Custom";
             default: return "Unknown";
         }
     }
@@ -495,7 +496,7 @@ void HEIN::GaugeComponent::DrawBar(
     {
         m_spriteBatch->Begin(DirectX::SpriteSortMode_Deferred, gameContext.commonStates.NonPremultiplied());
 
-        // 1) Background
+        // Background
         {
             RECT bgRect;
             bgRect.left = static_cast<LONG>(barX);
@@ -511,7 +512,7 @@ void HEIN::GaugeComponent::DrawBar(
             }
         }
 
-        // 2) Fill
+        // Fill
         {
             DirectX::SimpleMath::Vector4 currentFillColor = bar.fillColor;
             if (ratio < bar.lowThreshold)
@@ -587,7 +588,7 @@ void HEIN::GaugeComponent::DrawBar(
             }
         }
 
-        // 3) Border/Frame overlay (drawn on top of fill)
+        // Border/Frame overlay (drawn on top of fill)
         {
             if (bar.borderTex.Get())
             {
@@ -608,13 +609,14 @@ void HEIN::GaugeComponent::DrawBar(
     // Reset depth state
     context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
 
-    // 4) Label and Value text using ImGui draw list (always on top)
+    // Label and Value text using ImGui draw list (always on top)
     if (!gameContext.showUI || gameContext.isSceneViewPass) return;
 
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
     if (drawList)
     {
-        float fontSize = ImGui::GetFontSize() * bar.fontSize * scaleY;
+        float uiScale = std::min(scaleX, scaleY);
+        float fontSize = ImGui::GetFontSize() * bar.fontSize * uiScale;
 
         ImU32 labelCol = IM_COL32(
             static_cast<int>(bar.labelColor.x * 255.0f),
@@ -840,6 +842,10 @@ void HEIN::GaugeComponent::Deserialize(const nlohmann::json& data)
             GaugeBarDef bar;
             if (b.contains("Name")) bar.name = b["Name"];
             if (b.contains("GaugeType")) bar.gaugeType = static_cast<GaugeType>(b["GaugeType"].get<int>());
+            if (bar.gaugeType == GaugeType::Stamina && bar.name == "Dodge")
+            {
+                bar.name = "Stamina";
+            }
             if (b.contains("CurrentValue")) bar.currentValue = b["CurrentValue"];
             if (b.contains("MaxValue")) bar.maxValue = b["MaxValue"];
             if (b.contains("OffsetX")) bar.offset.x = b["OffsetX"];
@@ -1001,8 +1007,36 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
             GaugeBarDef bar;
             bar.name = "HP";
             bar.gaugeType = GaugeType::HP;
-            bar.fillColor = { 0.2f, 0.8f, 0.2f, 1.0f };
-            bar.offset = { 0.0f, static_cast<float>(m_bars.size()) * 28.0f };
+            bar.fillColor = { 0.9f, 0.2f, 0.2f, 1.0f };
+            bar.backgroundTexPath = L"Resources/Textures/nborder.dds";
+            bar.borderTexPath = L"Resources/Textures/border.png.dds";
+            bar.fillTexPath = L"Resources/Textures/fill.dds";
+            bar.offset = { 0.0f, -579.0f };
+            bar.size = { 241.0f, 46.0f };
+            bar.fillStartPoint = 0.2173f;
+            bar.fillEndPoint = 1.0f;
+            bar.clipTexture = true;
+            bar.fillTexMatchesFrame = true;
+            bar.autoBind = true;
+            m_bars.push_back(bar);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("+ Add Stamina Bar"))
+        {
+            GaugeBarDef bar;
+            bar.name = "Stamina";
+            bar.gaugeType = GaugeType::Stamina;
+            bar.fillColor = { 0.2f, 0.85f, 0.3f, 1.0f };
+            bar.backgroundTexPath = L"Resources/Textures/nborderg.dds";
+            bar.borderTexPath = L"Resources/Textures/borderg.dds";
+            bar.fillTexPath = L"Resources/Textures/fillg.dds";
+            bar.offset = { 26.0f, -547.0f };
+            bar.size = { 181.0f, 46.0f };
+            bar.fillStartPoint = 0.2173f;
+            bar.fillEndPoint = 1.0f;
+            bar.clipTexture = true;
+            bar.fillTexMatchesFrame = true;
+            bar.autoBind = true;
             m_bars.push_back(bar);
         }
         ImGui::SameLine();
@@ -1051,7 +1085,7 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
             {
                 // Name & Type
                 ImGui::InputText("Name", &bar.name);
-                const char* typeNames[] = { "HP", "Dodge", "Block", "Custom" };
+                const char* typeNames[] = { "HP", "Stamina", "Dodge", "Block", "Custom" };
                 int typeIdx = static_cast<int>(bar.gaugeType);
                 if (ImGui::Combo("Gauge Type", &typeIdx, typeNames, IM_ARRAYSIZE(typeNames)))
                 {
@@ -1104,9 +1138,10 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                     const char* bindTarget = "?";
                     switch (bar.gaugeType)
                     {
-                        case GaugeType::HP:    bindTarget = "HealthComponent"; break;
-                        case GaugeType::Dodge: bindTarget = "CombatBlackBoard.Dodge"; break;
-                        case GaugeType::Block: bindTarget = "CombatBlackBoard.Block"; break;
+                        case GaugeType::HP:      bindTarget = "HealthComponent"; break;
+                        case GaugeType::Stamina: bindTarget = "CombatBlackBoard.Stamina / PlayerBlackBoard"; break;
+                        case GaugeType::Dodge:   bindTarget = "CombatBlackBoard.Dodge (Legacy)"; break;
+                        case GaugeType::Block:   bindTarget = "CombatBlackBoard.Block (Legacy)"; break;
                         default: break;
                     }
                     ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "-> %s", bindTarget);

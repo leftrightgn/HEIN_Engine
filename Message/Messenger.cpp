@@ -51,17 +51,38 @@ void HEIN::Messenger::UnRegister(int actorID)
     m_objects.erase(actorID);
 }
 
+void HEIN::Messenger::UnRegisterObserver(IObserver* observer)
+{
+    if (observer == nullptr) return;
+    for (auto& pair : m_objects)
+    {
+        auto& vec = pair.second;
+        vec.erase(std::remove(vec.begin(), vec.end(), observer), vec.end());
+    }
+}
+
 void HEIN::Messenger::Notify(int actorID, Message::MessageID messageID)
 {
     // Locate the observer list for the given ActorID.
-    std::unordered_map<int, std::vector<IObserver*>>::iterator it = m_objects.find(actorID);
+    auto it = m_objects.find(actorID);
 
     if (it != m_objects.end())
     {
-        // Broadcast the message to all subscribed observers for this actor.
-        for (size_t i = 0; i < it->second.size(); i++)
+        // Snapshot copy of the observer list to ensure safe iteration even if an observer unregisters during dispatch
+        std::vector<IObserver*> observersSnapshot = it->second;
+        for (IObserver* obs : observersSnapshot)
         {
-            it->second[i]->OnMessageAccepted(messageID);
+            if (obs == nullptr) continue;
+            // Confirm the observer is still registered before dispatching
+            auto checkIt = m_objects.find(actorID);
+            if (checkIt != m_objects.end())
+            {
+                const auto& currentVec = checkIt->second;
+                if (std::find(currentVec.begin(), currentVec.end(), obs) != currentVec.end())
+                {
+                    obs->OnMessageAccepted(messageID);
+                }
+            }
         }
     }
 }
