@@ -247,7 +247,7 @@ void HEIN::MeshColliderComponent::Draw(
 	const DirectX::SimpleMath::Matrix& proj
 )
 {
-	if (!gameContext.isEditorMode || !gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;
+	if (!gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;
 	if (m_localTriangles.empty()) return;
 
 	if (m_vertexBuffer == nullptr)

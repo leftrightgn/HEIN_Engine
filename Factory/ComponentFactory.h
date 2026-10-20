@@ -30,6 +30,7 @@
 #include <Components/FogComponent.h>
 #include <Components/FoliageComponent.h>
 #include <Components/GaugeComponent.h>
+#include <Components/WeaponTrailComponent.h>
 
 #include <algorithm>
 
@@ -128,6 +129,7 @@ namespace HEIN
 			RegisterComponent<FogComponent>("FogComponent");
 			RegisterComponent<FoliageComponent>("FoliageComponent");
 			RegisterComponent<GaugeComponent>("GaugeComponent");
+			RegisterComponent<WeaponTrailComponent>("WeaponTrailComponent");
 		}
 	};
 }

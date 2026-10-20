@@ -145,6 +145,7 @@ namespace HEIN
         size_t m_activeTipIndex = 0;
         bool m_hasSwappedScenes = false;
         bool m_isPreviewOnly = false;
+        bool m_isTransitionPaused = false;
         std::string m_pendingTargetScene;
         LoadSceneMode m_pendingTargetMode = LoadSceneMode::Single;
         int m_loadingCoverFrames = 0;
@@ -188,12 +189,25 @@ namespace HEIN
         void LoadScene(const std::string& sceneName, LoadSceneMode mode = LoadSceneMode::Single);
         void LoadScene(const std::string& sceneName, const SceneTransitionDesc& desc);
         void PreviewTransition(const SceneTransitionDesc& desc);
+        void StartPausedPreview(const SceneTransitionDesc& desc);
+        void StopTransitionPreview();
         void UnloadScene(const std::string& sceneName);
 
         bool IsTransitioning() const { return m_transitionPhase != TransitionPhase::None; }
         TransitionPhase GetTransitionPhase() const { return m_transitionPhase; }
         float GetTransitionAlpha() const { return m_transitionAlpha; }
+        void SetTransitionAlpha(float alpha) { m_transitionAlpha = (alpha < 0.0f) ? 0.0f : ((alpha > 1.0f) ? 1.0f : alpha); }
         float GetLoadingProgress() const { return m_loadingProgress; }
+        void SetLoadingProgress(float progress) { m_loadingProgress = (progress < 0.0f) ? 0.0f : ((progress > 1.0f) ? 1.0f : progress); }
+
+        bool IsTransitionPaused() const { return m_isTransitionPaused; }
+        void SetTransitionPaused(bool paused) { m_isTransitionPaused = paused; }
+        void ToggleTransitionPause() { m_isTransitionPaused = !m_isTransitionPaused; }
+
+        size_t GetActiveTipIndex() const { return m_activeTipIndex; }
+        void SetActiveTipIndex(size_t index) { m_activeTipIndex = index; }
+
+        void UpdateActiveTransitionDesc(const SceneTransitionDesc& desc) { m_currentTransitionDesc = desc; }
 
         const SceneTransitionDesc& GetDefaultTransition() const { return m_defaultTransitionDesc; }
         void SetDefaultTransition(const SceneTransitionDesc& desc) { m_defaultTransitionDesc = desc; }

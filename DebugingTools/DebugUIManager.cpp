@@ -11,6 +11,7 @@
 #include <Components/ColliderComponent/MeshColliderComponent.h>
 #include <Factory/ComponentFactory.h>
 #include <Components/UIButtonComponent.h>
+#include <Components/GaugeComponent.h>
 #include <Components/AnimationEditorComponent.h>
 #include <Windows.h>
 #include <commdlg.h>
@@ -67,6 +68,35 @@ namespace HEIN
 		s_activeVpH = h;
 	}
 
+	namespace
+	{
+		D3D11_VIEWPORT FitViewportToAspect(const D3D11_VIEWPORT& bounds, float targetAspect = 1280.0f / 720.0f)
+		{
+			if (bounds.Width <= 10.0f || bounds.Height <= 10.0f || targetAspect <= 0.0f)
+			{
+				return bounds;
+			}
+
+			float currentAspect = bounds.Width / bounds.Height;
+			D3D11_VIEWPORT fitted = bounds;
+
+			if (currentAspect > targetAspect)
+			{
+				// Bounds are wider than 16:9 -> pillarbox horizontally
+				fitted.Width = std::floor(bounds.Height * targetAspect);
+				fitted.TopLeftX = std::floor(bounds.TopLeftX + (bounds.Width - fitted.Width) * 0.5f);
+			}
+			else if (currentAspect < targetAspect)
+			{
+				// Bounds are taller than 16:9 -> letterbox vertically
+				fitted.Height = std::floor(bounds.Width / targetAspect);
+				fitted.TopLeftY = std::floor(bounds.TopLeftY + (bounds.Height - fitted.Height) * 0.5f);
+			}
+
+			return fitted;
+		}
+	}
+
 	D3D11_VIEWPORT DebugUIManager::GetCenterViewport(const GameContext& gameContext) const
 	{
 		D3D11_VIEWPORT fullVp = gameContext.deviceResources.GetScreenViewport();
@@ -78,7 +108,7 @@ namespace HEIN
 		float screenW = fullVp.Width;
 		float screenH = fullVp.Height;
 		float hierarchyWidth = std::floor(screenW * 0.14f);
-		float toolbarHeight = 80.0f;
+		float toolbarHeight = (m_toolbarHeight > 60.0f) ? m_toolbarHeight : 88.0f;
 		float inspectorWidth = (m_inspectorWidth > 100.0f) ? m_inspectorWidth : std::floor(screenW * 0.24f);
 		if (inspectorWidth > screenW - hierarchyWidth - 100.0f)
 		{
@@ -98,27 +128,35 @@ namespace HEIN
 	D3D11_VIEWPORT DebugUIManager::GetSceneViewport(const GameContext& gameContext) const
 	{
 		D3D11_VIEWPORT center = GetCenterViewport(gameContext);
+		if (!m_isVisible)
+		{
+			return center;
+		}
 		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
 		{
 			D3D11_VIEWPORT vp = center;
 			vp.Width = std::floor(center.Width * 0.5f);
-			return vp;
+			return FitViewportToAspect(vp);
 		}
-		return center;
+		return FitViewportToAspect(center);
 	}
 
 	D3D11_VIEWPORT DebugUIManager::GetGameViewport(const GameContext& gameContext) const
 	{
 		D3D11_VIEWPORT center = GetCenterViewport(gameContext);
+		if (!m_isVisible)
+		{
+			return center;
+		}
 		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
 		{
 			float leftW = std::floor(center.Width * 0.5f);
 			D3D11_VIEWPORT vp = center;
 			vp.TopLeftX = center.TopLeftX + leftW;
 			vp.Width = center.Width - leftW;
-			return vp;
+			return FitViewportToAspect(vp);
 		}
-		return center;
+		return FitViewportToAspect(center);
 	}
 
 	void DebugUIManager::Update(
@@ -213,6 +251,24 @@ namespace HEIN
 				if (gameContext.sceneManager)
 				{
 					gameContext.sceneManager->PreviewTransition(m_editorTransitionDesc);
+				}
+			}
+			if (gameContext.keyboardTracker.pressed.Space)
+			{
+				if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
+				{
+					SetViewportLayout(EditorViewportLayout::GameViewOnly);
+				}
+				if (gameContext.sceneManager)
+				{
+					if (!gameContext.sceneManager->IsTransitioning())
+					{
+						gameContext.sceneManager->StartPausedPreview(m_editorTransitionDesc);
+					}
+					else
+					{
+						gameContext.sceneManager->ToggleTransitionPause();
+					}
 				}
 			}
 		}
@@ -569,38 +625,303 @@ namespace HEIN
 		ImGuiIO& io = ImGui::GetIO();
 		float screenW = io.DisplaySize.x;
 		float screenH = io.DisplaySize.y;
+		float hierarchyWidth = std::floor(screenW * 0.14f);
+		m_toolbarHeight = 88.0f;
 
-		// Lock the Height to always be screenH, but allow Width to be resized (min 100, max screenW)
-		ImGui::SetNextWindowSizeConstraints(ImVec2(100.0f, screenH), ImVec2(screenW, screenH));
+		// -------------------------------------------------------------------------
+		// DRAW THE TOP TOOLBAR (Spans full width from Hierarchy to Right Edge)
+		//    Inspector is placed strictly below m_toolbarHeight so it NEVER covers ToolBar!
+		// -------------------------------------------------------------------------
+		ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+		float toolbarWidth = std::max(100.0f, screenW - hierarchyWidth);
 
-		// Set the starting size (only applies the very first time it opens)
-		ImGui::SetNextWindowSize(ImVec2(std::floor(screenW * 0.24f), screenH), ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowPos(ImVec2(hierarchyWidth, 0.0f), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(toolbarWidth, m_toolbarHeight), ImGuiCond_Always);
 
-		// The last parameter ImVec2(1.0f, 0.0f) is the Pivot (1.0 = Right edge, 0.0 = Top edge)
-		ImGui::SetNextWindowPos(ImVec2(screenW, 0.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+		auto SameLineWrap = [](float nextItemEstimatedWidth)
+		{
+			ImGui::SameLine();
+			if (ImGui::GetContentRegionAvail().x < nextItemEstimatedWidth)
+			{
+				ImGui::NewLine();
+			}
+		};
 
-		// Render the Property Inspector Window
-		// This window dynamically exposes the properties of the currently selected Actor 
-		// and its attached Components. Modifications here instantly affect the live scene
-		// and are serializable out to AutoSave.json.
-		ImGui::Begin("Inspector");
+		ImGui::Begin("ToolBar", nullptr, toolbarFlags);
+		if (ImGui::Button("PLAY (Exit Editor)")) currentAction = HEIN::EditorAction::PlayPressed;
+		SameLineWrap(105.0f);
+		if (ImGui::Button("STOP (Pause)")) currentAction = HEIN::EditorAction::StopPressed;
+		SameLineWrap(105.0f);
+
+		// Unity-style Scene View vs Game View layout selector tabs (F2)
+		bool isSceneOnly = (m_viewportLayout == EditorViewportLayout::SceneViewOnly);
+		bool isGameOnly  = (m_viewportLayout == EditorViewportLayout::GameViewOnly);
+		bool isSplit     = (m_viewportLayout == EditorViewportLayout::SplitSideBySide);
+
+		if (isSceneOnly)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.85f, 1.0f));
+			ImGui::Button("[ Scene ] (F2)");
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("[ Scene ] (F2)"))
+			{
+				SetViewportLayout(EditorViewportLayout::SceneViewOnly);
+			}
+		}
+
+		SameLineWrap(75.0f);
+
+		if (isGameOnly)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.65f, 0.35f, 1.0f));
+			ImGui::Button("[ Game ]");
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("[ Game ]"))
+			{
+				SetViewportLayout(EditorViewportLayout::GameViewOnly);
+			}
+		}
+
+		SameLineWrap(150.0f);
+
+		if (isSplit)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.35f, 0.85f, 1.0f));
+			ImGui::Button("[ Split: Scene | Game ]");
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("[ Split: Scene | Game ]"))
+			{
+				SetViewportLayout(EditorViewportLayout::SplitSideBySide);
+			}
+		}
+
+		SameLineWrap(120.0f);
+		if (m_rightPanelMode == RightPanelMode::SceneTransition)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.45f, 0.15f, 1.0f));
+			if (ImGui::Button("INSPECTOR")) m_rightPanelMode = RightPanelMode::Inspector;
+			ImGui::PopStyleColor();
+		}
+		else
+		{
+			if (ImGui::Button("SCENE CHANGER")) m_rightPanelMode = RightPanelMode::SceneTransition;
+		}
+
+		// Pause / Pin Scene Transition directly from the ToolBar
+		if (gameContext.sceneManager != nullptr)
+		{
+			bool isTransRunning = gameContext.sceneManager->IsTransitioning();
+			bool isTransPaused  = gameContext.sceneManager->IsTransitionPaused();
+
+			SameLineWrap(145.0f);
+			if (isTransRunning && isTransPaused)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.55f, 0.10f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.00f, 0.65f, 0.20f, 1.0f));
+				if (ImGui::Button("RESUME TRANSITION"))
+				{
+					gameContext.sceneManager->SetTransitionPaused(false);
+				}
+				ImGui::PopStyleColor(2);
+
+				SameLineWrap(95.0f);
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.65f, 0.20f, 0.20f, 1.0f));
+				if (ImGui::Button("HIDE TRANS"))
+				{
+					gameContext.sceneManager->StopTransitionPreview();
+				}
+				ImGui::PopStyleColor();
+			}
+			else
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.50f, 0.65f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.62f, 0.80f, 1.0f));
+				if (ImGui::Button("PAUSE TRANSITION"))
+				{
+					if (!m_hasLoadedEditorDesc)
+					{
+						m_editorTransitionDesc = gameContext.sceneManager->GetDefaultTransition();
+						m_hasLoadedEditorDesc = true;
+					}
+					if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
+					{
+						SetViewportLayout(EditorViewportLayout::GameViewOnly);
+					}
+					if (!isTransRunning)
+					{
+						gameContext.sceneManager->StartPausedPreview(m_editorTransitionDesc);
+					}
+					else
+					{
+						gameContext.sceneManager->SetTransitionPaused(true);
+					}
+				}
+				ImGui::PopStyleColor(2);
+			}
+		}
+
+		SameLineWrap(95.0f);
+		if (ImGui::Button("SAVE SCENE")) currentAction = HEIN::EditorAction::SavePressed;
+		SameLineWrap(90.0f);
+		if (ImGui::Button("AUTO SAVE")) currentAction = HEIN::EditorAction::AutoSavePressed;
+		SameLineWrap(95.0f);
+		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
+		SameLineWrap(95.0f);
+		if (ImGui::Button("NEW SCENE")) currentAction = HEIN::EditorAction::NewScenePressed;
+		SameLineWrap(85.0f);
+		if (ImGui::Button("ANIMATOR")) m_showAnimatorWindow = !m_showAnimatorWindow;
+
+		ImGui::Separator();
+		if (ImGui::Button("Create Empty Actor"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"GameObject");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			newActor->Start();
+			SelectActor(newActor);
+		}
+		SameLineWrap(90.0f);
+		if (ImGui::Button("+ UI Button"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"UIButton");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			auto* btn = newActor->AddComponent<HEIN::UIButtonComponent>();
+			btn->SetElementType(HEIN::UIElementType::Button);
+			btn->SetText("Button");
+			btn->Initialize(gameContext, nullptr, nullptr, nullptr);
+			newActor->Start();
+			SelectActor(newActor);
+			g_ActiveGizmoTarget = btn;
+		}
+		SameLineWrap(90.0f);
+		if (ImGui::Button("+ UI Image"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"UIImage");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			auto* img = newActor->AddComponent<HEIN::UIButtonComponent>();
+			img->SetElementType(HEIN::UIElementType::Image);
+			img->Initialize(gameContext, nullptr, nullptr, nullptr);
+			newActor->Start();
+			SelectActor(newActor);
+			g_ActiveGizmoTarget = img;
+		}
+		SameLineWrap(90.0f);
+		if (ImGui::Button("+ UI Text"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"UIText");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			auto* txt = newActor->AddComponent<HEIN::UIButtonComponent>();
+			txt->SetElementType(HEIN::UIElementType::Text);
+			txt->SetText("New Text Label");
+			txt->SetFontSize(1.5f);
+			txt->Initialize(gameContext, nullptr, nullptr, nullptr);
+			newActor->Start();
+			SelectActor(newActor);
+			g_ActiveGizmoTarget = txt;
+		}
+		SameLineWrap(80.0f);
+		if (ImGui::Button("+ Camera"))
+		{
+			HEIN::Actor* newActor = manager.CreateActor(L"MainCamera");
+			newActor->AddComponent<HEIN::TransformComponent>();
+			auto* cam = newActor->AddComponent<HEIN::CameraController>();
+			cam->SetPosition(DirectX::SimpleMath::Vector3(0.0f, 15.0f, -40.0f));
+			newActor->Start();
+			SelectActor(newActor);
+			g_ActiveGizmoTarget = cam;
+		}
+		SameLineWrap(75.0f);
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.2f, 0.9f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+		if (ImGui::Button("+ Stage"))
+		{
+			currentAction = HEIN::EditorAction::CreateStagePressed;
+		}
+		ImGui::PopStyleColor(2);
+
+		SameLineWrap(105.0f);
+		ImGui::Checkbox("PiP Preview", &m_showViewportPreview);
+		SameLineWrap(115.0f);
+		ImGui::Checkbox("Show Colliders", &m_showColliders);
+		SameLineWrap(85.0f);
+		ImGui::Checkbox("Show UI", &m_showUI);
+		SameLineWrap(125.0f);
+		ImGui::Checkbox("Frustum Culling", &gameContext.enableFrustumCulling);
+
+		if (m_selectedActor != nullptr)
+		{
+			SameLineWrap(115.0f);
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.85f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.95f, 1.0f));
+			if (ImGui::Button("Duplicate Actor"))
+			{
+				HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
+				if (copy != nullptr)
+				{
+					SelectActor(copy);
+				}
+			}
+			ImGui::PopStyleColor(2);
+
+			SameLineWrap(115.0f);
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
+			if (ImGui::Button("Delete Selected"))
+			{
+				ActorID idToDelete = m_selectedActor->GetID();
+				SelectActor(nullptr);
+				manager.DestroyID(idToDelete);
+			}
+			ImGui::PopStyleColor();
+		}
+		ImGui::End();
+
+		// -------------------------------------------------------------------------
+		// DRAW THE INSPECTOR WINDOW (Strictly below ToolBar so it NEVER covers it!)
+		// -------------------------------------------------------------------------
+		float inspectorTopY = m_toolbarHeight;
+		float inspectorHeight = std::max(100.0f, screenH - inspectorTopY);
+		float maxInspectorWidth = std::max(200.0f, screenW - hierarchyWidth - 150.0f);
+
+		ImGui::SetNextWindowSizeConstraints(ImVec2(180.0f, inspectorHeight), ImVec2(maxInspectorWidth, inspectorHeight));
+		ImGui::SetNextWindowSize(ImVec2(std::floor(screenW * 0.24f), inspectorHeight), ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowPos(ImVec2(screenW, inspectorTopY), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+
+		ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 		
-		ImVec2 inspectorPos = ImGui::GetWindowPos();
 		ImVec2 inspectorSize = ImGui::GetWindowSize();
 		m_inspectorWidth = inspectorSize.x;
 
 		D3D11_VIEWPORT sceneVp = GetSceneViewport(gameContext);
+		D3D11_VIEWPORT gameVp  = GetGameViewport(gameContext);
 		SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
 
-		// Draw subtle Unity-style border around the dedicated Center Viewport
+		// Draw subtle Unity-style border around the 16:9 fitted Scene / Game Viewport(s)
 		if (ImDrawList* bgList = ImGui::GetBackgroundDrawList())
 		{
-			ImU32 vpBorderCol = m_isSceneViewActive ? IM_COL32(55, 130, 210, 180) : IM_COL32(60, 175, 95, 180);
-			bgList->AddRect(
-				ImVec2(sceneVp.TopLeftX, sceneVp.TopLeftY),
-				ImVec2(sceneVp.TopLeftX + sceneVp.Width, sceneVp.TopLeftY + sceneVp.Height),
-				vpBorderCol, 0.0f, 0, 1.5f
-			);
+			if (m_viewportLayout != EditorViewportLayout::GameViewOnly)
+			{
+				bgList->AddRect(
+					ImVec2(sceneVp.TopLeftX, sceneVp.TopLeftY),
+					ImVec2(sceneVp.TopLeftX + sceneVp.Width, sceneVp.TopLeftY + sceneVp.Height),
+					IM_COL32(55, 130, 210, 180), 0.0f, 0, 1.5f
+				);
+			}
+			if (m_viewportLayout != EditorViewportLayout::SceneViewOnly)
+			{
+				bgList->AddRect(
+					ImVec2(gameVp.TopLeftX, gameVp.TopLeftY),
+					ImVec2(gameVp.TopLeftX + gameVp.Width, gameVp.TopLeftY + gameVp.Height),
+					IM_COL32(60, 175, 95, 180), 0.0f, 0, 1.5f
+				);
+			}
 		}
 
 		// Mode Tabs: [ Inspector ]  [ Scene Transition ]
@@ -644,344 +965,261 @@ namespace HEIN
 		{
 			// Ctrl+D shortcut to duplicate selected actor
 			if (!ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false))
-		{
-			if (m_selectedActor != nullptr)
 			{
-				HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
-				if (copy != nullptr)
+				if (m_selectedActor != nullptr)
 				{
-					SelectActor(copy);
-				}
-			}
-		}
-
-		if (m_selectedActor == nullptr || !manager.HasActor(m_selectedActor->GetID()))
-		{
-			m_selectedActor = nullptr;
-			g_ActiveGizmoTarget = nullptr;
-			ImGui::TextDisabled("No Actor Selected");
-		}
-		else
-		{
-			// Inspector Header: Duplicate & Delete buttons
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.85f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.95f, 1.0f));
-			if (ImGui::Button("Duplicate Actor", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f - 4.0f, 26)))
-			{
-				HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
-				if (copy != nullptr)
-				{
-					SelectActor(copy);
-				}
-			}
-			ImGui::PopStyleColor(2);
-
-			ImGui::SameLine();
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.25f, 0.25f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.55f, 0.05f, 0.05f, 1.0f));
-			if (ImGui::Button("Delete", ImVec2(-1, 26)))
-			{
-				ActorID idToDelete = m_selectedActor->GetID();
-				SelectActor(nullptr);
-				manager.DestroyID(idToDelete);
-			}
-			ImGui::PopStyleColor(3);
-
-			if (m_selectedActor != nullptr)
-			{
-				ImGui::Separator();
-
-				bool isVis = m_selectedActor->IsVisible();
-				if (ImGui::Checkbox("Visible", &isVis))
-				{
-					m_selectedActor->SetVisible(isVis);
-				}
-				ImGui::SameLine();
-				bool isAct = m_selectedActor->IsActive();
-				if (ImGui::Checkbox("Active", &isAct))
-				{
-					m_selectedActor->SetActive(isAct);
-				}
-
-				std::wstring wtag = m_selectedActor ? m_selectedActor->GetTag() : L"";
-				std::string narrowTag(wtag.begin(), wtag.end());
-
-				char nameBuffer[256];
-				strncpy_s(nameBuffer, narrowTag.c_str(), sizeof(nameBuffer));
-				if (m_selectedActor && ImGui::InputText("Actor Name", nameBuffer, sizeof(nameBuffer)))
-				{
-					std::string newTag(nameBuffer);
-					std::wstring newWTag(newTag.begin(), newTag.end());
-					m_selectedActor->SetTag(newWTag);
-				}
-
-				if (m_selectedActor)
-				{
-					const char* actorTypeNames[] = {
-						"Default",
-						"Player",
-						"Enemy",
-						"Items",
-						"Enviroment",
-						"Ghost"
-					};
-					int currentTypeIdx = static_cast<int>(m_selectedActor->GetActorType());
-					if (currentTypeIdx < 0 || currentTypeIdx >= IM_ARRAYSIZE(actorTypeNames))
+					HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
+					if (copy != nullptr)
 					{
-						currentTypeIdx = 0;
-					}
-
-					if (ImGui::Combo("Actor Type", &currentTypeIdx, actorTypeNames, IM_ARRAYSIZE(actorTypeNames)))
-					{
-						m_selectedActor->SetActorType(static_cast<HEIN::ActorType>(currentTypeIdx));
+						SelectActor(copy);
 					}
 				}
+			}
 
-				ImGui::Separator();
-
-				// Draw gizmo mode toggles
-				if (ImGui::RadioButton("Local", m_currentGinzmo == ImGuizmo::LOCAL)) m_currentGinzmo = ImGuizmo::LOCAL;
-				ImGui::SameLine();
-				if (ImGui::RadioButton("World", m_currentGinzmo == ImGuizmo::WORLD)) m_currentGinzmo = ImGuizmo::WORLD;
-
-				ImGui::Separator();
-
-				if (m_selectedActor)
+			if (m_selectedActor == nullptr || !manager.HasActor(m_selectedActor->GetID()))
+			{
+				m_selectedActor = nullptr;
+				g_ActiveGizmoTarget = nullptr;
+				ImGui::TextDisabled("No Actor Selected");
+			}
+			else
+			{
+				// Inspector Header: Duplicate & Delete buttons
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.85f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.95f, 1.0f));
+				if (ImGui::Button("Duplicate Actor", ImVec2(ImGui::GetContentRegionAvail().x * 0.5f - 4.0f, 26)))
 				{
-					m_selectedActor->DrawInspector(gameContext);
-				}
-
-				ImGui::Separator();
-
-				// Add Component UI
-				std::vector<std::string> componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
-				if (componentNames.empty())
-				{
-					HEIN::ComponentFactory::Initialize();
-					componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
-				}
-
-				if (m_selectedActor && ImGui::BeginCombo("Add Component", "Select Component..."))
-				{
-					for (const std::string& compName : componentNames)
+					HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
+					if (copy != nullptr)
 					{
-						if (ImGui::Selectable(compName.c_str()))
+						SelectActor(copy);
+					}
+				}
+				ImGui::PopStyleColor(2);
+
+				ImGui::SameLine();
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.25f, 0.25f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.55f, 0.05f, 0.05f, 1.0f));
+				if (ImGui::Button("Delete", ImVec2(-1, 26)))
+				{
+					ActorID idToDelete = m_selectedActor->GetID();
+					SelectActor(nullptr);
+					manager.DestroyID(idToDelete);
+				}
+				ImGui::PopStyleColor(3);
+
+				if (m_selectedActor != nullptr)
+				{
+					ImGui::Separator();
+
+					bool isVis = m_selectedActor->IsVisible();
+					if (ImGui::Checkbox("Visible", &isVis))
+					{
+						m_selectedActor->SetVisible(isVis);
+					}
+					ImGui::SameLine();
+					bool isAct = m_selectedActor->IsActive();
+					if (ImGui::Checkbox("Active", &isAct))
+					{
+						m_selectedActor->SetActive(isAct);
+					}
+
+					std::wstring wtag = m_selectedActor ? m_selectedActor->GetTag() : L"";
+					std::string narrowTag(wtag.begin(), wtag.end());
+
+					char nameBuffer[256];
+					strncpy_s(nameBuffer, narrowTag.c_str(), sizeof(nameBuffer));
+					if (m_selectedActor && ImGui::InputText("Actor Name", nameBuffer, sizeof(nameBuffer)))
+					{
+						std::string newTag(nameBuffer);
+						std::wstring newWTag(newTag.begin(), newTag.end());
+						m_selectedActor->SetTag(newWTag);
+					}
+
+					if (m_selectedActor)
+					{
+						const char* actorTypeNames[] = {
+							"Default",
+							"Player",
+							"Enemy",
+							"Items",
+							"Enviroment",
+							"Ghost"
+						};
+						int currentTypeIdx = static_cast<int>(m_selectedActor->GetActorType());
+						if (currentTypeIdx < 0 || currentTypeIdx >= IM_ARRAYSIZE(actorTypeNames))
 						{
-							HEIN::IComponent* newComp = HEIN::ComponentFactory::CreateComponent(compName, m_selectedActor, &manager);
-							if (newComp)
-							{
-								newComp->Start();
-							}
+							currentTypeIdx = 0;
+						}
+
+						if (ImGui::Combo("Actor Type", &currentTypeIdx, actorTypeNames, IM_ARRAYSIZE(actorTypeNames)))
+						{
+							m_selectedActor->SetActorType(static_cast<HEIN::ActorType>(currentTypeIdx));
 						}
 					}
-					ImGui::EndCombo();
-				}
 
-				// ImGuizmo 3D Viewport Controls Integration
-				// If a valid editable target is selected (e.g., TransformComponent, CameraController),
-				// this overlays interactive translation, rotation, or scaling handles directly onto 
-				// the D3D11 scene view. Interactions modify the component's underlying coordinate matrices.
-				if (m_viewportLayout != EditorViewportLayout::GameViewOnly && g_ActiveGizmoTarget != nullptr)
-				{
-					g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
+					ImGui::Separator();
+
+					// Draw gizmo mode toggles
+					if (ImGui::RadioButton("Local", m_currentGinzmo == ImGuizmo::LOCAL)) m_currentGinzmo = ImGuizmo::LOCAL;
+					ImGui::SameLine();
+					if (ImGui::RadioButton("World", m_currentGinzmo == ImGuizmo::WORLD)) m_currentGinzmo = ImGuizmo::WORLD;
+
+					ImGui::Separator();
+
+					if (m_selectedActor)
+					{
+						m_selectedActor->DrawInspector(gameContext);
+					}
+
+					ImGui::Separator();
+
+					// Add Component UI
+					std::vector<std::string> componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
+					if (componentNames.empty())
+					{
+						HEIN::ComponentFactory::Initialize();
+						componentNames = HEIN::ComponentFactory::GetRegisteredComponentNames();
+					}
+
+					if (m_selectedActor && ImGui::BeginCombo("Add Component", "Select Component..."))
+					{
+						for (const std::string& compName : componentNames)
+						{
+							if (ImGui::Selectable(compName.c_str()))
+							{
+								HEIN::IComponent* newComp = HEIN::ComponentFactory::CreateComponent(compName, m_selectedActor, &manager);
+								if (newComp)
+								{
+									newComp->Start();
+								}
+							}
+						}
+						ImGui::EndCombo();
+					}
 				}
 			}
-
-		}
 		} // end if (m_rightPanelMode == RightPanelMode::SceneTransition) ... else
+
+		// ImGuizmo 2D & 3D Viewport Controls Integration (active regardless of which right panel tab is open)
+		if (m_selectedActor != nullptr && g_ActiveGizmoTarget != nullptr)
+		{
+			bool is2DUITarget = (m_selectedActor->GetComponent<HEIN::UIButtonComponent>() != nullptr ||
+			                     m_selectedActor->GetComponent<HEIN::GaugeComponent>() != nullptr);
+			if (is2DUITarget)
+			{
+				// 2D UI targets draw in Game View when GameViewOnly or SplitSideBySide is active
+				D3D11_VIEWPORT uiVp = (m_viewportLayout == EditorViewportLayout::SceneViewOnly) ? sceneVp : gameVp;
+				SetActiveViewportRect(uiVp.TopLeftX, uiVp.TopLeftY, uiVp.Width, uiVp.Height);
+				g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
+				SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+			}
+			else if (m_viewportLayout != EditorViewportLayout::GameViewOnly)
+			{
+				SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+				g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
+			}
+		}
+
 		ImGui::End();
 
-		ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
-
-		float hierarchyWidth = std::floor(screenW * 0.14f);
-		float toolbarWidth = inspectorPos.x - hierarchyWidth;
-		if (toolbarWidth < 10.0f) toolbarWidth = 10.0f; // Ensure a minimum width
-
-		ImGui::SetNextWindowPos(ImVec2(hierarchyWidth, 0.0f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(toolbarWidth, 80.0f), ImGuiCond_Always);
-
-		ImGui::Begin("ToolBar", nullptr, toolbarFlags);
-		if (ImGui::Button("PLAY (Exit Editor)")) currentAction = HEIN::EditorAction::PlayPressed;
-		ImGui::SameLine();
-		if (ImGui::Button("STOP (Pause)")) currentAction = HEIN::EditorAction::StopPressed;
-		ImGui::SameLine();
-
-		// Unity-style Scene View vs Game View layout selector tabs (F2)
-		bool isSceneOnly = (m_viewportLayout == EditorViewportLayout::SceneViewOnly);
-		bool isGameOnly  = (m_viewportLayout == EditorViewportLayout::GameViewOnly);
-		bool isSplit     = (m_viewportLayout == EditorViewportLayout::SplitSideBySide);
-
-		if (isSceneOnly)
+		// -------------------------------------------------------------------------
+		// INTERACTIVE DRAG HANDLES FOR PAUSED TRANSITION UI TEXT & LOADING BAR
+		// -------------------------------------------------------------------------
+		if (gameContext.sceneManager &&
+		    gameContext.sceneManager->IsTransitioning() &&
+		    gameContext.sceneManager->IsTransitionPaused() &&
+		    m_viewportLayout != EditorViewportLayout::SceneViewOnly)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.85f, 1.0f));
-			ImGui::Button("[ Scene ] (F2)");
-			ImGui::PopStyleColor();
-		}
-		else
-		{
-			if (ImGui::Button("[ Scene ] (F2)"))
+			if (!m_hasLoadedEditorDesc)
 			{
-				SetViewportLayout(EditorViewportLayout::SceneViewOnly);
+				m_editorTransitionDesc = gameContext.sceneManager->GetDefaultTransition();
+				m_hasLoadedEditorDesc = true;
 			}
-		}
 
-		ImGui::SameLine();
-
-		if (isGameOnly)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.65f, 0.35f, 1.0f));
-			ImGui::Button("[ Game ]");
-			ImGui::PopStyleColor();
-		}
-		else
-		{
-			if (ImGui::Button("[ Game ]"))
+			ImDrawList* fg = ImGui::GetForegroundDrawList();
+			if (fg && gameVp.Width > 50.0f && gameVp.Height > 50.0f)
 			{
-				SetViewportLayout(EditorViewportLayout::GameViewOnly);
-			}
-		}
+				float uiScale = std::min(gameVp.Width / 1280.0f, gameVp.Height / 720.0f);
 
-		ImGui::SameLine();
+				// Compute Tip UI Text Box in screen space inside gameVp
+				float tipScreenX = gameVp.TopLeftX + m_editorTransitionDesc.tipNormalizedPos.x * gameVp.Width;
+				float tipScreenY = gameVp.TopLeftY + m_editorTransitionDesc.tipNormalizedPos.y * gameVp.Height;
+				ImVec2 tipMin(tipScreenX - 6.0f, tipScreenY - 6.0f);
+				ImVec2 tipMax(tipScreenX + 380.0f * uiScale, tipScreenY + 62.0f * uiScale);
 
-		if (isSplit)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.35f, 0.85f, 1.0f));
-			ImGui::Button("[ Split: Scene | Game ]");
-			ImGui::PopStyleColor();
-		}
-		else
-		{
-			if (ImGui::Button("[ Split: Scene | Game ]"))
-			{
-				SetViewportLayout(EditorViewportLayout::SplitSideBySide);
-			}
-		}
-
-		ImGui::SameLine();
-		if (m_rightPanelMode == RightPanelMode::SceneTransition)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.45f, 0.15f, 1.0f));
-			if (ImGui::Button("INSPECTOR")) m_rightPanelMode = RightPanelMode::Inspector;
-			ImGui::PopStyleColor();
-		}
-		else
-		{
-			if (ImGui::Button("SCENE CHANGER")) m_rightPanelMode = RightPanelMode::SceneTransition;
-		}
-
-		ImGui::SameLine();
-		if (ImGui::Button("SAVE SCENE")) currentAction = HEIN::EditorAction::SavePressed;
-		ImGui::SameLine();
-		if (ImGui::Button("AUTO SAVE")) currentAction = HEIN::EditorAction::AutoSavePressed;
-		ImGui::SameLine();
-		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
-		ImGui::SameLine();
-		if (ImGui::Button("NEW SCENE")) currentAction = HEIN::EditorAction::NewScenePressed;
-		ImGui::SameLine();
-		if (ImGui::Button("ANIMATOR")) m_showAnimatorWindow = !m_showAnimatorWindow;
-		ImGui::SameLine();
-		ImGui::Checkbox("PiP Preview", &m_showViewportPreview);
-		ImGui::SameLine();
-		ImGui::Checkbox("Show Colliders", &m_showColliders);
-		ImGui::SameLine();
-		ImGui::Checkbox("Show UI", &m_showUI);
-		ImGui::SameLine();
-		ImGui::Checkbox("Frustum Culling", &gameContext.enableFrustumCulling);
-
-		if (m_selectedActor != nullptr)
-		{
-			ImGui::SameLine();
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.85f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.95f, 1.0f));
-			if (ImGui::Button("Duplicate Actor"))
-			{
-				HEIN::Actor* copy = manager.DuplicateActor(m_selectedActor, gameContext);
-				if (copy != nullptr)
+				// Compute Loading Bar Box in screen space inside gameVp
+				float barScreenX = gameVp.TopLeftX + m_editorTransitionDesc.barNormalizedPos.x * gameVp.Width;
+				float barScreenY = gameVp.TopLeftY + m_editorTransitionDesc.barNormalizedPos.y * gameVp.Height;
+				float barLen = m_editorTransitionDesc.barLength * uiScale;
+				ImVec2 barMin(barScreenX - 10.0f, barScreenY - 18.0f * uiScale);
+				ImVec2 barMax(barScreenX + barLen + 10.0f, barScreenY + 18.0f * uiScale);
+				if (m_editorTransitionDesc.barOrientation == LoadingBarOrientation::Horizontal_RightToLeft)
 				{
-					SelectActor(copy);
+					barMin.x = barScreenX - barLen - 10.0f;
+					barMax.x = barScreenX + 10.0f;
+				}
+				else if (m_editorTransitionDesc.barOrientation == LoadingBarOrientation::Center_Horizontal)
+				{
+					barMin.x = barScreenX - barLen * 0.5f - 10.0f;
+					barMax.x = barScreenX + barLen * 0.5f + 10.0f;
+				}
+
+				ImVec2 mousePos = io.MousePos;
+				bool overTip = m_editorTransitionDesc.showTips &&
+				               (mousePos.x >= tipMin.x && mousePos.x <= tipMax.x && mousePos.y >= tipMin.y && mousePos.y <= tipMax.y);
+				bool overBar = m_editorTransitionDesc.showLoadingBar &&
+				               (mousePos.x >= barMin.x && mousePos.x <= barMax.x && mousePos.y >= barMin.y && mousePos.y <= barMax.y);
+
+				if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+				{
+					m_draggingTransitionElement = 0;
+				}
+				else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive() && !ImGuizmo::IsUsing())
+				{
+					if (overTip)
+					{
+						m_draggingTransitionElement = 1;
+					}
+					else if (overBar)
+					{
+						m_draggingTransitionElement = 2;
+					}
+				}
+
+				if (m_draggingTransitionElement == 1 && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+				{
+					m_editorTransitionDesc.tipNormalizedPos.x = std::clamp(m_editorTransitionDesc.tipNormalizedPos.x + io.MouseDelta.x / gameVp.Width, 0.0f, 0.95f);
+					m_editorTransitionDesc.tipNormalizedPos.y = std::clamp(m_editorTransitionDesc.tipNormalizedPos.y + io.MouseDelta.y / gameVp.Height, 0.0f, 0.95f);
+					gameContext.sceneManager->UpdateActiveTransitionDesc(m_editorTransitionDesc);
+				}
+				else if (m_draggingTransitionElement == 2 && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+				{
+					m_editorTransitionDesc.barNormalizedPos.x = std::clamp(m_editorTransitionDesc.barNormalizedPos.x + io.MouseDelta.x / gameVp.Width, 0.0f, 0.98f);
+					m_editorTransitionDesc.barNormalizedPos.y = std::clamp(m_editorTransitionDesc.barNormalizedPos.y + io.MouseDelta.y / gameVp.Height, 0.0f, 0.98f);
+					gameContext.sceneManager->UpdateActiveTransitionDesc(m_editorTransitionDesc);
+				}
+
+				if (m_editorTransitionDesc.showTips)
+				{
+					ImU32 col = (m_draggingTransitionElement == 1 || overTip) ? IM_COL32(80, 220, 255, 230) : IM_COL32(80, 200, 255, 130);
+					fg->AddRect(tipMin, tipMax, col, 4.0f, 0, 1.5f);
+					fg->AddText(ImVec2(tipMin.x + 4.0f, tipMin.y - 16.0f), col, "[Drag UI Tip Text]");
+				}
+
+				if (m_editorTransitionDesc.showLoadingBar)
+				{
+					ImU32 col = (m_draggingTransitionElement == 2 || overBar) ? IM_COL32(255, 210, 80, 230) : IM_COL32(255, 195, 70, 130);
+					fg->AddRect(barMin, barMax, col, 4.0f, 0, 1.5f);
+					fg->AddText(ImVec2(barMin.x + 4.0f, barMin.y - 16.0f), col, "[Drag Loading Bar]");
 				}
 			}
-			ImGui::PopStyleColor(2);
-
-			ImGui::SameLine();
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
-			if (ImGui::Button("Delete Selected"))
-			{
-				ActorID idToDelete = m_selectedActor->GetID();
-				SelectActor(nullptr);
-				manager.DestroyID(idToDelete);
-			}
-			ImGui::PopStyleColor();
 		}
-
-		ImGui::Separator();
-		if (ImGui::Button("Create Empty Actor"))
+		else
 		{
-			HEIN::Actor* newActor = manager.CreateActor(L"GameObject");
-			newActor->AddComponent<HEIN::TransformComponent>();
-			newActor->Start();
-			SelectActor(newActor);
+			m_draggingTransitionElement = 0;
 		}
-		ImGui::SameLine();
-		if (ImGui::Button("+ UI Button"))
-		{
-			HEIN::Actor* newActor = manager.CreateActor(L"UIButton");
-			newActor->AddComponent<HEIN::TransformComponent>();
-			auto* btn = newActor->AddComponent<HEIN::UIButtonComponent>();
-			btn->SetElementType(HEIN::UIElementType::Button);
-			btn->SetText("Button");
-			btn->Initialize(gameContext, nullptr, nullptr, nullptr);
-			newActor->Start();
-			SelectActor(newActor);
-			g_ActiveGizmoTarget = btn;
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("+ UI Image"))
-		{
-			HEIN::Actor* newActor = manager.CreateActor(L"UIImage");
-			newActor->AddComponent<HEIN::TransformComponent>();
-			auto* img = newActor->AddComponent<HEIN::UIButtonComponent>();
-			img->SetElementType(HEIN::UIElementType::Image);
-			img->Initialize(gameContext, nullptr, nullptr, nullptr);
-			newActor->Start();
-			SelectActor(newActor);
-			g_ActiveGizmoTarget = img;
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("+ UI Text"))
-		{
-			HEIN::Actor* newActor = manager.CreateActor(L"UIText");
-			newActor->AddComponent<HEIN::TransformComponent>();
-			auto* txt = newActor->AddComponent<HEIN::UIButtonComponent>();
-			txt->SetElementType(HEIN::UIElementType::Text);
-			txt->SetText("New Text Label");
-			txt->SetFontSize(1.5f);
-			txt->Initialize(gameContext, nullptr, nullptr, nullptr);
-			newActor->Start();
-			SelectActor(newActor);
-			g_ActiveGizmoTarget = txt;
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("+ Camera"))
-		{
-			HEIN::Actor* newActor = manager.CreateActor(L"MainCamera");
-			newActor->AddComponent<HEIN::TransformComponent>();
-			auto* cam = newActor->AddComponent<HEIN::CameraController>();
-			cam->SetPosition(DirectX::SimpleMath::Vector3(0.0f, 15.0f, -40.0f));
-			newActor->Start();
-			SelectActor(newActor);
-			g_ActiveGizmoTarget = cam;
-		}
-		ImGui::SameLine();
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.2f, 0.9f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
-		if (ImGui::Button("+ Stage"))
-		{
-			currentAction = HEIN::EditorAction::CreateStagePressed;
-		}
-		ImGui::PopStyleColor(2);
-		ImGui::End();
 
 		// DRAW THE HIERARCHY WINDOW
 		// The Scene Hierarchy provides a visual tree-view of the Actor parent-child graph.
@@ -1084,8 +1322,6 @@ namespace HEIN
 
 		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
 		{
-			D3D11_VIEWPORT sceneVp = GetSceneViewport(gameContext);
-			D3D11_VIEWPORT gameVp = GetGameViewport(gameContext);
 			ImDrawList* fg = ImGui::GetForegroundDrawList();
 			if (fg)
 			{
@@ -1228,10 +1464,106 @@ namespace HEIN
 		}
 
 		ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.2f, 1.0f), "Scene Transition Asset Settings");
-		ImGui::TextDisabled("Configure full-screen fade, tint, hold, and flipbook effects.");
+		ImGui::TextDisabled("Configure full-screen fade, tint, hold, and UI text placement.");
 		ImGui::Separator();
 
-		// 1. Transition Style Selector
+		// -------------------------------------------------------------------------
+		// PAUSE & UI TEXT PLACEMENT CONTROLS (Top-level quick access)
+		// -------------------------------------------------------------------------
+		bool isTransRunning = gameContext.sceneManager->IsTransitioning();
+		bool isTransPaused  = gameContext.sceneManager->IsTransitionPaused();
+
+		if (isTransRunning && isTransPaused)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.55f, 0.10f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.00f, 0.65f, 0.20f, 1.0f));
+			if (ImGui::Button("PAUSED - Click to Resume (Space)", ImVec2(-1, 32)))
+			{
+				gameContext.sceneManager->SetTransitionPaused(false);
+			}
+			ImGui::PopStyleColor(2);
+		}
+		else
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.55f, 0.78f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.65f, 0.90f, 1.0f));
+			if (ImGui::Button("Pause / Pin Transition to Place UI Text (Space)", ImVec2(-1, 32)))
+			{
+				if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
+				{
+					SetViewportLayout(EditorViewportLayout::GameViewOnly);
+				}
+				if (!isTransRunning)
+				{
+					gameContext.sceneManager->StartPausedPreview(m_editorTransitionDesc);
+				}
+				else
+				{
+					gameContext.sceneManager->SetTransitionPaused(true);
+				}
+			}
+			ImGui::PopStyleColor(2);
+		}
+
+		if (ImGui::Button("Play Full Preview (F5)", ImVec2(ImGui::GetContentRegionAvail().x * 0.62f - 2.0f, 26)))
+		{
+			if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
+			{
+				SetViewportLayout(EditorViewportLayout::GameViewOnly);
+			}
+			gameContext.sceneManager->PreviewTransition(m_editorTransitionDesc);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Hide / Stop", ImVec2(-1, 26)))
+		{
+			gameContext.sceneManager->StopTransitionPreview();
+		}
+
+		// Live Scrubbers & Quick UI Text Placement Sliders while Transition is Active/Paused
+		if (gameContext.sceneManager->IsTransitioning())
+		{
+			ImGui::Spacing();
+			ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "Live UI Text & Bar Placement (Drag in Game View or Slide):");
+
+			float alpha = gameContext.sceneManager->GetTransitionAlpha();
+			if (ImGui::SliderFloat("Overlay Alpha", &alpha, 0.0f, 1.0f, "%.2f"))
+			{
+				gameContext.sceneManager->SetTransitionPaused(true);
+				gameContext.sceneManager->SetTransitionAlpha(alpha);
+			}
+
+			float progress = gameContext.sceneManager->GetLoadingProgress();
+			if (ImGui::SliderFloat("Bar Progress", &progress, 0.0f, 1.0f, "%.2f"))
+			{
+				gameContext.sceneManager->SetTransitionPaused(true);
+				gameContext.sceneManager->SetLoadingProgress(progress);
+			}
+
+			ImGui::SliderFloat2("UI Tip Text Pos (X,Y)", &m_editorTransitionDesc.tipNormalizedPos.x, 0.0f, 1.0f, "%.3f");
+			ImGui::SliderFloat2("Loading Bar Pos (X,Y)", &m_editorTransitionDesc.barNormalizedPos.x, 0.0f, 1.0f, "%.3f");
+
+			if (!m_editorTransitionDesc.tips.empty())
+			{
+				size_t tipIdx = gameContext.sceneManager->GetActiveTipIndex() % m_editorTransitionDesc.tips.size();
+				if (ImGui::Button("< Prev Tip"))
+				{
+					size_t nextIdx = (tipIdx == 0) ? (m_editorTransitionDesc.tips.size() - 1) : (tipIdx - 1);
+					gameContext.sceneManager->SetActiveTipIndex(nextIdx);
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Next Tip >"))
+				{
+					size_t nextIdx = (tipIdx + 1) % m_editorTransitionDesc.tips.size();
+					gameContext.sceneManager->SetActiveTipIndex(nextIdx);
+				}
+				ImGui::SameLine();
+				ImGui::TextDisabled("Tip #%d: %s", static_cast<int>(tipIdx + 1), m_editorTransitionDesc.tips[tipIdx].title.c_str());
+			}
+		}
+
+		ImGui::Separator();
+
+		// Transition Style Selector
 		if (m_editorTransitionDesc.texturePath.empty())
 		{
 			m_transitionStyleIndex = 0; // Solid Color Fade
@@ -1275,7 +1607,7 @@ namespace HEIN
 
 		ImGui::Separator();
 
-		// 2. Texture File Picker (shown for styles 1 and 2)
+		// Texture File Picker (shown for styles 1 and 2)
 		if (m_transitionStyleIndex > 0)
 		{
 			ImGui::Text("Texture Path (.dds):");
@@ -1327,7 +1659,7 @@ namespace HEIN
 			ImGui::Separator();
 		}
 
-		// 3. Timing Controls
+		// Timing Controls
 		ImGui::Text("Transition Timings:");
 		ImGui::DragFloat("Fade Out Duration", &m_editorTransitionDesc.fadeOutDuration, 0.05f, 0.05f, 5.0f, "%.2fs");
 		if (ImGui::DragFloat("Min Loading Hold Duration", &m_editorTransitionDesc.minLoadingHoldDuration, 0.05f, 0.1f, 10.0f, "%.2fs"))
@@ -1338,13 +1670,13 @@ namespace HEIN
 
 		ImGui::Separator();
 
-		// 4. Color Picker
+		// Color Picker
 		ImGui::Text("Color & Tint:");
 		ImGui::ColorEdit4("Tint / Fade Color", &m_editorTransitionDesc.tintColor.x);
 
 		ImGui::Separator();
 
-		// 5. Flipbook / Video Settings (shown when Flipbook mode is active)
+		// Flipbook / Video Settings (shown when Flipbook mode is active)
 		if (m_transitionStyleIndex == 2 || ImGui::CollapsingHeader("Flipbook / Video Settings"))
 		{
 			ImGui::DragInt("Columns", &m_editorTransitionDesc.columns, 1, 1, 32);
@@ -1355,7 +1687,7 @@ namespace HEIN
 			ImGui::Separator();
 		}
 
-		// 6. Versatile Elden Ring Loading Bar Controls
+		// Versatile Elden Ring Loading Bar Controls
 		if (ImGui::CollapsingHeader("Loading Bar Settings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Checkbox("Show Loading Bar", &m_editorTransitionDesc.showLoadingBar);
@@ -1484,7 +1816,7 @@ namespace HEIN
 			ImGui::Separator();
 		}
 
-		// 7. Lore / Gameplay Tips Controls
+		// Lore / Gameplay Tips Controls
 		if (ImGui::CollapsingHeader("Lore & Gameplay Tips Cycler", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Checkbox("Show Gameplay Tips", &m_editorTransitionDesc.showTips);
@@ -1534,7 +1866,7 @@ namespace HEIN
 			ImGui::Separator();
 		}
 
-		// 8. Action Buttons
+		// Action Buttons
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.65f, 0.35f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.75f, 0.45f, 1.0f));
 		if (ImGui::Button("Preview Transition (F5 / Space)", ImVec2(-1, 32)))
@@ -1627,6 +1959,12 @@ namespace HEIN
 		{
 			ImGui::Spacing();
 			ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.4f, 1.0f), "%s", m_transitionStatusMessage.c_str());
+		}
+
+		// Live-sync editor settings to active/paused transition overlay in real time
+		if (gameContext.sceneManager->IsTransitioning())
+		{
+			gameContext.sceneManager->UpdateActiveTransitionDesc(m_editorTransitionDesc);
 		}
 	}
 }

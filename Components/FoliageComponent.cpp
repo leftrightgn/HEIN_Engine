@@ -107,24 +107,24 @@ namespace HEIN
 		TransformComponent* terrainTrans = terrain->GetOwner()->GetComponent<TransformComponent>();
 		DirectX::SimpleMath::Matrix invWorld = terrainTrans ? terrainTrans->GetWorldMatrix().Invert() : DirectX::SimpleMath::Matrix::Identity;
 
-		// 1. Transform grass world position into the Terrain's localized space
+		// Transform grass world position into the Terrain's localized space
 		DirectX::SimpleMath::Vector3 localPos = DirectX::SimpleMath::Vector3::Transform(worldPos, invWorld);
 
-		// 2. Reverse the terrain's half-width/depth shift to acquire absolute grid coordinates
+		// Reverse the terrain's half-width/depth shift to acquire absolute grid coordinates
 		float halfWidth = static_cast<float>(terrain->GetTerrainWidth()) / 2.0f;
 		float halfDepth = static_cast<float>(terrain->GetTerrainHeight()) / 2.0f;
 
 		float gridX = localPos.x + halfWidth;
 		float gridZ = localPos.z + halfDepth;
 
-		// 3. Divide by the identical quad chunk size used in TerrainComponent (32)
+		// Divide by the identical quad chunk size used in TerrainComponent (32)
 		// This guarantees that foliage cells perfectly overlap terrain cells.
 		const float quadsPerCell = 32.0f;
 
 		int32_t cellX = static_cast<int32_t>(std::floor(gridX / quadsPerCell));
 		int32_t cellY = static_cast<int32_t>(std::floor(gridZ / quadsPerCell));
 
-		// 4. Pack into a distinct 64-bit hash key for dictionary lookup
+		// Pack into a distinct 64-bit hash key for dictionary lookup
 		return (static_cast<uint64_t>(static_cast<uint32_t>(cellX)) << 32) | static_cast<uint32_t>(cellY);
 	}
 
@@ -797,7 +797,7 @@ namespace HEIN
 
 		if (GetTotalInstanceCount() == 0) return;
 
-		// 1. Build World-Space Camera Frustum
+		// Build World-Space Camera Frustum
 		DirectX::BoundingFrustum worldFrustum;
 		if (m_freezeFrustum)
 		{
@@ -840,7 +840,7 @@ namespace HEIN
 			m_frozenFrustum = worldFrustum;
 		}
 
-		// 2. Setup Shared Constants
+		// Setup Shared Constants
 		TerrainComponent* terrain = FindTerrain(gameContext);
 		float terW = terrain ? static_cast<float>(terrain->GetTerrainWidth()) : 256.0f;
 		float terH = terrain ? static_cast<float>(terrain->GetTerrainHeight()) : 256.0f;
@@ -935,7 +935,7 @@ namespace HEIN
 		}
 
 
-		// 3. Bind Graphics Pipeline Variables
+		// Bind Graphics Pipeline Variables
 		context->IASetInputLayout(m_inputLayout.Get());
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -970,7 +970,7 @@ namespace HEIN
 		context->OMSetDepthStencilState(m_depthStencilState.Get(), 0);
 		context->OMSetBlendState(gameContext.commonStates.AlphaBlend(), nullptr, 0xFFFFFFFF);
 
-		// 4. Frustum Cull and Execute Draws over Iterated Cells
+		// Frustum Cull and Execute Draws over Iterated Cells
 		for (auto& pair : m_cells)
 		{
 			FoliageCell* cell = pair.second.get();

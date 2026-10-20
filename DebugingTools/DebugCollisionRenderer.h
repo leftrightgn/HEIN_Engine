@@ -156,7 +156,7 @@ namespace HEIN
     public:
 
 		DebugCollisionRenderer(
-			bool modelActive = true,
+			bool modelActive = false,
 			bool lineActive = true,
 			uint32_t collisionMax = DISPLAY_COLLISION_MAX
 		);
@@ -241,6 +241,8 @@ namespace HEIN
 		{
 			m_lineSegments.push_back(LineSegmentData(a, b, lineColor));
 		}
+
+		bool HasQueuedData() const { return !m_lineSegments.empty() || !m_spheres.empty() || !m_aabb.empty() || !m_obb.empty() || !m_meshes.empty(); }
 
 		void SetSolidRenderingEnable(bool active) { m_modelActive = active; }
 
