@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "ProceduralAnimationComponent.h"
+#include "../Common/SkeletonProfile.h"
 #include "Components/SkinnedModelComponent.h"
 #include "Components/ColliderComponent/TerrainColliderComponent.h"
 #include "Components/ColliderComponent/MeshColliderComponent.h"
@@ -18,8 +19,9 @@ namespace HEIN
     ProceduralAnimationComponent::ProceduralAnimationComponent(Actor* owner, ActorManager* manager)
         : IComponent(owner), m_actorManager(manager)
     {
-        m_ikChains.push_back({ L"mixamorig:LeftFoot", L"mixamorig:LeftLeg", L"mixamorig:LeftUpLeg", L"mixamorig:LeftToe_End", 1.0f, 0.0f, true });
-        m_ikChains.push_back({ L"mixamorig:RightFoot", L"mixamorig:RightLeg", L"mixamorig:RightUpLeg", L"mixamorig:RightToe_End", 1.0f, 0.0f, true });
+        const auto& profile = SkeletonProfile::DefaultMixamo();
+        m_ikChains.push_back({ profile.leftFoot, profile.leftLeg, profile.leftUpLeg, profile.leftToe, 1.0f, 0.0f, true });
+        m_ikChains.push_back({ profile.rightFoot, profile.rightLeg, profile.rightUpLeg, profile.rightToe, 1.0f, 0.0f, true });
     }
 
     nlohmann::json ProceduralAnimationComponent::Serialize()
@@ -366,7 +368,7 @@ namespace HEIN
                 float bestHeight = -FLT_MAX;
                 DirectX::SimpleMath::Vector3 bestNorm = DirectX::SimpleMath::Vector3::Up;
 
-                // 1. Query Terrain Heightmap
+                // Query Terrain Heightmap
                 if (m_terrain)
                 {
                     DirectX::SimpleMath::Vector3 n;
@@ -379,7 +381,7 @@ namespace HEIN
                     }
                 }
 
-                // 2. Query Static Environment AABBs (e.g. Stage floor)
+                // Query Static Environment AABBs (e.g. Stage floor)
                 for (auto* aabbComp : m_environmentAABBs)
                 {
                     if (!aabbComp) continue;
@@ -403,7 +405,7 @@ namespace HEIN
                     }
                 }
 
-                // 3. Query Mesh Colliders
+                // Query Mesh Colliders
                 if (m_meshCollider)
                 {
                     DirectX::SimpleMath::Vector3 rayOrigin(pos.x, pos.y + 10.0f, pos.z);
@@ -652,6 +654,7 @@ namespace HEIN
             {
                 alignAxis.Normalize();
                 float alignAngle = std::atan2(alignSin, alignCos);
+                alignAngle = std::clamp(alignAngle, -DirectX::XMConvertToRadians(35.0f), DirectX::XMConvertToRadians(35.0f));
 
                 // Blend rotation angle by active weight (faded during swing phase)
                 DirectX::SimpleMath::Matrix alignRot = DirectX::SimpleMath::Matrix::CreateFromAxisAngle(alignAxis, alignAngle * activeWeight);

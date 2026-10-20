@@ -67,6 +67,7 @@ namespace HEIN
 		DirectX::SimpleMath::Vector2 m_viewportSize = DirectX::SimpleMath::Vector2(400.0f, 225.0f);
 		bool m_isViewportVisibleInUI = false;
 		float m_inspectorWidth = 0.0f;
+		float m_toolbarHeight = 88.0f;
 
 		// Right Panel Mode (Inspector vs Scene Transition)
 		RightPanelMode m_rightPanelMode = RightPanelMode::Inspector;
@@ -76,6 +77,7 @@ namespace HEIN
 		float m_transitionStatusTimer = 0.0f;
 		int m_selectedTargetSceneIndex = 0;
 		int m_transitionStyleIndex = 0;
+		int m_draggingTransitionElement = 0; // 0 = None, 1 = Tip Text, 2 = Loading Bar
 
 	public:
 		DebugUIManager() = default;

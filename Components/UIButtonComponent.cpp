@@ -228,10 +228,11 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
                 static_cast<int>(m_textColor.w * 255.0f)
             );
 
-            float fontSize = ImGui::GetFontSize() * m_fontSize * m_lastScaleY;
+            float uiScale = std::min(m_lastScaleX, m_lastScaleY);
+            float fontSize = ImGui::GetFontSize() * m_fontSize * uiScale;
             ImVec2 textSize = ImGui::CalcTextSize(m_text.c_str());
-            textSize.x *= (m_fontSize * m_lastScaleY);
-            textSize.y *= (m_fontSize * m_lastScaleY);
+            textSize.x *= (m_fontSize * uiScale);
+            textSize.y *= (m_fontSize * uiScale);
 
             ImVec2 textPos;
             if (m_elementType == UIElementType::Button)
@@ -252,7 +253,8 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
             }
 
             // Drop shadow
-            drawList->AddText(ImGui::GetFont(), fontSize, ImVec2(textPos.x + 2.0f, textPos.y + 2.0f), IM_COL32(0, 0, 0, static_cast<int>(m_textColor.w * 190.0f)), m_text.c_str());
+            float shadowOff = std::max(1.0f, 2.0f * uiScale);
+            drawList->AddText(ImGui::GetFont(), fontSize, ImVec2(textPos.x + shadowOff, textPos.y + shadowOff), IM_COL32(0, 0, 0, static_cast<int>(m_textColor.w * 190.0f)), m_text.c_str());
             drawList->AddText(ImGui::GetFont(), fontSize, textPos, col, m_text.c_str());
         }
     }

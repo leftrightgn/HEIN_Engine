@@ -52,6 +52,11 @@ namespace HEIN
 		bool m_isActive = true;
 		bool m_enableFrustumCulling = true;
 
+		// Per-Actor Time Dilation (Anticipation Wind-Up Pause) & Hitstop (Hit Freeze)
+		float m_localTimeScale = 1.0f;
+		float m_hitstopTimer = 0.0f;
+		float m_unscaledDeltaTime = 0.016f;
+
 		// Memory safe Array of Components
 		std::vector<std::unique_ptr<HEIN::IComponent>> m_components;
 		std::wstring m_tag;
@@ -67,6 +72,12 @@ namespace HEIN
 		void LateUpdate(float deltaTime);
 
 		void Draw(
+			GameContext& gameContext,
+			const DirectX::SimpleMath::Matrix& view,
+			const DirectX::SimpleMath::Matrix& proj
+		);
+
+		void DrawTransparent(
 			GameContext& gameContext,
 			const DirectX::SimpleMath::Matrix& view,
 			const DirectX::SimpleMath::Matrix& proj
@@ -102,6 +113,22 @@ namespace HEIN
 		void SetActive(bool active) { m_isActive = active; }
 		bool IsFrustumCullingEnabled() const { return m_enableFrustumCulling; }
 		void SetEnableFrustumCulling(bool enable) { m_enableFrustumCulling = enable; }
+
+		// Per-Actor Time-Scale & Hitstop (Hit Freeze) API
+		void SetLocalTimeScale(float scale) { m_localTimeScale = std::max(0.0f, scale); }
+		float GetLocalTimeScale() const { return m_localTimeScale; }
+		void TriggerHitstop(float durationSeconds) { m_hitstopTimer = std::max(m_hitstopTimer, durationSeconds); }
+		void TriggerHitstopFrames(int frames, float fps = 60.0f)
+		{
+			if (frames > 0 && fps > 0.0f)
+			{
+				TriggerHitstop(static_cast<float>(frames) / fps);
+			}
+		}
+		bool IsHitstopped() const { return m_hitstopTimer > 0.0f; }
+		float GetHitstopTimer() const { return m_hitstopTimer; }
+		float GetEffectiveTimeScale() const { return (m_hitstopTimer > 0.0f) ? 0.0f : m_localTimeScale; }
+		float GetUnscaledDeltaTime() const { return m_unscaledDeltaTime; }
 
 		/// <summary>
 		/// Adds a child to this actor's scene graph hierarchy.

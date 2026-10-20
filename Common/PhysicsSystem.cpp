@@ -20,23 +20,12 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
         if (activeTerrain) break;
     }
 
-    // Player position query for distance-based simulation culling
+    // Player position query for distance-based simulation culling (type-safe query)
     DirectX::SimpleMath::Vector3 playerPos = DirectX::SimpleMath::Vector3::Zero;
-    HEIN::Actor* playerActor = actorManager.GetActorByName(L"Player");
-    if (playerActor == nullptr || playerActor->GetActorType() != HEIN::ActorType::Player)
+    HEIN::Actor* playerActor = actorManager.GetFirstActorByType(HEIN::ActorType::Player);
+    if (!playerActor)
     {
-        for (const auto& pair : actorManager.GetAllActors())
-        {
-            if (pair.second && pair.second->IsActive())
-            {
-                if (pair.second->GetActorType() == HEIN::ActorType::Player ||
-                    pair.second->GetActorType() == HEIN::ActorType::Ghost)
-                {
-                    playerActor = pair.second.get();
-                    break;
-                }
-            }
-        }
+        playerActor = actorManager.GetFirstActorByType(HEIN::ActorType::Ghost);
     }
 
     if (playerActor != nullptr)
@@ -125,7 +114,7 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
             }
 
             // Persist initial ground position as spawn anchor for tether return logic
-            HEIN::CombatBlackBoard* bb = actor->GetComponent<HEIN::CombatBlackBoard>();
+            HEIN::BossBlackBoard* bb = actor->GetComponent<HEIN::BossBlackBoard>();
             if (bb)
             {
                 bb->spawnPosition = pos;
@@ -147,7 +136,7 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
             if (distSq > SIMULATION_RADIUS_SQ)
             {
                 // Off-Screen Distance Reset: return dormant actors to their anchor coordinate
-                HEIN::CombatBlackBoard* bb = actor->GetComponent<HEIN::CombatBlackBoard>();
+                HEIN::BossBlackBoard* bb = actor->GetComponent<HEIN::BossBlackBoard>();
                 if (bb && bb->hasSetSpawnPosition)
                 {
                     transform->SetPosition(bb->spawnPosition);
@@ -157,6 +146,13 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& gameContext, HEIN::ActorMa
                 // Bypass remaining dynamics calculations for dormant actor
                 continue;
             }
+        }
+
+        // Hitstop (Hit Freeze): Pause velocity and position delta integration for X fixed frames on hit
+        if (actor->IsHitstopped())
+        {
+            rb->m_acceleration = DirectX::SimpleMath::Vector3::Zero;
+            continue;
         }
 
         // Numerical Integration (Semi-Implicit Euler: Acceleration -> Velocity -> Position)

@@ -207,6 +207,7 @@ namespace HEIN
         m_pendingTargetMode = LoadSceneMode::Single;
         m_currentTransitionDesc = desc;
         m_isPreviewOnly = false;
+        m_isTransitionPaused = false;
         m_transitionPhase = TransitionPhase::FadeOut;
         m_transitionTimer = 0.0f;
         m_transitionAlpha = 0.0f;
@@ -227,6 +228,7 @@ namespace HEIN
         m_pendingTargetScene.clear();
         m_currentTransitionDesc = desc;
         m_isPreviewOnly = true;
+        m_isTransitionPaused = false;
         m_transitionPhase = TransitionPhase::FadeOut;
         m_transitionTimer = 0.0f;
         m_transitionAlpha = 0.0f;
@@ -240,6 +242,38 @@ namespace HEIN
         {
             m_activeTipIndex = rand() % m_currentTransitionDesc.tips.size();
         }
+    }
+
+    void SceneManager::StartPausedPreview(const SceneTransitionDesc& desc)
+    {
+        m_pendingTargetScene.clear();
+        m_currentTransitionDesc = desc;
+        m_isPreviewOnly = true;
+        m_isTransitionPaused = true;
+        m_transitionPhase = TransitionPhase::LoadingSwitch;
+        m_transitionTimer = desc.minLoadingHoldDuration * 0.65f;
+        m_transitionAlpha = 1.0f;
+        m_animTimer = 0.0f;
+        m_loadingProgress = 0.65f;
+        m_needlePulseTimer = 0.0f;
+        m_hasSwappedScenes = true;
+        m_loadingCoverFrames = 2;
+
+        if (!m_currentTransitionDesc.tips.empty() && m_activeTipIndex >= m_currentTransitionDesc.tips.size())
+        {
+            m_activeTipIndex = 0;
+        }
+    }
+
+    void SceneManager::StopTransitionPreview()
+    {
+        m_transitionAlpha = 0.0f;
+        m_loadingProgress = 0.0f;
+        m_transitionPhase = TransitionPhase::None;
+        m_transitionTimer = 0.0f;
+        m_isPreviewOnly = false;
+        m_isTransitionPaused = false;
+        m_pendingTargetScene.clear();
     }
 
     void SceneManager::UnloadScene(const std::string& sceneName)
@@ -609,18 +643,21 @@ namespace HEIN
         {
         case TransitionPhase::FadeOut:
         {
-            m_transitionTimer += deltaTime;
-            float duration = (m_currentTransitionDesc.fadeOutDuration > 0.0f) ? m_currentTransitionDesc.fadeOutDuration : 0.001f;
-            float t = std::min(1.0f, m_transitionTimer / duration);
-            m_transitionAlpha = t * t * (3.0f - 2.0f * t); // Smoothstep 0 -> 1
-            m_loadingProgress = 0.0f;
-
-            if (t >= 1.0f)
+            if (!m_isTransitionPaused)
             {
-                m_transitionAlpha = 1.0f;
-                m_transitionPhase = TransitionPhase::LoadingSwitch;
-                m_transitionTimer = 0.0f;
-                m_loadingCoverFrames = 0;
+                m_transitionTimer += deltaTime;
+                float duration = (m_currentTransitionDesc.fadeOutDuration > 0.0f) ? m_currentTransitionDesc.fadeOutDuration : 0.001f;
+                float t = std::min(1.0f, m_transitionTimer / duration);
+                m_transitionAlpha = t * t * (3.0f - 2.0f * t); // Smoothstep 0 -> 1
+                m_loadingProgress = 0.0f;
+
+                if (t >= 1.0f)
+                {
+                    m_transitionAlpha = 1.0f;
+                    m_transitionPhase = TransitionPhase::LoadingSwitch;
+                    m_transitionTimer = 0.0f;
+                    m_loadingCoverFrames = 0;
+                }
             }
             break;
         }
@@ -628,11 +665,14 @@ namespace HEIN
         case TransitionPhase::LoadingSwitch:
         {
             m_loadingCoverFrames++;
-            m_transitionAlpha = 1.0f;
-            m_transitionTimer += deltaTime;
 
             float hold = (m_currentTransitionDesc.minLoadingHoldDuration > 0.05f) ? m_currentTransitionDesc.minLoadingHoldDuration : 0.05f;
-            m_loadingProgress = std::clamp(m_transitionTimer / hold, 0.0f, 1.0f);
+            if (!m_isTransitionPaused)
+            {
+                m_transitionAlpha = 1.0f;
+                m_transitionTimer += deltaTime;
+                m_loadingProgress = std::clamp(m_transitionTimer / hold, 0.0f, 1.0f);
+            }
 
             // Once the screen is visibly 100% covered (>= 2 frames), swap the underlying scene immediately
             if (m_loadingCoverFrames >= 2 && !m_hasSwappedScenes)
@@ -682,7 +722,7 @@ namespace HEIN
             }
 
             // After hold duration has elapsed and progress is full, transition to FadeIn
-            if (m_loadingCoverFrames >= 2 && m_transitionTimer >= hold)
+            if (!m_isTransitionPaused && m_loadingCoverFrames >= 2 && m_transitionTimer >= hold)
             {
                 m_loadingProgress = 1.0f;
                 m_transitionPhase = TransitionPhase::FadeIn;
@@ -693,30 +733,34 @@ namespace HEIN
 
         case TransitionPhase::FadeIn:
         {
-            m_transitionTimer += deltaTime;
-            float duration = (m_currentTransitionDesc.fadeInDuration > 0.0f) ? m_currentTransitionDesc.fadeInDuration : 0.001f;
-            float t = std::min(1.0f, m_transitionTimer / duration);
-            m_transitionAlpha = 1.0f - (t * t * (3.0f - 2.0f * t)); // Smoothstep 1 -> 0
-            m_loadingProgress = 1.0f;
-
-            if (t >= 1.0f)
+            if (!m_isTransitionPaused)
             {
-                m_transitionAlpha = 0.0f;
-                m_loadingProgress = 0.0f;
-                m_transitionPhase = TransitionPhase::None;
-                m_transitionTimer = 0.0f;
-                m_isPreviewOnly = false;
+                m_transitionTimer += deltaTime;
+                float duration = (m_currentTransitionDesc.fadeInDuration > 0.0f) ? m_currentTransitionDesc.fadeInDuration : 0.001f;
+                float t = std::min(1.0f, m_transitionTimer / duration);
+                m_transitionAlpha = 1.0f - (t * t * (3.0f - 2.0f * t)); // Smoothstep 1 -> 0
+                m_loadingProgress = 1.0f;
 
-                // VRAM Cleanup: free transition textures so they consume 0 MB during gameplay
-                m_transitionTextureSRV.Reset();
-                m_barTrackSRV.Reset();
-                m_barFillSRV.Reset();
-                m_barNeedleSRV.Reset();
-                m_loadedTexturePath.clear();
-                m_loadedBarTrackPath.clear();
-                m_loadedBarFillPath.clear();
-                m_loadedBarNeedlePath.clear();
-                m_textureDimensions = DirectX::SimpleMath::Vector2(0.0f, 0.0f);
+                if (t >= 1.0f)
+                {
+                    m_transitionAlpha = 0.0f;
+                    m_loadingProgress = 0.0f;
+                    m_transitionPhase = TransitionPhase::None;
+                    m_transitionTimer = 0.0f;
+                    m_isPreviewOnly = false;
+                    m_isTransitionPaused = false;
+
+                    // VRAM Cleanup: free transition textures so they consume 0 MB during gameplay
+                    m_transitionTextureSRV.Reset();
+                    m_barTrackSRV.Reset();
+                    m_barFillSRV.Reset();
+                    m_barNeedleSRV.Reset();
+                    m_loadedTexturePath.clear();
+                    m_loadedBarTrackPath.clear();
+                    m_loadedBarFillPath.clear();
+                    m_loadedBarNeedlePath.clear();
+                    m_textureDimensions = DirectX::SimpleMath::Vector2(0.0f, 0.0f);
+                }
             }
             break;
         }
@@ -726,8 +770,8 @@ namespace HEIN
             break;
         }
 
-        // Update active scenes (skip only during exact LoadingSwitch frame)
-        if (m_transitionPhase != TransitionPhase::LoadingSwitch)
+        // Update active scenes (always update in editor/preview/paused mode so editor UI remains responsive)
+        if (context.isEditorMode || m_isPreviewOnly || m_isTransitionPaused || m_transitionPhase != TransitionPhase::LoadingSwitch)
         {
             for (auto& active : m_activeScenes)
             {
@@ -740,10 +784,12 @@ namespace HEIN
     {
         if (!m_currentTransitionDesc.showLoadingBar || !m_whiteTextureSRV || !m_spriteBatch) return;
 
+        float uiScale = std::min(vp.Width / 1280.0f, vp.Height / 720.0f);
+
         float anchorX = m_currentTransitionDesc.barNormalizedPos.x * vp.Width;
         float anchorY = m_currentTransitionDesc.barNormalizedPos.y * vp.Height;
-        float length = m_currentTransitionDesc.barLength;
-        float thickness = m_currentTransitionDesc.barThickness;
+        float length = m_currentTransitionDesc.barLength * uiScale;
+        float thickness = std::max(1.0f, m_currentTransitionDesc.barThickness * uiScale);
         float progress = std::clamp(m_loadingProgress, 0.0f, 1.0f);
 
         DirectX::SimpleMath::Vector4 trackCol = m_currentTransitionDesc.barTrackColor;
@@ -769,8 +815,8 @@ namespace HEIN
             RECT r;
             r.left = static_cast<LONG>(x);
             r.top = static_cast<LONG>(y);
-            r.right = static_cast<LONG>(x + w);
-            r.bottom = static_cast<LONG>(y + h);
+            r.right = static_cast<LONG>(std::max(x + 1.0f, x + w));
+            r.bottom = static_cast<LONG>(std::max(y + 1.0f, y + h));
             m_spriteBatch->Draw(m_whiteTextureSRV.Get(), r, nullptr, col);
         };
 
@@ -817,7 +863,7 @@ namespace HEIN
         if (style == LoadingBarStyle::Segmented)
         {
             int segments = std::max(2, m_currentTransitionDesc.segmentCount);
-            float gap = 3.0f;
+            float gap = std::max(1.0f, 3.0f * uiScale);
             float totalGaps = gap * (segments - 1);
             float segLen = std::max(1.0f, (length - totalGaps) / segments);
 
@@ -842,7 +888,7 @@ namespace HEIN
         }
         else // EldenRingNeedle, SolidFill, CustomTextured
         {
-            // 1. Draw Track
+            // Draw Track
             if (style == LoadingBarStyle::CustomTextured && m_barTrackSRV)
             {
                 RECT r = { static_cast<LONG>(trackX), static_cast<LONG>(trackY),
@@ -855,7 +901,7 @@ namespace HEIN
                 DrawSolidRect(trackX, trackY, isHorizontal ? length : thickness, isHorizontal ? thickness : length, trackCol);
             }
 
-            // 2. Draw Fill
+            // Draw Fill
             float fillLength = length * progress;
             if (fillLength > 0.5f)
             {
@@ -895,11 +941,11 @@ namespace HEIN
                 }
             }
 
-            // 3. Draw End-Caps (Elden Ring perpendicular ticks at start and end)
+            // Draw End-Caps (Elden Ring perpendicular ticks at start and end)
             if (m_currentTransitionDesc.showEndCaps)
             {
-                float capLen = m_currentTransitionDesc.endCapLength;
-                float capThick = m_currentTransitionDesc.endCapThickness;
+                float capLen = std::max(2.0f, m_currentTransitionDesc.endCapLength * uiScale);
+                float capThick = std::max(1.0f, m_currentTransitionDesc.endCapThickness * uiScale);
 
                 if (isHorizontal)
                 {
@@ -917,11 +963,11 @@ namespace HEIN
                 }
             }
 
-            // 4. Draw Sliding Needle (Elden Ring sliding tick at current progress)
+            // Draw Sliding Needle (Elden Ring sliding tick at current progress)
             if (m_currentTransitionDesc.showNeedle)
             {
-                float needleLen = m_currentTransitionDesc.needleLength;
-                float needleThick = m_currentTransitionDesc.needleThickness;
+                float needleLen = std::max(2.0f, m_currentTransitionDesc.needleLength * uiScale);
+                float needleThick = std::max(1.0f, m_currentTransitionDesc.needleThickness * uiScale);
 
                 if (isHorizontal)
                 {
@@ -964,7 +1010,7 @@ namespace HEIN
             }
         }
 
-        // 5. Optional Percentage Readout
+        // Optional Percentage Readout
         if (m_currentTransitionDesc.showPercentageText && m_spriteFont)
         {
             char pBuf[32];
@@ -972,21 +1018,23 @@ namespace HEIN
             DirectX::SimpleMath::Vector4 textCol = m_currentTransitionDesc.barNeedleColor;
             textCol.w *= alpha;
 
-            float textX = trackX + length + 18.0f;
-            float textY = anchorY - 10.0f;
+            float textX = trackX + length + 18.0f * uiScale;
+            float textY = anchorY - 10.0f * uiScale;
             if (!isHorizontal)
             {
-                textX = anchorX - 16.0f;
-                textY = trackY + length + 14.0f;
+                textX = anchorX - 16.0f * uiScale;
+                textY = trackY + length + 14.0f * uiScale;
             }
 
-            m_spriteFont->DrawString(m_spriteBatch.get(), pBuf, DirectX::SimpleMath::Vector2(textX, textY), textCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.75f);
+            m_spriteFont->DrawString(m_spriteBatch.get(), pBuf, DirectX::SimpleMath::Vector2(textX, textY), textCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.75f * uiScale);
         }
     }
 
     void SceneManager::RenderTips(GameContext& /*context*/, const D3D11_VIEWPORT& vp, float alpha)
     {
         if (!m_currentTransitionDesc.showTips || m_currentTransitionDesc.tips.empty() || !m_spriteFont || !m_spriteBatch) return;
+
+        float uiScale = std::min(vp.Width / 1280.0f, vp.Height / 720.0f);
 
         size_t idx = m_activeTipIndex % m_currentTransitionDesc.tips.size();
         const auto& tip = m_currentTransitionDesc.tips[idx];
@@ -998,29 +1046,31 @@ namespace HEIN
         DirectX::SimpleMath::Vector4 descCol  = DirectX::SimpleMath::Vector4(0.72f, 0.70f, 0.62f, alpha * 0.90f);
 
         // Title
-        m_spriteFont->DrawString(m_spriteBatch.get(), tip.title.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY), titleCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.85f);
+        m_spriteFont->DrawString(m_spriteBatch.get(), tip.title.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY), titleCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.85f * uiScale);
 
         // Subtle divider underline
         if (m_whiteTextureSRV)
         {
             RECT lineRect;
             lineRect.left = static_cast<LONG>(tipX);
-            lineRect.top = static_cast<LONG>(tipY + 22.0f);
-            lineRect.right = static_cast<LONG>(tipX + 220.0f);
-            lineRect.bottom = static_cast<LONG>(tipY + 23.0f);
+            lineRect.top = static_cast<LONG>(tipY + 22.0f * uiScale);
+            lineRect.right = static_cast<LONG>(tipX + 220.0f * uiScale);
+            lineRect.bottom = static_cast<LONG>(std::max(lineRect.top + 1L, static_cast<LONG>(tipY + 23.0f * uiScale)));
             DirectX::SimpleMath::Vector4 lineCol = titleCol;
             lineCol.w *= 0.5f;
             m_spriteBatch->Draw(m_whiteTextureSRV.Get(), lineRect, nullptr, lineCol);
         }
 
         // Description
-        m_spriteFont->DrawString(m_spriteBatch.get(), tip.description.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY + 30.0f), descCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.70f);
+        m_spriteFont->DrawString(m_spriteBatch.get(), tip.description.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY + 30.0f * uiScale), descCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.70f * uiScale);
     }
 
     void SceneManager::Render(GameContext& context)
     {
-        // 1. Skip rendering active scenes when screen is 100% covered by the loading screen
-        bool skipSceneRender = (m_transitionPhase == TransitionPhase::LoadingSwitch || (m_transitionAlpha >= 0.99f && !m_isPreviewOnly));
+        // Skip rendering active scenes only in full-screen game mode when 100% covered by the loading screen.
+        // In Editor Mode, active.instance->Render(context) must run so the Editor UI and viewports render!
+        bool skipSceneRender = !context.isEditorMode && !m_isPreviewOnly && !m_isTransitionPaused &&
+                               (m_transitionPhase == TransitionPhase::LoadingSwitch || m_transitionAlpha >= 0.99f);
         if (!skipSceneRender)
         {
             for (auto& active : m_activeScenes)
@@ -1029,7 +1079,7 @@ namespace HEIN
             }
         }
 
-        // 2. In full-screen game mode, render transition overlay across main screen viewport
+        // In full-screen game mode, render transition overlay across main screen viewport
         if (!context.isEditorMode)
         {
             D3D11_VIEWPORT vp = context.deviceResources.GetScreenViewport();
@@ -1122,16 +1172,16 @@ namespace HEIN
         {
             m_spriteBatch->Begin(DirectX::SpriteSortMode_Deferred, context.commonStates.NonPremultiplied());
 
-            // 2A. Draw background overlay
+            // Draw background overlay
             if (drawSRV)
             {
                 m_spriteBatch->Draw(drawSRV, destRect, pSourceRect, drawColor);
             }
 
-            // 2B. Draw Elden Ring Loading Bar
+            // Draw Elden Ring Loading Bar
             RenderLoadingBar(context, targetViewport, m_transitionAlpha);
 
-            // 2C. Draw Lore / Gameplay Tips
+            // Draw Lore / Gameplay Tips
             RenderTips(context, targetViewport, m_transitionAlpha);
 
             m_spriteBatch->End();

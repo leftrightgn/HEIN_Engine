@@ -177,6 +177,7 @@ namespace HEIN
 		m_targetBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
 		m_shapShotBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
 		m_blendedLocalBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
+		m_snapshotLocalBones = DirectX::ModelBone::MakeArray(m_model->bones.size());
 
 		// Ensure they never hold uninitialized memory from the start
 		for (size_t i = 0; i < m_model->bones.size(); ++i)
@@ -186,6 +187,7 @@ namespace HEIN
 			m_targetBones[i] = DirectX::SimpleMath::Matrix::Identity;
 			m_shapShotBones[i] = DirectX::SimpleMath::Matrix::Identity;
 			m_blendedLocalBones[i] = DirectX::SimpleMath::Matrix::Identity;
+			m_snapshotLocalBones[i] = DirectX::SimpleMath::Matrix::Identity;
 		}
 
 		// Load Shaders once and share across all SkinnedModelComponent instances
@@ -348,7 +350,7 @@ namespace HEIN
 	{
 		if (!m_model || m_model->bones.empty()) return -1;
 
-		// 1. Explicitly configured root bone name
+		// Explicitly configured root bone name
 		if (!m_rootBoneName.empty())
 		{
 			for (size_t i = 0; i < m_model->bones.size(); ++i)
@@ -360,7 +362,7 @@ namespace HEIN
 			}
 		}
 
-		// 2. Search common root bone naming conventions
+		// Search common root bone naming conventions
 		const wchar_t* commonNames[] = {
 			L"mixamorig:Hips",
 			L"Hips",
@@ -382,7 +384,7 @@ namespace HEIN
 			}
 		}
 
-		// 3. Fallback: bone without parent (parentIndex == ModelBone::c_Invalid)
+		// Fallback: bone without parent (parentIndex == ModelBone::c_Invalid)
 		for (size_t i = 0; i < m_model->bones.size(); ++i)
 		{
 			if (m_model->bones[i].parentIndex == DirectX::ModelBone::c_Invalid)
@@ -391,7 +393,7 @@ namespace HEIN
 			}
 		}
 
-		// 4. Default fallback: bone 0
+		// Default fallback: bone 0
 		return 0;
 	}
 
@@ -429,10 +431,34 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 endPos = anim->GetRootTranslationAtKey(rootIdx, numKeys - 1);
 		DirectX::SimpleMath::Vector3 cycleDisplacement = endPos - startPos;
 
+		DirectX::SimpleMath::Vector3 rawDelta = DirectX::SimpleMath::Vector3::Zero;
+
+		if (!anim->IsLooping())
+		{
+			double tPrev = (prevAnimTime < 0.0) ? 0.0 : ((prevAnimTime > clipDuration) ? clipDuration : prevAnimTime);
+			double tCurr = (currentAnimTime < 0.0) ? 0.0 : ((currentAnimTime > clipDuration) ? clipDuration : currentAnimTime);
+			if (tCurr >= tPrev)
+			{
+				DirectX::SimpleMath::Vector3 pPrev = anim->GetRootTranslationAtTime(rootIdx, tPrev);
+				DirectX::SimpleMath::Vector3 pCurr = anim->GetRootTranslationAtTime(rootIdx, tCurr);
+				rawDelta = pCurr - pPrev;
+			}
+			else
+			{
+				DirectX::SimpleMath::Vector3 pCurr = anim->GetRootTranslationAtTime(rootIdx, tCurr);
+				rawDelta = pCurr - startPos;
+			}
+
+			if (!m_rootMotionExtractY)
+			{
+				rawDelta.y = 0.0f;
+			}
+
+			return rawDelta;
+		}
+
 		int prevCycle = static_cast<int>(std::floor(prevAnimTime / clipDuration));
 		int currentCycle = static_cast<int>(std::floor(currentAnimTime / clipDuration));
-
-		DirectX::SimpleMath::Vector3 rawDelta = DirectX::SimpleMath::Vector3::Zero;
 
 		if (currentCycle == prevCycle)
 		{
@@ -503,6 +529,19 @@ namespace HEIN
 
 	void SkinnedModelComponent::ApplyRootMotionDeltaToWorld(const DirectX::SimpleMath::Vector3& localDelta, float deltaTime)
 	{
+		// If animation time-scale is frozen (0.0f wind-up pause or hitstop), hold position with zero velocity
+		// while keeping m_hasActiveRootMotion latched so the character stays planted in place.
+		if (m_owner != nullptr && m_owner->GetEffectiveTimeScale() <= 0.0001f)
+		{
+			m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
+			m_rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
+			if (m_isVisible && m_enableRootMotion && m_currentAnimation != nullptr)
+			{
+				m_hasActiveRootMotion = true;
+			}
+			return;
+		}
+
 		DirectX::SimpleMath::Vector3 worldDelta = DirectX::SimpleMath::Vector3::Zero;
 		if (m_owner != nullptr)
 		{
@@ -516,12 +555,17 @@ namespace HEIN
 
 		m_rootMotionDelta = worldDelta;
 
-		// Deadzone (0.01 units) prevents microscopic in-place hip bobbing from triggering movement
-		if (m_isVisible && worldDelta.LengthSquared() > 0.0001f)
+		// Divide by unscaled frame deltaTime so slow-motion time-scales proportionally reduce velocity
+		// instead of canceling out in (worldDelta / scaledDt).
+		float rawDt = (m_owner != nullptr && m_owner->GetUnscaledDeltaTime() > 0.0001f)
+			? m_owner->GetUnscaledDeltaTime()
+			: ((deltaTime > 0.0001f) ? deltaTime : 0.016f);
+
+		float deadzone = 0.0001f * (m_owner != nullptr ? std::max(0.01f, m_owner->GetEffectiveTimeScale()) : 1.0f);
+		if (m_isVisible && worldDelta.LengthSquared() > deadzone)
 		{
 			m_hasActiveRootMotion = true;
-			float safeDt = (deltaTime > 0.0001f) ? deltaTime : 0.016f;
-			DirectX::SimpleMath::Vector3 computedVel = worldDelta / safeDt;
+			DirectX::SimpleMath::Vector3 computedVel = worldDelta / rawDt;
 
 			float speedSq = computedVel.LengthSquared();
 			constexpr float MAX_ROOT_SPEED = 60.0f; // Sane limit prevents velocity explosions
@@ -542,10 +586,11 @@ namespace HEIN
 
 	void SkinnedModelComponent::Update(float deltaTime)
 	{
-		m_ghostTime += deltaTime;
+		float rawDt = (m_owner != nullptr && m_owner->GetUnscaledDeltaTime() > 0.0f) ? m_owner->GetUnscaledDeltaTime() : deltaTime;
+		m_ghostTime += rawDt;
 		if (m_hitFlashTimer > 0.0f)
 		{
-			m_hitFlashTimer -= deltaTime;
+			m_hitFlashTimer -= rawDt;
 			if (m_hitFlashTimer < 0.0f) m_hitFlashTimer = 0.0f;
 		}
 		if (!m_model) return;
@@ -560,9 +605,10 @@ namespace HEIN
 
 		if (m_isBlending)
 		{
-			if (m_currentAnimation == m_targetAnimation || m_targetAnimation == nullptr)
+			if ((!m_blendFromSnapshot && m_currentAnimation == m_targetAnimation) || m_targetAnimation == nullptr)
 			{
 				m_isBlending = false;
+				m_blendFromSnapshot = false;
 				m_targetAnimation = nullptr;
 			}
 		}
@@ -571,13 +617,14 @@ namespace HEIN
 			m_targetAnimation != nullptr)
 		{
 			m_blendTimer += deltaTime;
-			float blendFactor = m_blendTimer / m_blendDuration;
+			float blendFactor = (m_blendDuration > 0.0001f) ? (m_blendTimer / m_blendDuration) : 1.0f;
 
 			if (blendFactor >= 1.0f)
 			{
 				m_currentAnimation = m_targetAnimation;
 				m_targetAnimation = nullptr;
 				m_isBlending = false;
+				m_blendFromSnapshot = false;
 
 				// Transfer target tracking state to active tracking state
 				m_prevAnimTime = m_targetPrevAnimTime;
@@ -601,36 +648,57 @@ namespace HEIN
 			}
 			else
 			{
-				// Live Dynamic Blending
-				m_currentAnimation->Update(deltaTime);
-				m_targetAnimation->Update(deltaTime);
-
-				m_currentAnimation->Apply(*m_model, m_model->bones.size(), m_shapShotBones.get());
-				m_targetAnimation->Apply(*m_model, m_model->bones.size(), m_targetBones.get());
-
-				if (m_enableRootMotion && rootIdx >= 0)
+				if (m_blendFromSnapshot)
 				{
-					DirectX::SimpleMath::Vector3 deltaA = ExtractClipRootMotionDelta(
-						m_currentAnimation, rootIdx,
-						m_prevAnimTime, m_hasPrevRootTranslation
-					);
-					DirectX::SimpleMath::Vector3 deltaB = ExtractClipRootMotionDelta(
-						m_targetAnimation, rootIdx,
-						m_targetPrevAnimTime, m_targetHasPrevRootTranslation
-					);
+					// Snapshot Blending: source pose is frozen in m_snapshotLocalBones, only advance target clip
+					m_targetAnimation->Update(deltaTime);
+					m_targetAnimation->Apply(*m_model, m_model->bones.size(), m_targetBones.get());
 
-					// Blend the displacement: (1 - blendFactor) * A + blendFactor * B
-					DirectX::SimpleMath::Vector3 blendedDelta = DirectX::SimpleMath::Vector3::Lerp(deltaA, deltaB, blendFactor);
+					if (m_enableRootMotion && rootIdx >= 0)
+					{
+						DirectX::SimpleMath::Vector3 deltaB = ExtractClipRootMotionDelta(
+							m_targetAnimation, rootIdx,
+							m_targetPrevAnimTime, m_targetHasPrevRootTranslation
+						);
+						LockRootBone(m_targetAnimation->GetLocalBones(), rootIdx, m_targetInitialRootTranslation);
+						ApplyRootMotionDeltaToWorld(deltaB, deltaTime);
+					}
+				}
+				else
+				{
+					// Live Dynamic Blending between two distinct clips
+					m_currentAnimation->Update(deltaTime);
+					m_targetAnimation->Update(deltaTime);
 
-					// Lock root bones in both clips so blended bones remain anchored
-					LockRootBone(m_currentAnimation->GetLocalBones(), rootIdx, m_initialRootTranslation);
-					LockRootBone(m_targetAnimation->GetLocalBones(), rootIdx, m_targetInitialRootTranslation);
+					m_currentAnimation->Apply(*m_model, m_model->bones.size(), m_shapShotBones.get());
+					m_targetAnimation->Apply(*m_model, m_model->bones.size(), m_targetBones.get());
 
-					ApplyRootMotionDeltaToWorld(blendedDelta, deltaTime);
+					if (m_enableRootMotion && rootIdx >= 0)
+					{
+						DirectX::SimpleMath::Vector3 deltaA = ExtractClipRootMotionDelta(
+							m_currentAnimation, rootIdx,
+							m_prevAnimTime, m_hasPrevRootTranslation
+						);
+						DirectX::SimpleMath::Vector3 deltaB = ExtractClipRootMotionDelta(
+							m_targetAnimation, rootIdx,
+							m_targetPrevAnimTime, m_targetHasPrevRootTranslation
+						);
+
+						// Blend the displacement: (1 - blendFactor) * A + blendFactor * B
+						DirectX::SimpleMath::Vector3 blendedDelta = DirectX::SimpleMath::Vector3::Lerp(deltaA, deltaB, blendFactor);
+
+						// Lock root bones in both clips so blended bones remain anchored
+						LockRootBone(m_currentAnimation->GetLocalBones(), rootIdx, m_initialRootTranslation);
+						LockRootBone(m_targetAnimation->GetLocalBones(), rootIdx, m_targetInitialRootTranslation);
+
+						ApplyRootMotionDeltaToWorld(blendedDelta, deltaTime);
+					}
 				}
 
-				// Get the Live raw Bones
-				const DirectX::XMMATRIX* sourceLocalBones = m_currentAnimation->GetLocalBones();
+				// Get the source (snapshot or live current) and target local bones
+				const DirectX::XMMATRIX* sourceLocalBones = m_blendFromSnapshot
+					? m_snapshotLocalBones.get()
+					: m_currentAnimation->GetLocalBones();
 				const DirectX::XMMATRIX* targetLocalBones = m_targetAnimation->GetLocalBones();
 
 				for (size_t i = 0; i < m_model->bones.size(); ++i)
@@ -1026,6 +1094,13 @@ namespace HEIN
 	}
 
 	DirectX::SimpleMath::Vector3 SkinnedModelComponent::GetBoneWorldPosition(
+		HumanoidBone bone,
+		const DirectX::SimpleMath::Matrix& actorWorldMatrix)
+	{
+		return GetBoneWorldPosition(m_skeletonProfile.GetBone(bone).c_str(), actorWorldMatrix);
+	}
+
+	DirectX::SimpleMath::Vector3 SkinnedModelComponent::GetBoneWorldPosition(
 		const wchar_t* boneName, 
 		const DirectX::SimpleMath::Matrix& actorWorldMatrix)
 	{
@@ -1160,6 +1235,7 @@ namespace HEIN
 			{
 				m_targetAnimation = nullptr;
 				m_isBlending = false;
+				m_blendFromSnapshot = false;
 			}
 			m_animations.erase(it);
 		}
@@ -1180,6 +1256,7 @@ namespace HEIN
 			m_currentAnimation = it->second.get();
 			m_targetAnimation = nullptr;
 			m_isBlending = false;
+			m_blendFromSnapshot = false;
 			ResetRootMotionTracking();
 			if (m_enableRootMotion && m_currentAnimation)
 			{
@@ -1201,9 +1278,17 @@ namespace HEIN
 
 		DX::AnimationSDKMESH* requestedAnim = it->second.get();
 
-		if (m_currentAnimation == nullptr)
+		if (m_currentAnimation == nullptr || duration <= 0.0001f)
 		{
 			m_currentAnimation = requestedAnim;
+			m_currentAnimation->SetLooping(!forceRestart);
+			if (forceRestart)
+			{
+				m_currentAnimation->SetAnimTime(0.0f);
+			}
+			m_targetAnimation = nullptr;
+			m_isBlending = false;
+			m_blendFromSnapshot = false;
 			ResetRootMotionTracking();
 			if (m_enableRootMotion && m_currentAnimation)
 			{
@@ -1216,33 +1301,25 @@ namespace HEIN
 			return;
 		}
 
-		// Prevent crossfading into the exact same animation clip (which would cause double-speed updates)
+		// Handle same-clip requests or interrupted crossfades without double-updating or ignoring forceRestart
 		if (m_currentAnimation == requestedAnim)
 		{
-			if (!m_isBlending)
-			{
-				if (forceRestart)
-				{
-					m_currentAnimation->SetAnimTime(0.0f);
-					m_prevAnimTime = 0.0;
-					m_hasPrevRootTranslation = false;
-				}
-				return;
-			}
-			else if (m_targetAnimation == requestedAnim)
+			if (!m_isBlending && !forceRestart)
 			{
 				return;
 			}
-			else
+			if (m_isBlending && m_targetAnimation == requestedAnim && !forceRestart)
 			{
-				// Currently blending away, but requested to stay on current: cancel the blend
-				m_targetAnimation = nullptr;
-				m_isBlending = false;
 				return;
 			}
 		}
+		else if (m_isBlending && m_targetAnimation == requestedAnim && !forceRestart)
+		{
+			return;
+		}
 
-		if (m_isBlending && m_targetAnimation == requestedAnim) return;
+		// Use a frozen local-bone snapshot whenever restarting the same clip or interrupting an in-progress crossfade
+		bool useSnapshot = m_isBlending || (m_currentAnimation == requestedAnim);
 
 		if (m_model)
 		{
@@ -1251,13 +1328,14 @@ namespace HEIN
 				m_shapShotBones[i] = m_drawBones[i];
 			}
 
-			// PREVENT RACE CONDITION: If another component reads GetCurrentLocalBones() 
-			// before SkinnedModelComponent::Update() runs, m_blendedLocalBones would be uninitialized garbage.
+			// Capture current local bones (blended pose if mid-crossfade, or active clip local bones)
+			// before mutating m_isBlending or resetting m_targetAnimation time.
 			const DirectX::SimpleMath::Matrix* currentLocal = GetCurrentLocalBones();
 			if (currentLocal)
 			{
 				for (size_t i = 0; i < m_model->bones.size(); ++i)
 				{
+					m_snapshotLocalBones[i] = currentLocal[i];
 					m_blendedLocalBones[i] = currentLocal[i];
 				}
 			}
@@ -1265,10 +1343,12 @@ namespace HEIN
 
 		// Begin Crossfade
 		m_isBlending = true;
+		m_blendFromSnapshot = useSnapshot;
 		m_blendTimer = 0.0f;
 		m_blendDuration = duration;
 
-		m_targetAnimation = it->second.get();
+		m_targetAnimation = requestedAnim;
+		m_targetAnimation->SetLooping(!forceRestart);
 		if (forceRestart)
 		{
 			m_targetAnimation->SetAnimTime(0.0f);

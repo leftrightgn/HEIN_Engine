@@ -22,10 +22,22 @@ void HEIN::Actor::Update(float deltaTime)
 {
 	if (!m_isActive) return;
 
+	m_unscaledDeltaTime = deltaTime;
+	if (m_hitstopTimer > 0.0f)
+	{
+		m_hitstopTimer -= deltaTime;
+		if (m_hitstopTimer < 0.0f)
+		{
+			m_hitstopTimer = 0.0f;
+		}
+	}
+
+	float effectiveDt = deltaTime * GetEffectiveTimeScale();
+
 	// Route update tick to all attached components sequentially
 	for (auto& comp : m_components)
 	{
-		comp->Update(deltaTime);
+		comp->Update(effectiveDt);
 	}
 }
 
@@ -111,6 +123,22 @@ void HEIN::Actor::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matr
 		if (!component->Is2D())
 		{
 			component->Draw(gameContext, world, view, proj);
+		}
+	}
+}
+
+void HEIN::Actor::DrawTransparent(GameContext& gameContext, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
+{
+	if (!m_isVisible || !m_isActive) return;
+
+	TransformComponent* transform = GetComponent<TransformComponent>();
+	DirectX::SimpleMath::Matrix world = transform ? transform->GetWorldMatrix() : DirectX::SimpleMath::Matrix::Identity;
+
+	for (auto& component : m_components)
+	{
+		if (!component->Is2D())
+		{
+			component->DrawTransparent(gameContext, world, view, proj);
 		}
 	}
 }

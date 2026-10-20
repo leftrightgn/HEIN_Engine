@@ -1,5 +1,6 @@
 #pragma once
 #include "IComponent.h"
+#include "../Common/SkeletonProfile.h"
 #include "DirectXTK_Utilities/Animation.h"
 #include <map>
 
@@ -13,6 +14,7 @@ namespace HEIN
 	class SkinnedModelComponent : public IComponent
 	{
 	private:
+		SkeletonProfile m_skeletonProfile;
 
 		// Model And Animation Data 
 		DirectX::ModelBone::TransformArray m_drawBones;
@@ -21,6 +23,7 @@ namespace HEIN
 		DirectX::ModelBone::TransformArray m_shapShotBones;
 
 		DirectX::ModelBone::TransformArray m_blendedLocalBones;
+		DirectX::ModelBone::TransformArray m_snapshotLocalBones;
 		//DX::AnimationSDKMESH m_animation;
 		static std::shared_ptr<DirectX::EffectFactory> s_fxFactory;
 
@@ -40,6 +43,7 @@ namespace HEIN
 
 		bool m_isVisible = true;
 		bool m_isBlending = false;
+		bool m_blendFromSnapshot = false;
 		float m_blendTimer = 0.0f;
 		float m_blendDuration = 0.0f;
 		
@@ -125,6 +129,13 @@ namespace HEIN
 			const wchar_t* boneName,
 			const DirectX::SimpleMath::Matrix& actorWorldMatrix
 		);
+		DirectX::SimpleMath::Vector3 GetBoneWorldPosition(
+			HumanoidBone bone,
+			const DirectX::SimpleMath::Matrix& actorWorldMatrix
+		);
+
+		const SkeletonProfile& GetSkeletonProfile() const { return m_skeletonProfile; }
+		void SetSkeletonProfile(const SkeletonProfile& profile) { m_skeletonProfile = profile; }
 		DirectX::SimpleMath::Vector3 GetBoneWorldPosition(
 			const int boneNum,
 			const DirectX::SimpleMath::Matrix& actorWorldMatrix

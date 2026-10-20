@@ -43,24 +43,95 @@ void HEIN::SocketAttachmentComponent::LateUpdate(float deltaTime)
 		}
 	}
 
+	// Fallback to parent actor if no socket owner is set or found by tag
+	if (m_socketOwnerActorID == HEIN::INVALID_ACTOR_ID && m_owner && m_owner->GetParentID() != HEIN::INVALID_ACTOR_ID)
+	{
+		Actor* parent = m_actorManager->GetActor(m_owner->GetParentID());
+		if (parent)
+		{
+			m_socketOwnerActorID = parent->GetID();
+			m_socketOwnerTag = parent->GetTag();
+			m_owner->SetOwnerID(m_socketOwnerActorID);
+		}
+	}
+
+	// Fallback: If still invalid, try to find active Player actor
+	if (m_socketOwnerActorID == HEIN::INVALID_ACTOR_ID && m_owner && m_owner->GetActorType() != ActorType::Enemy)
+	{
+		if (Actor* player = m_actorManager->GetFirstActorByType(ActorType::Player))
+		{
+			m_socketOwnerActorID = player->GetID();
+			m_socketOwnerTag = player->GetTag();
+			m_owner->SetOwnerID(m_socketOwnerActorID);
+		}
+	}
+
 	if (m_socketOwnerActorID == HEIN::INVALID_ACTOR_ID) return;
+
+	HEIN::Actor* targetActor = m_actorManager->GetActor(m_socketOwnerActorID);
+	if (targetActor == nullptr)
+	{
+		// Target actor was destroyed or missing; fallback to parent actor
+		m_socketOwnerActorID = HEIN::INVALID_ACTOR_ID;
+		if (m_owner && m_owner->GetParentID() != HEIN::INVALID_ACTOR_ID)
+		{
+			targetActor = m_actorManager->GetActor(m_owner->GetParentID());
+			if (targetActor)
+			{
+				m_socketOwnerActorID = targetActor->GetID();
+				m_socketOwnerTag = targetActor->GetTag();
+				m_owner->SetOwnerID(m_socketOwnerActorID);
+			}
+		}
+		if (targetActor == nullptr && m_owner && m_owner->GetActorType() != ActorType::Enemy)
+		{
+			targetActor = m_actorManager->GetFirstActorByType(ActorType::Player);
+			if (targetActor)
+			{
+				m_socketOwnerActorID = targetActor->GetID();
+				m_socketOwnerTag = targetActor->GetTag();
+				m_owner->SetOwnerID(m_socketOwnerActorID);
+			}
+		}
+		if (targetActor == nullptr) return;
+	}
 
 	if (m_owner && m_owner->GetOwnerID() != m_socketOwnerActorID)
 	{
 		m_owner->SetOwnerID(m_socketOwnerActorID);
 	}
 
-	HEIN::Actor* targetActor = m_actorManager->GetActor(m_socketOwnerActorID);
-	if (targetActor == nullptr) return;
-
 	HEIN::SocketComponent* targetSocket = targetActor->GetComponent<HEIN::SocketComponent>();
 
-	if (targetSocket != nullptr && targetSocket->HasSocket(m_socketName))
+	DirectX::SimpleMath::Matrix socketWorld = DirectX::SimpleMath::Matrix::Identity;
+	bool foundSocket = false;
+
+	if (targetSocket != nullptr)
 	{
-		DirectX::SimpleMath::Matrix socketWorld = targetSocket->GetSocketWorldMatrix(m_socketName);
+		if (!m_socketName.empty() && targetSocket->HasSocket(m_socketName))
+		{
+			socketWorld = targetSocket->GetSocketWorldMatrix(m_socketName);
+			foundSocket = true;
+		}
+		else if (targetSocket->HasSocket(L"WeaponSocket"))
+		{
+			socketWorld = targetSocket->GetSocketWorldMatrix(L"WeaponSocket");
+			foundSocket = true;
+		}
+	}
 
+	if (!foundSocket)
+	{
+		if (auto* targetTrans = targetActor->GetComponent<HEIN::TransformComponent>())
+		{
+			socketWorld = targetTrans->GetWorldMatrix();
+			foundSocket = true;
+		}
+	}
+
+	if (foundSocket)
+	{
 		HEIN::TransformComponent* myTransform = m_owner->GetComponent<HEIN::TransformComponent>();
-
 		if (myTransform != nullptr)
 		{
 			myTransform->SetParentMatrix(socketWorld);

@@ -7,6 +7,8 @@
 #include <Camera/CameraController.h>
 #include "Effect/Skybox.h"
 #include <Entities/Actor.h>
+#include <Components/UIButtonComponent.h>
+#include <Components/GaugeComponent.h>
 
 
 namespace HEIN
@@ -254,8 +256,11 @@ namespace HEIN
             float fov = (gameContext.mainCamera != nullptr) ? gameContext.mainCamera->GetFov() : (DirectX::XM_PI / 4.0f);
             DirectX::SimpleMath::Matrix gameProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(fov, aspectRatio, 0.1f, 5000.0f);
 
+            bool isTransitioning = (gameContext.sceneManager && gameContext.sceneManager->IsTransitioning() && gameContext.sceneManager->GetTransitionAlpha() > 0.05f);
+            bool isTransitionPaused = (gameContext.sceneManager && gameContext.sceneManager->IsTransitionPaused());
+
             gameContext.isSceneViewPass = false;
-            gameContext.showUI = m_debugUI.IsShowUIEnabled(); // HUD enabled in Game View!
+            gameContext.showUI = m_debugUI.IsShowUIEnabled() && !isTransitioning; // Suppress HUD underneath active transition
             gameContext.showColliders = false; // NO Colliders in Game View!
 
             if (skybox) skybox->Draw(gameContext, mainView, gameProj);
@@ -270,10 +275,39 @@ namespace HEIN
 
             actorManager.DrawAll(gameContext, mainView, gameProj);
 
+            if (gameContext.debugCollisionRenderer != nullptr)
+            {
+                gameContext.debugCollisionRenderer->RenderAndFlush(context, gameContext.commonStates, mainView, gameProj);
+            }
+
             // Render transition overlay ONLY inside the Game View panel
             if (gameContext.sceneManager && gameContext.sceneManager->IsTransitioning())
             {
                 gameContext.sceneManager->RenderTransitionOverlay(gameContext, vp);
+
+                // When the transition is PAUSED in the editor and Show UI is enabled,
+                // render scene UI elements (UI Text / Buttons / Gauges) ON TOP of the paused transition
+                // so the user can visually place UI text over the transition screen!
+                if (isTransitionPaused && m_debugUI.IsShowUIEnabled())
+                {
+                    gameContext.showUI = true;
+                    context->RSSetViewports(1, &vp);
+                    for (const auto& pair : actorManager.GetAllActors())
+                    {
+                        HEIN::Actor* actor = pair.second.get();
+                        if (!actor || !actor->IsVisible() || !actor->IsActive()) continue;
+                        auto uiComps = actor->GetComponents<HEIN::UIButtonComponent>();
+                        for (auto* ui : uiComps)
+                        {
+                            if (ui) ui->Draw(gameContext, DirectX::SimpleMath::Matrix::Identity, mainView, gameProj);
+                        }
+                        auto gaugeComps = actor->GetComponents<HEIN::GaugeComponent>();
+                        for (auto* gauge : gaugeComps)
+                        {
+                            if (gauge) gauge->Draw(gameContext, DirectX::SimpleMath::Matrix::Identity, mainView, gameProj);
+                        }
+                    }
+                }
             }
         };
 
