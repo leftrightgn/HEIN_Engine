@@ -1,7 +1,7 @@
 #pragma once
 #include "ICameraMode.h"
-#include <SimpleMath.h>
-#include <Entities/Actor.h>
+#include "SimpleMath.h"
+#include "Entities/Actor.h"
 
 namespace HEIN
 {

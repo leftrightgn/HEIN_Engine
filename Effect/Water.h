@@ -1,24 +1,26 @@
 ﻿#pragma once
 #include "pch.h" 
 #include "Framework/GameContext.h"
+namespace HEIN
+{
 class Water
 {
 private:
     struct WaterConstantBuffer
     {
-        float time;
-        float padding[3];
-        DirectX::SimpleMath::Matrix world;
-        DirectX::SimpleMath::Matrix view;
-        DirectX::SimpleMath::Matrix projection;
+        float time{};
+        float padding[3]{};
+        DirectX::SimpleMath::Matrix world{};
+        DirectX::SimpleMath::Matrix view{};
+        DirectX::SimpleMath::Matrix projection{};
     };
 
     struct LightBuffer
     {
-        DirectX::SimpleMath::Vector3 lightDir;
-        float time;
-        DirectX::SimpleMath::Vector3 camPos;
-        float padding2;
+        DirectX::SimpleMath::Vector3 lightDir{};
+        float time{};
+        DirectX::SimpleMath::Vector3 camPos{};
+        float padding2{};
     };
 
     struct WaterSettingsBuffer
@@ -84,3 +86,4 @@ public:
 
     //void DrawDebugUI();
 };
+}

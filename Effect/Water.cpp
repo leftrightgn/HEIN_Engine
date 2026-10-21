@@ -1,11 +1,13 @@
 ﻿#include "pch.h"
 #include "Water.h"
-#include <vector>
 #include <d3dcompiler.h>
+#include <vector>
 
 //#include "ImaseLib/DirectXTK_ImGui.h"
 
 
+namespace HEIN
+{
 Water::Water() 
     : m_indexCount(0)
     , m_totalTime(0) 
@@ -244,3 +246,4 @@ void Water::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& vi
 //#endif // _DEBUG
 //
 //}
+}

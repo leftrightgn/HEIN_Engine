@@ -1,7 +1,7 @@
-//--------------------------------------------------------------------------------------
+ï»¿//--------------------------------------------------------------------------------------
 // File: GridFloor.h
 //
-// ƒOƒŠƒbƒh‚Ì°‚ğ•`‰æ‚·‚éƒNƒ‰ƒX
+// ã‚°ãƒªãƒƒãƒ‰ã®åºŠã‚’æç”»ã™ã‚‹ã‚¯ãƒ©ã‚¹
 //
 // Date: 2023.5.6
 // Author: Hideyasu Imase
@@ -10,12 +10,12 @@
 
 namespace Imase
 {
-	// ƒOƒŠƒbƒh‚Ì°‚ğ•\¦‚·‚éƒ^ƒXƒN
+	// ã‚°ãƒªãƒƒãƒ‰ã®åºŠã‚’è¡¨ç¤ºã™ã‚‹ã‚¿ã‚¹ã‚¯
 	class GridFloor
 	{
 	public:
 
-		// ƒRƒ“ƒXƒgƒ‰ƒNƒ^
+		// ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿
 		GridFloor(
 			ID3D11Device* pDevice,
 			ID3D11DeviceContext* pContext,
@@ -25,7 +25,7 @@ namespace Imase
 			size_t divs = FLOOR_DIVS
 		);
 
-		// •`‰æ
+		// æç”»
 		void Render(
 			ID3D11DeviceContext* pContext,
 			const DirectX::SimpleMath::Matrix& view,
@@ -34,42 +34,42 @@ namespace Imase
 
 	private:
 
-		// ‹¤’ÊƒXƒe[ƒg‚Ö‚Ìƒ|ƒCƒ“ƒ^
+		// å…±é€šã‚¹ãƒ†ãƒ¼ãƒˆã¸ã®ãƒã‚¤ãƒ³ã‚¿
 		DirectX::CommonStates* m_pStates;
 
-		// ƒx[ƒVƒbƒNƒGƒtƒFƒNƒg‚Ö‚Ìƒ|ƒCƒ“ƒ^
+		// ãƒ™ãƒ¼ã‚·ãƒƒã‚¯ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã¸ã®ãƒã‚¤ãƒ³ã‚¿
 		std::unique_ptr<DirectX::BasicEffect> m_basicEffect;
 
-		// ƒvƒŠƒ~ƒeƒBƒuƒoƒbƒ`‚Ö‚Ìƒ|ƒCƒ“ƒ^
+		// ãƒ—ãƒªãƒŸãƒ†ã‚£ãƒ–ãƒãƒƒãƒã¸ã®ãƒã‚¤ãƒ³ã‚¿
 		std::unique_ptr<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>> m_primitiveBatch;
 
-		// “ü—ÍƒŒƒCƒAƒEƒg
+		// å…¥åŠ›ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆ
 		Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout;
 
-		// ƒTƒCƒY
+		// ã‚µã‚¤ã‚º
 		float m_size;
 
-		// •ªŠ„”
+		// åˆ†å‰²æ•°
 		size_t m_divs;
 
-		// •\¦F
+		// è¡¨ç¤ºè‰²
 		DirectX::SimpleMath::Color m_color;
 
 	public:
 
-		// °‚Ì1•Ó‚ÌƒTƒCƒY
+		// åºŠã®1è¾ºã®ã‚µã‚¤ã‚º
 		static const float FLOOR_SIZE;
 
-		// •ªŠ„”
+		// åˆ†å‰²æ•°
 		static const size_t FLOOR_DIVS = 10;
 
-		// °‚Ì‚P•Ó‚ÌƒTƒCƒY‚ğ•ÏX‚·‚éŠÖ”
+		// åºŠã®ï¼‘è¾ºã®ã‚µã‚¤ã‚ºã‚’å¤‰æ›´ã™ã‚‹é–¢æ•°
 		void SetSize(float size) { m_size = size; }
 
-		// °‚Ì•ªŠ„”‚ğ•ÏX‚·‚éŠÖ”
+		// åºŠã®åˆ†å‰²æ•°ã‚’å¤‰æ›´ã™ã‚‹é–¢æ•°
 		void SetDivs(size_t divs) { m_divs = divs; }
 
-		// F‚ğİ’è‚·‚éŠÖ”
+		// è‰²ã‚’è¨­å®šã™ã‚‹é–¢æ•°
 		void SetColor(DirectX::FXMVECTOR color) { m_color = color; }
 
 	};

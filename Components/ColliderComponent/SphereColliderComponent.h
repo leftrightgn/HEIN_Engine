@@ -25,7 +25,7 @@ namespace HEIN
 		void InitializeFromModel(StaticModelComponent* staticModel);
 
 		void Start() override;
-		void Update(float deltaTime) override {}
+		void Update(float /*deltaTime*/) override {}
 
 		void OnInspectorGUI(GameContext& gameContext) override;
 		void SyncColliderState() override;

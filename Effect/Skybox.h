@@ -1,8 +1,8 @@
 #pragma once
 #include "pch.h"
-#include "Framework/GameContext.h"
+#include "GeometricPrimitive.h"
 #include "Effect/SkyboxEffect.h"
-#include <GeometricPrimitive.h>
+#include "Framework/GameContext.h"
 
 namespace HEIN
 {

@@ -1,12 +1,12 @@
 #include "pch.h"
 #include "CollisionDispatcher.h"
 #include "CollisionMath.h"
-#include "Components/ColliderComponent/ColliderComponent.h"
-#include "Components/ColliderComponent/OBBColliderComponent.h"
-#include "Components/ColliderComponent/CapsuleColliderComponent.h"
 #include "Components/ColliderComponent/AABBColliderComponent.h"
-#include <Components/ColliderComponent/MeshColliderComponent.h>
-#include <Components/ColliderComponent/TerrainColliderComponent.h>
+#include "Components/ColliderComponent/CapsuleColliderComponent.h"
+#include "Components/ColliderComponent/ColliderComponent.h"
+#include "Components/ColliderComponent/MeshColliderComponent.h"
+#include "Components/ColliderComponent/OBBColliderComponent.h"
+#include "Components/ColliderComponent/TerrainColliderComponent.h"
 
 // Dispatches appropriate SAT geometry tests based on collider shapes.
 // Ensures consistent Minimum Translation Vector (MTV) direction by inverting the normal 

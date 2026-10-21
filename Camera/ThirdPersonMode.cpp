@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "ThirdPersonMode.h"
-#include <Entities/ActorManager.h>
 #include "CameraCollisionHelper.h"
+#include "Entities/ActorManager.h"
 
 HEIN::ThirdPersonMode::ThirdPersonMode(
 	HEIN::ActorManager* manager,

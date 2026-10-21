@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "RigidBodyComponent.h"
+#include "Components/TransformComponent.h"
+#include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
-#include <Components/TransformComponent.h>
-#include <DebugingTools/DebugUIManager.h>
 
 HEIN::RigidBodyComponent::RigidBodyComponent(Actor* owner)
 	: IComponent(owner)
@@ -27,7 +27,7 @@ void HEIN::RigidBodyComponent::Start()
 	m_transform = GetOwner()->GetComponent<HEIN::TransformComponent>();
 }
 
-void HEIN::RigidBodyComponent::Update(float deltaTime)
+void HEIN::RigidBodyComponent::Update(float /*deltaTime*/)
 {
 	
 }
@@ -75,7 +75,7 @@ void HEIN::RigidBodyComponent::Deserialize(const nlohmann::json& data)
 	if (data.contains("NeedsInitialSnap")) m_needsInitialSnap = data["NeedsInitialSnap"];
 }
 
-void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	if (ImGui::CollapsingHeader("RigidBodyComponent", ImGuiTreeNodeFlags_DefaultOpen))
 	{

@@ -10,8 +10,8 @@
 #include <cassert>
 #include <fstream>
 #include <stdexcept>
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 
 using namespace DX;
 using namespace DirectX;

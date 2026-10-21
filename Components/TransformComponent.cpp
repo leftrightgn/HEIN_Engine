@@ -1,8 +1,6 @@
 #include "pch.h"
 #include "TransformComponent.h"
-//#include <ImGui/imgui.h>
-//#include <ImGui/ImGuizmo.h>
-#include <DebugingTools/DebugUIManager.h>
+#include "DebugingTools/DebugUIManager.h"
 
 HEIN::TransformComponent::TransformComponent(Actor* owner)
     : IComponent(owner)
@@ -14,12 +12,12 @@ HEIN::TransformComponent::TransformComponent(Actor* owner)
 {
 }
 
-void HEIN::TransformComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::TransformComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     bool isActive = (HEIN::g_ActiveGizmoTarget == this);
     if (ImGui::RadioButton("Edit Transform with Gizmo", isActive))
     {
-        HEIN::g_ActiveGizmoTarget = this; // Point the global tracker to THIS specific component!
+        HEIN::g_ActiveGizmoTarget = this; // Set the global tracker to this component.
     }
     if (ImGui::CollapsingHeader("Transform Component", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -172,7 +170,7 @@ void HEIN::TransformComponent::Deserialize(const nlohmann::json& data)
 
 DirectX::SimpleMath::Matrix HEIN::TransformComponent::GetWorldMatrix() const
 {
-    // Ensure strictly normalized before passing to CreateFromQuaternion!
+    // Ensure strictly normalized before quaternion conversion.
     DirectX::SimpleMath::Quaternion normRot = m_rotation;
     normRot.Normalize();
 

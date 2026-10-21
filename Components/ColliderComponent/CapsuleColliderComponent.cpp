@@ -1,7 +1,7 @@
 #include "pch.h"
-#include "Framework/GameContext.h"
 #include "CapsuleColliderComponent.h"
-#include <DebugingTools/DebugUIManager.h>
+#include "DebugingTools/DebugUIManager.h"
+#include "Framework/GameContext.h"
 #include <DirectXColors.h>
 
 HEIN::CapsuleColliderComponent::CapsuleColliderComponent(Actor* owner)
@@ -60,9 +60,9 @@ void HEIN::CapsuleColliderComponent::SyncColliderState()
 
 void HEIN::CapsuleColliderComponent::Draw(
 	GameContext& gameContext, 
-	const DirectX::SimpleMath::Matrix& world,
-	const DirectX::SimpleMath::Matrix& view,
-	const DirectX::SimpleMath::Matrix& proj
+	const DirectX::SimpleMath::Matrix& /*world*/,
+	const DirectX::SimpleMath::Matrix& /*view*/,
+	const DirectX::SimpleMath::Matrix& /*proj*/
 )
 {
 	if (!gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;
@@ -153,38 +153,38 @@ void HEIN::CapsuleColliderComponent::Draw(
 			m_worldBottomCenter + (m_worldrightDir * cosRing * m_radius) + (m_worldforwardDir * sinRing * m_radius);
 		gameContext.debugCollisionRenderer->QueueLine(prevBottomRing, nextBottomRing, debugColor);
 		prevBottomRing = nextBottomRing;
+	}
 
-		float ringSpacing = 2.0f;
+	float ringSpacing = 2.0f;
 
-		int numExtraRings = static_cast<int>(m_height / ringSpacing);
+	int numExtraRings = static_cast<int>(m_height / ringSpacing);
 
-		if (numExtraRings > 0)
+	if (numExtraRings > 0)
+	{
+		// Calculate the exact distance between rings
+		float stepSize = m_height / (numExtraRings + 1);
+
+		for (int r = 1; r <= numExtraRings; r++)
 		{
-			// Calculate the exact distance between rings
-			float stepSize = m_height / (numExtraRings + 1);
+			DirectX::SimpleMath::Vector3 ringCenter =
+				m_worldBottomCenter + (m_worldupDir * (stepSize * r));
 
-			for (int r = 1; r <= numExtraRings; r++)
+			DirectX::SimpleMath::Vector3 prevRingPoint =
+				ringCenter + (m_worldrightDir * m_radius);
+
+			for (int seg = 1; seg <= segments; seg++)
 			{
-				DirectX::SimpleMath::Vector3 ringCenter =
-					m_worldBottomCenter + (m_worldupDir * (stepSize * r));
+				float ringAngle = (DirectX::XM_2PI) * ((float)seg / segments);
 
-				DirectX::SimpleMath::Vector3 prevRingPoint =
-					ringCenter + (m_worldrightDir * m_radius);
+				float cosRing = cos(ringAngle);
+				float sinRing = sin(ringAngle);
 
-				for (int i = 1; i <= segments; i++)
-				{
-					float ringAngle = (DirectX::XM_2PI) * ((float)i / segments);
+				DirectX::SimpleMath::Vector3 nextRingPoint = ringCenter +
+					(m_worldrightDir * cosRing * m_radius) +
+					(m_worldforwardDir * sinRing * m_radius);
 
-					float cosRing = cos(ringAngle);
-					float sinRing = sin(ringAngle);
-
-					DirectX::SimpleMath::Vector3 nextRingPoint = ringCenter +
-						(m_worldrightDir * cosRing * m_radius) +
-						(m_worldforwardDir * sinRing * m_radius);
-
-					gameContext.debugCollisionRenderer->QueueLine(prevRingPoint, nextRingPoint, debugColor);
-					prevRingPoint = nextRingPoint;
-				}
+				gameContext.debugCollisionRenderer->QueueLine(prevRingPoint, nextRingPoint, debugColor);
+				prevRingPoint = nextRingPoint;
 			}
 		}
 	}

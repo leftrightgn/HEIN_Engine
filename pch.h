@@ -4,6 +4,7 @@
 //
 
 #pragma once
+#pragma warning(disable : 4244)
 
 #include <winsdkver.h>
 #ifndef _WIN32_WINNT

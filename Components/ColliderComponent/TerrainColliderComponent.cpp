@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "TerrainColliderComponent.h"
-#include "Entities/Actor.h"
 #include "Components/TransformComponent.h"
-#include <ImGui/imgui.h>
+#include "Entities/Actor.h"
+#include "ImGui/imgui.h"
 #include <cmath>
 
 namespace HEIN
@@ -59,10 +59,10 @@ namespace HEIN
 	}
 
 	void TerrainColliderComponent::Draw(
-		GameContext& gameContext,
-		const DirectX::SimpleMath::Matrix& world,
-		const DirectX::SimpleMath::Matrix& view,
-		const DirectX::SimpleMath::Matrix& proj
+		GameContext& /*gameContext*/,
+		const DirectX::SimpleMath::Matrix& /*world*/,
+		const DirectX::SimpleMath::Matrix& /*view*/,
+		const DirectX::SimpleMath::Matrix& /*proj*/
 	)
 	{
 		// Optional: Implement debug drawing for the terrain collider if needed

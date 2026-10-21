@@ -2,8 +2,8 @@
 #include "AABBColliderComponent.h"
 #include "Components/StaticModelComponent.h"
 #include "Entities/Actor.h"
+#include "ImGui/imgui.h"
 #include <DirectXColors.h>
-#include <ImGui/imgui.h>
 
 HEIN::AABBColliderComponent::AABBColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::AABB)
@@ -64,9 +64,9 @@ void HEIN::AABBColliderComponent::SyncColliderState()
 
 void HEIN::AABBColliderComponent::Draw(
     GameContext& gameContext,
-    const DirectX::SimpleMath::Matrix& world, 
-    const DirectX::SimpleMath::Matrix& view, 
-    const DirectX::SimpleMath::Matrix& proj
+    const DirectX::SimpleMath::Matrix& /*world*/, 
+    const DirectX::SimpleMath::Matrix& /*view*/, 
+    const DirectX::SimpleMath::Matrix& /*proj*/
 )
 {
     if (!gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;

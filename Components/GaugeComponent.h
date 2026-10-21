@@ -1,13 +1,14 @@
 #pragma once
+#include "SimpleMath.h"
+#include "SpriteBatch.h"
+#include "SpriteFont.h"
 #include "Components/IComponent.h"
-#include "Framework/GameContext.h"
 #include "DebugingTools/IGizmoEditable.h"
+#include "Framework/GameContext.h"
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include <functional>
-#include <SimpleMath.h>
-#include "SpriteBatch.h"
 
 namespace HEIN
 {
@@ -108,6 +109,10 @@ namespace HEIN
         float fontSize = 0.8f;
         DirectX::SimpleMath::Vector4 labelColor = { 1.0f, 1.0f, 1.0f, 1.0f };
         DirectX::SimpleMath::Vector2 textOffset = { 0.0f, 0.0f };
+
+        // SpriteFont typography
+        std::wstring spriteFontPath;
+        std::shared_ptr<DirectX::SpriteFont> spriteFont = nullptr;
     };
 
     /**
@@ -155,6 +160,9 @@ namespace HEIN
         float m_activationRange = 20.0f;      // Distance in world units
         float m_deactivationRange = 25.0f;    // Slightly larger to prevent flickering (hysteresis)
         bool m_isInRange = false;             // Runtime state: currently within range?
+
+        void LoadBarFont(ID3D11Device* device, GaugeBarDef& bar);
+        static std::shared_ptr<DirectX::SpriteFont> GetOrCreateFont(ID3D11Device* device, const std::wstring& path);
 
         // Reference canvas (matches UIButtonComponent for consistent scaling)
         static constexpr float kRefWidth = 1280.0f;

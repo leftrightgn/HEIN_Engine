@@ -1,9 +1,9 @@
 #include "pch.h"
 #include "ColliderComponent.h"
-#include "Components/TransformComponent.h"
 #include "Components/StaticModelComponent.h"
+#include "Components/TransformComponent.h"
+#include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
-#include <DebugingTools/DebugUIManager.h>
 
 HEIN::ColliderComponent::ColliderComponent(
 	Actor* owner,
@@ -60,7 +60,7 @@ DirectX::SimpleMath::Matrix HEIN::ColliderComponent::CalculateWorldMatrix()
 	return finalMatrix;
 }
 
-void HEIN::ColliderComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::ColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     ImGui::PushID((void*)this);
 

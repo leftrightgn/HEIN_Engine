@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "Skybox.h"
-#include <Windows.h>
 #include "Components/StaticModelComponent.h"
+#include <Windows.h>
 
 const std::vector<D3D11_INPUT_ELEMENT_DESC> HEIN::Skybox::INPUT_LAYOUT =
 {

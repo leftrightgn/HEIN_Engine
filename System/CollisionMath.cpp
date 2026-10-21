@@ -1,11 +1,11 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "CollisionMath.h"
-#include <Components/ColliderComponent/AABBColliderComponent.h>
-#include <Components/ColliderComponent/ColliderComponent.h>
-#include <Components/ColliderComponent/CapsuleColliderComponent.h>
-#include <Components/ColliderComponent/OBBColliderComponent.h>
-#include <Components/ColliderComponent/MeshColliderComponent.h>
-#include <Components/ColliderComponent/TerrainColliderComponent.h>
+#include "Components/ColliderComponent/AABBColliderComponent.h"
+#include "Components/ColliderComponent/CapsuleColliderComponent.h"
+#include "Components/ColliderComponent/ColliderComponent.h"
+#include "Components/ColliderComponent/MeshColliderComponent.h"
+#include "Components/ColliderComponent/OBBColliderComponent.h"
+#include "Components/ColliderComponent/TerrainColliderComponent.h"
 
 HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColliderComponent* capsule, HEIN::OBBColliderComponent* obb)
 {
@@ -94,7 +94,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColl
     }
     else
     {
-        // Capsule segment is INSIDE the OBB box!
+        // Capsule segment is inside the OBB box.
         // Calculate distance to each of the 6 local faces and push out along the minimum penetration axis
         float distPosX = extents.x - localClosestOnSeg.x;
         float distNegX = localClosestOnSeg.x - (-extents.x);
@@ -121,7 +121,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColl
     return manifold;
 }
 
-HEIN::CollisionManifold HEIN::CollisionMath::CheckOBBvsOBB(HEIN::OBBColliderComponent* obbA, HEIN::OBBColliderComponent* obbB)
+HEIN::CollisionManifold HEIN::CollisionMath::CheckOBBvsOBB(HEIN::OBBColliderComponent* /*obbA*/, HEIN::OBBColliderComponent* /*obbB*/)
 {
     HEIN::CollisionManifold maniflod;
     // TO DO::logic 
@@ -189,7 +189,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsAABB(HEIN::CapsuleCol
     }
     else
     {
-        // Closest segment point is INSIDE the AABB box!
+        // Closest segment point is inside the AABB box.
         // Calculate distance to all 6 faces and push out along the minimum penetration axis
         float distPosX = (aabbPos.x + extents.x) - closestOnSeg.x;
         float distNegX = closestOnSeg.x - (aabbPos.x - extents.x);
@@ -392,7 +392,7 @@ HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsMesh(HEIN::CapsuleCol
             }
         }
 
-        // If this specific ray hit the floor, add its data to the averages!
+        // If this specific ray hit the floor, add its data to the averages.
         if (hitSomethingForThisRay)
         {
             validHits++;

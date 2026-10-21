@@ -1,7 +1,7 @@
 #pragma once
-#include <SimpleMath.h>
 #include "IComponent.h"
-#include <DebugingTools/IGizmoEditable.h>
+#include "SimpleMath.h"
+#include "DebugingTools/IGizmoEditable.h"
 
 namespace HEIN
 {

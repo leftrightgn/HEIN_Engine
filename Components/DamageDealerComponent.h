@@ -1,10 +1,10 @@
 #pragma once
-#include <Components/IComponent.h>
 #include "../Message/IObserver.h"
 #include "../Message/Message.h"
-#include <unordered_set>
-#include <cstdint>
+#include "Components/IComponent.h"
 #include <algorithm>
+#include <cstdint>
+#include <unordered_set>
 
 namespace HEIN
 {

@@ -1,25 +1,25 @@
 #include "pch.h"
 #include "FoliageComponent.h"
-#include "Entities/Actor.h"
-#include "Entities/ActorManager.h"
-#include "Components/TransformComponent.h"
-#include "Components/TerrainComponent.h"
+#include "DDSTextureLoader.h"
 #include "FogComponent.h"
 #include "StaticModelComponent.h"
-#include "Framework/GameContext.h"
-#include "Common/ShadowSystem.h"
+#include "WICTextureLoader.h"
 #include "Camera/CameraController.h"
+#include "System/ShadowSystem.h"
+#include "Components/TerrainComponent.h"
+#include "Components/TransformComponent.h"
 #include "DebugingTools/DebugRenderer.h"
-#include <DDSTextureLoader.h>
-#include <WICTextureLoader.h>
-#include <d3dcompiler.h>
 #include "Effect/ReadData.h"
-#include <ImGui/imgui.h>
-#include <cmath>
-#include <random>
+#include "Entities/Actor.h"
+#include "Entities/ActorManager.h"
+#include "Framework/GameContext.h"
+#include "ImGui/imgui.h"
 #include <algorithm>
-#include <fstream>
+#include <cmath>
+#include <d3dcompiler.h>
 #include <filesystem>
+#include <fstream>
+#include <random>
 
 namespace HEIN
 {
@@ -978,7 +978,7 @@ namespace HEIN
 			// Bounding box intersection check dictates visibility state.
 			if (m_enableFrustumCulling && !worldFrustum.Intersects(cell->boundingBox))
 			{
-				continue; // Cell is off-screen, skip it entirely!
+				continue; // Cell is off-screen, skip it entirely.
 			}
 
 			UpdateCellBuffers(device, context, cell);

@@ -1,7 +1,7 @@
 #pragma once
-#include <Components/IComponent.h>
+#include "Components/IComponent.h"
+#include "Entities/Actor.h"
 #include <string>
-#include <Entities/Actor.h>
 
 namespace HEIN
 {

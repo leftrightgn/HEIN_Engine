@@ -1,16 +1,16 @@
 #include "pch.h"
 #include "ProceduralAnimationComponent.h"
 #include "../Common/SkeletonProfile.h"
-#include "Components/SkinnedModelComponent.h"
-#include "Components/ColliderComponent/TerrainColliderComponent.h"
-#include "Components/ColliderComponent/MeshColliderComponent.h"
+#include "System/CollisionMath.h"
 #include "Components/ColliderComponent/AABBColliderComponent.h"
+#include "Components/ColliderComponent/MeshColliderComponent.h"
+#include "Components/ColliderComponent/TerrainColliderComponent.h"
 #include "Components/RigidBodyComponent.h"
-#include "Common/CollisionMath.h"
+#include "Components/SkinnedModelComponent.h"
 #include "Components/TransformComponent.h"
 #include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
-#include <ImGui/imgui.h>
+#include "ImGui/imgui.h"
 #include <algorithm>
 #include <cmath>
 
@@ -72,7 +72,7 @@ namespace HEIN
         }
     }
 
-    void ProceduralAnimationComponent::OnInspectorGUI(GameContext& gameContext)
+    void ProceduralAnimationComponent::OnInspectorGUI(GameContext& /*gameContext*/)
     {
         if (ImGui::CollapsingHeader("Procedural Animation (Whole Body IK)", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -132,7 +132,7 @@ namespace HEIN
         m_skinnedModel = m_owner->GetComponent<SkinnedModelComponent>();
     }
 
-    void ProceduralAnimationComponent::Update(float deltaTime) {}
+    void ProceduralAnimationComponent::Update(float /*deltaTime*/) {}
 
     void ProceduralAnimationComponent::LateUpdate(float deltaTime)
     {
@@ -141,7 +141,7 @@ namespace HEIN
         SolveWholeBodyIK(deltaTime);
     }
 
-    void ProceduralAnimationComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
+    void ProceduralAnimationComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& /*world*/, const DirectX::SimpleMath::Matrix& /*view*/, const DirectX::SimpleMath::Matrix& /*proj*/)
     {
         if (!gameContext.isEditorMode || !gameContext.showColliders) return;
         if (gameContext.debugCollisionRenderer && !m_debugLines.empty())
@@ -360,7 +360,7 @@ namespace HEIN
         if (alignToTerrain && isGrounded && (m_terrain || m_meshCollider || !m_environmentAABBs.empty()))
         {
             const DirectX::SimpleMath::Vector3 actorPos = worldMatrix.Translation();
-            float groundAtFoot = 0.0f, groundAtActor = 0.0f;
+            float groundAtActor = 0.0f;
 
             // Multi-surface raycast: queries heightmap, static stage AABBs, and static mesh triangle BVH for highest contact
             auto getGroundHeight = [&](const DirectX::SimpleMath::Vector3& pos, float& outHeight, DirectX::SimpleMath::Vector3* outNormal = nullptr) -> bool {
@@ -506,7 +506,7 @@ namespace HEIN
 
         // Flat-Surface & Zero-Offset Optimization (Early Exit):
         // If the ground is flat (normal is Up) and the offset delta is negligible,
-        // the modified pose matches the original animation pose. Skip all trigonometry!
+        // the modified pose matches the original animation pose. Skip procedural trigonometry.
         if (std::abs(currentOffset) < 0.005f && std::abs(targetOffset) < 0.005f &&
             currentNormal.y > 0.99f && std::abs(heightOffset) < 0.001f)
         {

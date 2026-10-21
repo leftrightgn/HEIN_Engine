@@ -1,5 +1,6 @@
 #pragma once
-#include <Common/json.hpp>
+#include "Common/json.hpp"
+
 
 struct GameContext;
 
@@ -61,8 +62,8 @@ namespace HEIN
 		) {}
 
 		virtual void DrawShadow(
-			GameContext& gameContext, 
-			const DirectX::SimpleMath::Matrix& lightViewProj
+			GameContext& /*gameContext*/, 
+			const DirectX::SimpleMath::Matrix& /*lightViewProj*/
 		) {}
 
 		/**
@@ -87,7 +88,7 @@ namespace HEIN
 		 * @brief Draws properties in the inspector GUI.
 		 * @param gameContext The current game context.
 		 */
-		virtual void OnInspectorGUI(GameContext& gamecontext) {}
+		virtual void OnInspectorGUI(GameContext& /*gamecontext*/) {}
 
 		/** @brief Gets the name of the component. */
 		virtual std::string GetComponentName() const { return "Unknown"; }
@@ -96,10 +97,10 @@ namespace HEIN
 		virtual nlohmann::json Serialize() { return nlohmann::json(); }
 
 		/** @brief Deserializes the component data from JSON. */
-		virtual void Deserialize(const nlohmann::json& data) {}
+		virtual void Deserialize(const nlohmann::json& /*data*/) {}
 
 		/** @brief Initializes the component after deserialization. */
-		virtual void InitializeAfterDeserialize(GameContext& gameContext) {}
+		virtual void InitializeAfterDeserialize(GameContext& /*gameContext*/) {}
 
 		/** @brief Gets the owner Actor. */
 		Actor* GetOwner() const { return m_owner; }

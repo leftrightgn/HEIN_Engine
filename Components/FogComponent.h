@@ -1,7 +1,7 @@
 #pragma once
 #include "IComponent.h"
-#include <SimpleMath.h>
-#include <Common/json.hpp>
+#include "SimpleMath.h"
+#include "Common/json.hpp"
 
 namespace HEIN
 {
@@ -14,7 +14,7 @@ namespace HEIN
 
 		FogComponent(Actor* owner);
 
-		void Update(float deltaTime) override {}
+		void Update(float /*deltaTime*/) override {}
 
 		std::string GetComponentName() const override { return "FogComponent"; }
 		nlohmann::json Serialize() override;

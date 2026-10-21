@@ -1,8 +1,8 @@
 #pragma once
 #include "ICameraMode.h"
-#include <SimpleMath.h>
-#include <Components/SkinnedModelComponent.h>
-#include <Entities/Actor.h>
+#include "SimpleMath.h"
+#include "Components/SkinnedModelComponent.h"
+#include "Entities/Actor.h"
 
 namespace HEIN
 {

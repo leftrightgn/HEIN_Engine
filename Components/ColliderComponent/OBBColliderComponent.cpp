@@ -2,8 +2,8 @@
 #include "OBBColliderComponent.h"
 #include "Components/StaticModelComponent.h"
 #include "Entities/Actor.h"
+#include "ImGui/imgui.h"
 #include <DirectXColors.h>
-#include <ImGui/imgui.h>
 
 HEIN::OBBColliderComponent::OBBColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::OBB)
@@ -83,9 +83,9 @@ void HEIN::OBBColliderComponent::SyncColliderState()
 
 void HEIN::OBBColliderComponent::Draw(
     GameContext& gameContext,
-    const DirectX::SimpleMath::Matrix& world,
-    const DirectX::SimpleMath::Matrix& view,
-    const DirectX::SimpleMath::Matrix& proj
+    const DirectX::SimpleMath::Matrix& /*world*/,
+    const DirectX::SimpleMath::Matrix& /*view*/,
+    const DirectX::SimpleMath::Matrix& /*proj*/
 )
 {
     if (!gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;

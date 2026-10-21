@@ -57,7 +57,7 @@ float4 main(PixelInputType input) : SV_Target
     // Convert shadow clip space to NDC
     float3 shadowCoords = input.shadowPos.xyz / input.shadowPos.w;
     
-    // Check if we are inside the orthographic projection box
+    // Check if position is inside the orthographic projection box
     if (shadowCoords.x >= -1.0f && shadowCoords.x <= 1.0f &&
         shadowCoords.y >= -1.0f && shadowCoords.y <= 1.0f &&
         shadowCoords.z >= 0.0f && shadowCoords.z <= 1.0f)
@@ -75,7 +75,7 @@ float4 main(PixelInputType input) : SV_Target
         shadow = lerp(0.5f, 1.0f, shadowPercent);
     }
     
-   // INVERT THE LIGHT DIRECTION!
+   // Invert light direction.
     lightDir = -lightDirection;
     
     lightIntensity = saturate(dot(bumpNormal, lightDir)) * shadow;

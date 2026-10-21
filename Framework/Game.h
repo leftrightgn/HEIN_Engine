@@ -4,18 +4,16 @@
 
 #pragma once
 
+#include "GameContext.h"
 #include "Common/DeviceResources.h"
+#include "Common/EventManager.h"
+#include "Common/InputManager.h"
 #include "Common/StepTimer.h"
-
+#include "DebugingTools/DebugCollisionRenderer.h"
+#include "DebugingTools/DebugRenderer.h"
+#include "Scene/SceneManager.h"
 #include <memory>
 #include <optional>
-#include <Scene/SceneManager.h>
-#include "DebugingTools/DebugRenderer.h"
-#include "Common/InputManager.h"
-#include "DebugingTools/DebugCollisionRenderer.h"
-#include "Common/EventManager.h"
-#include "GameContext.h"
-
 
 /**
  * @brief A basic game implementation that creates a D3D11 device and provides a game loop.

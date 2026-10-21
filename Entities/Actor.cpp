@@ -1,15 +1,14 @@
 #include "pch.h"
 #include "Actor.h"
-#include "Framework/GameContext.h"
-#include "Components/IComponent.h"
-#include <Components/TransformComponent.h>
-#include <Components/SkinnedModelComponent.h>
-#include <Components/ColliderComponent/ColliderComponent.h>
-#include <Factory/ComponentFactory.h>
 #include "ActorManager.h"
-#include <Camera/CameraController.h>
-#include <ImGui/imgui.h>
-
+#include "Camera/CameraController.h"
+#include "Components/ColliderComponent/ColliderComponent.h"
+#include "Components/IComponent.h"
+#include "Components/SkinnedModelComponent.h"
+#include "Components/TransformComponent.h"
+#include "Factory/ComponentFactory.h"
+#include "Framework/GameContext.h"
+#include "ImGui/imgui.h"
 
 HEIN::Actor::Actor(ActorID id, const std::wstring& tag)
 	: m_id(id)
@@ -190,7 +189,7 @@ void HEIN::Actor::DrawInspector(GameContext& gameContext)
 		ImGui::PushID(comp.get());
 		comp->OnInspectorGUI(gameContext);
 		
-		// it is important to prevent removing TransformComponent since the engine relies heavily on it being there!
+		// it is important to prevent removing TransformComponent since the engine relies heavily on it being present.
 		if (comp->GetComponentName() != "TransformComponent")
 		{
 			std::string removeBtn = "Remove " + comp->GetComponentName();

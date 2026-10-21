@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "FirstPersonMode.h"
-#include <Entities/Actor.h>
-#include <Entities/ActorManager.h>
+#include "Entities/Actor.h"
+#include "Entities/ActorManager.h"
 
 HEIN::FirstPersonMode::FirstPersonMode(
 	HEIN::ActorManager* manager,

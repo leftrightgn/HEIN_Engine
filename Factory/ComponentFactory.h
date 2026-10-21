@@ -1,38 +1,37 @@
 #pragma once
+#include "Entities/Actor.h"
+#include "Entities/ActorManager.h"
+#include "Camera/CameraController.h"
+#include "Components/BoneLinkComponent.h"
+#include "Components/ColliderComponent/AABBColliderComponent.h"
+#include "Components/ColliderComponent/CapsuleColliderComponent.h"
+#include "Components/ColliderComponent/MeshColliderComponent.h"
+#include "Components/ColliderComponent/OBBColliderComponent.h"
+#include "Components/ColliderComponent/SphereColliderComponent.h"
+#include "Components/ColliderComponent/TerrainColliderComponent.h"
+#include "Components/DamageDealerComponent.h"
+#include "Components/FogComponent.h"
+#include "Components/FoliageComponent.h"
+#include "Components/GaugeComponent.h"
+#include "Components/HealthComponent.h"
+#include "Components/LightComponent.h"
+#include "Components/ProceduralAnimationComponent.h"
+#include "Components/RigidBodyComponent.h"
+#include "Components/SkinnedModelComponent.h"
+#include "Components/SlidingDoorComponent.h"
+#include "Components/SocketAttachmentComponent.h"
+#include "Components/SocketComponent.h"
+#include "Components/StaticModelComponent.h"
+#include "Components/TargetTrackingComponent.h"
+#include "Components/TerrainComponent.h"
+#include "Components/TransformComponent.h"
+#include "Components/TwoBoneLinkComponent.h"
+#include "Components/UIButtonComponent.h"
+#include "Components/WeaponTrailComponent.h"
+#include <algorithm>
+#include <functional>
 #include <string>
 #include <unordered_map>
-#include <functional>
-#include <Entities/Actor.h>
-#include <Entities/ActorManager.h>
-#include <Components/TransformComponent.h>
-#include <Components/DamageDealerComponent.h>
-#include <Components/HealthComponent.h>
-#include <Camera/CameraController.h>
-#include <Components/RigidBodyComponent.h>
-#include <Components/SkinnedModelComponent.h>
-#include <Components/TargetTrackingComponent.h>
-#include <Components/StaticModelComponent.h>
-#include <Components/BoneLinkComponent.h>
-#include <Components/SocketComponent.h>
-#include <Components/SocketAttachmentComponent.h>
-#include <Components/TwoBoneLinkComponent.h>
-#include <Components/ColliderComponent/AABBColliderComponent.h>
-#include <Components/ColliderComponent/CapsuleColliderComponent.h>
-#include <Components/ColliderComponent/MeshColliderComponent.h>
-#include <Components/ColliderComponent/OBBColliderComponent.h>
-#include <Components/ColliderComponent/SphereColliderComponent.h>
-#include <Components/ColliderComponent/TerrainColliderComponent.h>
-#include <Components/UIButtonComponent.h>
-#include <Components/TerrainComponent.h>
-#include <Components/LightComponent.h>
-#include <Components/SlidingDoorComponent.h>
-#include <Components/ProceduralAnimationComponent.h>
-#include <Components/FogComponent.h>
-#include <Components/FoliageComponent.h>
-#include <Components/GaugeComponent.h>
-#include <Components/WeaponTrailComponent.h>
-
-#include <algorithm>
 
 namespace HEIN
 {
@@ -65,7 +64,7 @@ namespace HEIN
 		template <typename T>
 		static void RegisterComponent(const std::string& name)
 		{
-			m_creators[name] = [](HEIN::Actor* owner, HEIN::ActorManager* manager) -> HEIN::IComponent* {
+			m_creators[name] = [](HEIN::Actor* owner, [[maybe_unused]] HEIN::ActorManager* manager) -> HEIN::IComponent* {
 				if constexpr (std::is_constructible_v<T, HEIN::Actor*, HEIN::ActorManager*>)
 				{
 					return owner->AddComponent<T>(manager);

@@ -8,11 +8,11 @@
 //--------------------------------------------------------------------------------------
 #pragma once
 
-#include "Common/StepTimer.h"
 #include "Common/DeviceResources.h"
-#include "DebugingTools/DebugRenderer.h"
-#include "DebugingTools/DebugCollisionRenderer.h"
 #include "Common/EventManager.h"
+#include "Common/StepTimer.h"
+#include "DebugingTools/DebugCollisionRenderer.h"
+#include "DebugingTools/DebugRenderer.h"
 
 namespace HEIN { 
 	class CameraController; 

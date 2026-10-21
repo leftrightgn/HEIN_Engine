@@ -1,10 +1,10 @@
 #include "pch.h"
 #include "MeshColliderComponent.h"
+#include "DebugingTools/EditorUtils.h"
+#include "Framework/GameContext.h"
+#include "ImGui/imgui.h"
 #include <fstream>
 #include <sstream>
-#include <Framework/GameContext.h>
-#include <DebugingTools/EditorUtils.h>
-#include <ImGui/imgui.h>
 
 HEIN::MeshColliderComponent::MeshColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::Mesh)
@@ -242,9 +242,9 @@ void HEIN::MeshColliderComponent::SyncColliderState()
 
 void HEIN::MeshColliderComponent::Draw(
 	GameContext& gameContext, 
-	const DirectX::SimpleMath::Matrix& world, 
-	const DirectX::SimpleMath::Matrix& view, 
-	const DirectX::SimpleMath::Matrix& proj
+	const DirectX::SimpleMath::Matrix& /*world*/, 
+	const DirectX::SimpleMath::Matrix& /*view*/, 
+	const DirectX::SimpleMath::Matrix& /*proj*/
 )
 {
 	if (!gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;

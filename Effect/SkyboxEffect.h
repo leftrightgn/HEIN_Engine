@@ -9,12 +9,10 @@
 
 #pragma once
 
-#include <BufferHelpers.h>
-#include <Effects.h>
-#include <SimpleMath.h>
-
+#include "BufferHelpers.h"
+#include "Effects.h"
+#include "SimpleMath.h"
 #include <vector>
-
 
 namespace DX
 {

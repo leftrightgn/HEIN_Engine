@@ -1,20 +1,64 @@
 #include "pch.h"
 #include "TerrainComponent.h"
+#include "FogComponent.h"
+#include "LightComponent.h"
+#include "StaticModelComponent.h"
+#include "TransformComponent.h"
+#include "Camera/CameraController.h"
+#include "System/ShadowSystem.h"
+#include "DebugingTools/DebugUIManager.h"
+#include "DebugingTools/EditorUtils.h"
+#include "Effect/ReadData.h"
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
-#include "TransformComponent.h"
-#include "Common/ShadowSystem.h"
-#include "FogComponent.h"
-#include "LightComponent.h"
-#include "DebugingTools/DebugUIManager.h"
-#include "DebugingTools/EditorUtils.h"
-#include <ImGui/imgui_stdlib.h>
+#include "ImGui/imgui_stdlib.h"
 #include <cstdio>
 #include <d3dcompiler.h>
-#include "Effect/ReadData.h"
-#include "Camera/CameraController.h"
-#include "StaticModelComponent.h"
+
+static FILE* OpenFileWithFallback(const wchar_t* filename, const wchar_t* mode, std::wstring* outResolvedPath = nullptr)
+{
+	if (!filename || filename[0] == L'\0') return nullptr;
+
+	std::vector<std::wstring> candidates = {
+		filename,
+		std::wstring(L"Dual/") + filename,
+		std::wstring(L"../Dual/") + filename,
+		std::wstring(L"../../Dual/Dual/") + filename,
+		std::wstring(L"../") + filename
+	};
+
+	std::wstring fnStr = filename;
+	size_t dotPos = fnStr.find_last_of(L'.');
+	if (dotPos != std::wstring::npos)
+	{
+		std::wstring base = fnStr.substr(0, dotPos);
+		std::wstring ext = fnStr.substr(dotPos);
+		if (_wcsicmp(ext.c_str(), L".bmp") == 0)
+		{
+			candidates.push_back(base + L".r16");
+			candidates.push_back(L"Dual/" + base + L".r16");
+			candidates.push_back(L"../Dual/" + base + L".r16");
+			if (base.find(L"_with_road") == std::wstring::npos)
+			{
+				candidates.push_back(base + L"_with_road.bmp");
+				candidates.push_back(L"Dual/" + base + L"_with_road.bmp");
+				candidates.push_back(L"../Dual/" + base + L"_with_road.bmp");
+			}
+		}
+	}
+
+	for (const auto& candidate : candidates)
+	{
+		FILE* fp = nullptr;
+		if (_wfopen_s(&fp, candidate.c_str(), mode) == 0 && fp != nullptr)
+		{
+			if (outResolvedPath) *outResolvedPath = candidate;
+			return fp;
+		}
+	}
+	return nullptr;
+}
 
 HEIN::TerrainComponent::TerrainComponent(Actor* owner)
 	: IComponent(owner)
@@ -52,21 +96,27 @@ bool HEIN::TerrainComponent::Initialize(
 	{
 		return false;
 	}
-	// Detect File extension(.bmp vs .raw)
-	std::wstring ext = m_heightMapFilename;
+	// Resolve and detect file extension (.bmp vs .r16 / .raw)
+	std::wstring resolvedHeightMapPath = m_heightMapFilename;
+	FILE* testFp = OpenFileWithFallback(m_heightMapFilename.c_str(), L"rb", &resolvedHeightMapPath);
+	if (testFp)
+	{
+		fclose(testFp);
+	}
+
+	std::wstring ext = resolvedHeightMapPath;
 	size_t exPos = ext.find_last_of(L".");
 	bool isRaw = false;
 
 	if (exPos != std::wstring::npos)
 	{
 		std::wstring extension = ext.substr(exPos + 1);
-
 		std::transform(extension.begin(), extension.end(), extension.begin(), towlower);
-		if (extension == L"r16") isRaw = true;
+		if (extension == L"r16" || extension == L"raw") isRaw = true;
 	}
 	bool success = false;
-	if (isRaw) success = LoadRawHeightMap(heightMapFilename);
-	else success = LoadHeightMap(heightMapFilename);
+	if (isRaw) success = LoadRawHeightMap(resolvedHeightMapPath.c_str());
+	else success = LoadHeightMap(resolvedHeightMapPath.c_str());
 
 	if (!success)
 	{
@@ -965,16 +1015,16 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 
 bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 {
-	FILE* filePtr;
 	BITMAPFILEHEADER bitmapFileHeader;
 	BITMAPINFOHEADER bitmapInfoHeader;
 	int imageSize, index, i, j;
 	unsigned char* bitmapImage;
 	unsigned char height;
 
-	// Open the heightMap file in the Binary
-	int error = _wfopen_s(&filePtr, filename, L"rb");
-	if (error != 0) return false;
+	// Open the heightMap file with fallback resolution
+	std::wstring resolvedPath;
+	FILE* filePtr = OpenFileWithFallback(filename, L"rb", &resolvedPath);
+	if (!filePtr) return false;
 
 	// Read the FileHeader
 	fread(&bitmapFileHeader, sizeof(bitmapFileHeader), 1, filePtr);
@@ -1025,11 +1075,10 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 
 bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 {
-	FILE* filePtr;
-
-	// Open the 16bit raw file in binary mode
-	int error = _wfopen_s(&filePtr, filename, L"rb");
-	if (error != 0) return false;
+	// Open the 16bit raw file with fallback resolution
+	std::wstring resolvedPath;
+	FILE* filePtr = OpenFileWithFallback(filename, L"rb", &resolvedPath);
+	if (!filePtr) return false;
 
 	// Automatically Calculate the grid Dimensions by checking the file size
 	fseek(filePtr, 0, SEEK_END);
@@ -1062,7 +1111,7 @@ bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 		{
 			int rawIndex = (j * m_terrainWidth) + i;
 			int index = j * m_terrainWidth + i;
-			// Normalize by dividing by 65535 instead of 255!
+			// Normalize by dividing by 65535 instead of 255.
 			m_heightMap[index].y = (float)rawImage[rawIndex] / 65535.0f;
 		}
 	}
@@ -1241,7 +1290,7 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 				}
 			}
 
-			// Hand the memory over to the new cell and save it!
+			// Assign memory to the new cell and save.
 			auto cell = std::make_unique<TerrainCell>();
 			cell->Initialize(device, vertices.data(), (int)vertices.size(), indices.data(), (int)indices.size());
 			m_cells.push_back(std::move(cell));
@@ -1257,15 +1306,15 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 
 bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
 {
-	FILE* filePtr;
 	BITMAPFILEHEADER bitmapFileHeader;
 	BITMAPINFOHEADER bitmapInfoHeader;
 	int imageSize, index, i, j;
 	unsigned char* bitmapImage;
 
-	// open the color map file
-	int error = _wfopen_s(&filePtr, filename, L"rb");
-	if (error != 0) return false;
+	// Open the color map file with fallback resolution
+	std::wstring resolvedPath;
+	FILE* filePtr = OpenFileWithFallback(filename, L"rb", &resolvedPath);
+	if (!filePtr) return false;
 
 	fread(&bitmapFileHeader, sizeof(bitmapFileHeader), 1, filePtr);
 	fread(&bitmapInfoHeader, sizeof(bitmapInfoHeader), 1, filePtr);
@@ -1298,7 +1347,7 @@ bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
 			int pixelOffset = (m_terrainHeight - 1 - j) * rowPitch + i * bytesPerPixel;
 			index = j * m_terrainWidth + i;
 
-			// Windows BMP files store pixels in BGR (Blue, Green, Red) format!
+			// Windows BMP files store pixels in BGR format.
 			m_colorMap[index].z = (float)bitmapImage[pixelOffset] / 255.0f;     // B
 			m_colorMap[index].y = (float)bitmapImage[pixelOffset + 1] / 255.0f; // G
 			m_colorMap[index].x = (float)bitmapImage[pixelOffset + 2] / 255.0f; // R

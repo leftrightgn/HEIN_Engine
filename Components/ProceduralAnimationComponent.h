@@ -1,6 +1,6 @@
 #pragma once
-#include <Components/IComponent.h>
-#include <SimpleMath.h>
+#include "SimpleMath.h"
+#include "Components/IComponent.h"
 #include <string>
 #include <vector>
 

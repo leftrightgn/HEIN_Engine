@@ -23,6 +23,7 @@
     <ProjectGuid>{7B25AEB1-3C1E-45A1-910F-7E1184E03743}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <SolutionDir Condition="'$(SolutionDir)'==''">$(MSBuildThisFileDirectory)..\..\</SolutionDir>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -89,6 +90,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level4</WarningLevel>
+      <DisableSpecificWarnings>4244;26819;26495;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -115,6 +117,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level4</WarningLevel>
+      <DisableSpecificWarnings>4244;26819;26495;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -141,6 +144,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level4</WarningLevel>
+      <DisableSpecificWarnings>4244;26819;26495;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -171,6 +175,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level4</WarningLevel>
+      <DisableSpecificWarnings>4244;26819;26495;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -201,7 +206,7 @@
     <ClInclude Include="Camera\ManualCameraMode.h" />
     <ClInclude Include="Common\json.hpp" />
     <ClInclude Include="Common\TerrainCell.h" />
-    <ClInclude Include="Common\ShadowSystem.h" />
+    <ClInclude Include="System\ShadowSystem.h" />
     <ClInclude Include="Common\ShaderStructures.h" />
     <ClInclude Include="Components\AnimationEditorComponent.h" />
     <ClInclude Include="Components\LightComponent.h" />
@@ -220,7 +225,7 @@
   <ItemGroup>
     <ClCompile Include="Camera\ManualCameraMode.cpp" />
     <ClCompile Include="Common\TerrainCell.cpp" />
-    <ClCompile Include="Common\ShadowSystem.cpp" />
+    <ClCompile Include="System\ShadowSystem.cpp" />
     <ClCompile Include="Components\AnimationEditorComponent.cpp" />
     <ClCompile Include="Components\ColliderComponent\TerrainColliderComponent.cpp" />
     <ClCompile Include="Components\ProceduralAnimationComponent.cpp" />
@@ -354,7 +359,6 @@
       <ErrorText>このプロジェクトは、このコンピューター上にない NuGet パッケージを参照しています。それらのパッケージをダウンロードするには、[NuGet パッケージの復元] を使用します。詳細については、http://go.microsoft.com/fwlink/?LinkID=322105 を参照してください。見つからないファイルは {0} です。</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('$(SolutionDir)packages\directxtk_desktop_win10.2026.4.1.1\build\native\directxtk_desktop_win10.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)packages\directxtk_desktop_win10.2026.4.1.1\build\native\directxtk_desktop_win10.targets'))" />
-    <Error Condition="!Exists('$(SolutionDir)packages\directxtk_desktop_win10.2026.5.8.1\build\native\directxtk_desktop_win10.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)packages\directxtk_desktop_win10.2026.5.8.1\build\native\directxtk_desktop_win10.targets'))" />
   </Target>
   <ItemGroup />
   <ItemGroup />
@@ -379,13 +383,13 @@
     <ClInclude Include="Camera\ICameraMode.h" />
     <ClInclude Include="Camera\SpringCameraMode.h" />
     <ClInclude Include="Camera\ThirdPersonMode.h" />
-    <ClInclude Include="Common\CollisionDispatcher.h" />
-    <ClInclude Include="Common\CollisionMath.h" />
+    <ClInclude Include="System\CollisionDispatcher.h" />
+    <ClInclude Include="System\CollisionMath.h" />
     <ClInclude Include="Common\DeviceResources.h" />
     <ClInclude Include="Common\Event.h" />
     <ClInclude Include="Common\EventManager.h" />
     <ClInclude Include="Common\InputManager.h" />
-    <ClInclude Include="Common\PhysicsSystem.h" />
+    <ClInclude Include="System\PhysicsSystem.h" />
     <ClInclude Include="Common\SkeletonProfile.h" />
     <ClInclude Include="Common\StepTimer.h" />
     <ClInclude Include="Components\BoneLinkComponent.h" />
@@ -445,12 +449,12 @@
     <ClCompile Include="Camera\FirstPersonMode.cpp" />
     <ClCompile Include="Camera\SpringCameraMode.cpp" />
     <ClCompile Include="Camera\ThirdPersonMode.cpp" />
-    <ClCompile Include="Common\CollisionDispatcher.cpp" />
-    <ClCompile Include="Common\CollisionMath.cpp" />
+    <ClCompile Include="System\CollisionDispatcher.cpp" />
+    <ClCompile Include="System\CollisionMath.cpp" />
     <ClCompile Include="Common\DeviceResources.cpp" />
     <ClCompile Include="Common\EventManager.cpp" />
     <ClCompile Include="Common\InputManager.cpp" />
-    <ClCompile Include="Common\PhysicsSystem.cpp" />
+    <ClCompile Include="System\PhysicsSystem.cpp" />
     <ClCompile Include="Components\BoneLinkComponent.cpp" />
     <ClCompile Include="Components\RigidBodyComponent.cpp" />
     <ClCompile Include="Components\SkinnedModelComponent.cpp" />
@@ -523,14 +527,14 @@
     <None Include="Shaders\WaterVs.hlsl" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Common\DamageSystem.h" />
+    <ClInclude Include="System\DamageSystem.h" />
     <ClInclude Include="Components\HealthComponent.h" />
     <ClInclude Include="Components\DamageDealerComponent.h" />
     <ClInclude Include="Components\TargetTrackingComponent.h" />
     <ClInclude Include="Camera\LockOnCameraMode.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Common\DamageSystem.cpp" />
+    <ClCompile Include="System\DamageSystem.cpp" />
     <ClCompile Include="Components\HealthComponent.cpp" />
     <ClCompile Include="Components\DamageDealerComponent.cpp" />
     <ClCompile Include="Components\TargetTrackingComponent.cpp" />
@@ -539,6 +543,5 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(SolutionDir)packages\directxtk_desktop_win10.2026.4.1.1\build\native\directxtk_desktop_win10.targets" Condition="Exists('$(SolutionDir)packages\directxtk_desktop_win10.2026.4.1.1\build\native\directxtk_desktop_win10.targets')" />
-    <Import Project="$(SolutionDir)packages\directxtk_desktop_win10.2026.5.8.1\build\native\directxtk_desktop_win10.targets" Condition="Exists('$(SolutionDir)packages\directxtk_desktop_win10.2026.5.8.1\build\native\directxtk_desktop_win10.targets')" />
   </ImportGroup>
 </Project>

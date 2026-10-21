@@ -25,27 +25,28 @@ float CalculateShadow(float4 lightSpacePos)
     projCoords.x = projCoords.x * 0.5f + 0.5f;
     projCoords.y = -projCoords.y * 0.5f + 0.5f;
 
+    float shadow = 1.0f;
     // Ignore shadow if outside map bounds
-    if (projCoords.x < 0.0f || projCoords.x > 1.0f || projCoords.y < 0.0f || projCoords.y > 1.0f)
-        return 1.0f;
-
-    float currentDepth = projCoords.z;
-    float shadow = 0.0f;
-    float bias = 0.0005f; // Shadow bias to prevent shadow acne
-    
-    // 3x3 Hardware PCF Filtering using SampleCmpLevelZero
-    float2 texelSize = 1.0f / 2048.0f;
-    
-    for (int x = -1; x <= 1; ++x)
+    if (!(projCoords.x < 0.0f || projCoords.x > 1.0f || projCoords.y < 0.0f || projCoords.y > 1.0f))
     {
-        for (int y = -1; y <= 1; ++y)
+        float currentDepth = projCoords.z;
+        float shadowSum = 0.0f;
+        float bias = 0.0005f; // Shadow bias to prevent shadow acne
+        
+        // 3x3 Hardware PCF Filtering using SampleCmpLevelZero
+        float2 texelSize = 1.0f / 2048.0f;
+        
+        for (int x = -1; x <= 1; ++x)
         {
-            float2 uv = projCoords.xy + float2(x, y) * texelSize;
-            float pcfResult = ShadowMap.SampleCmpLevelZero(ShadowSampler, uv, currentDepth - bias).r;
-            shadow += pcfResult;
+            for (int y = -1; y <= 1; ++y)
+            {
+                float2 uv = projCoords.xy + float2(x, y) * texelSize;
+                float pcfResult = ShadowMap.SampleCmpLevelZero(ShadowSampler, uv, currentDepth - bias).r;
+                shadowSum += pcfResult;
+            }
         }
+        shadow = shadowSum / 9.0f;
     }
-    shadow /= 9.0f;
     
     return shadow; // Returns 0.0 for shadow, 1.0 for light
 }

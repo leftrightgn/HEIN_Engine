@@ -1,9 +1,9 @@
 #include "pch.h"
 #include "LightComponent.h"
-#include <ImGui/imgui.h>
-#include "Framework/GameContext.h"
-#include "Entities/Actor.h"
 #include "Components/TransformComponent.h"
+#include "Entities/Actor.h"
+#include "Framework/GameContext.h"
+#include "ImGui/imgui.h"
 
 namespace HEIN
 {
@@ -40,7 +40,7 @@ namespace HEIN
         if (data.contains("CastShadows")) m_castShadows = data["CastShadows"];
     }
 
-    void LightComponent::OnInspectorGUI(GameContext& gameContext)
+    void LightComponent::OnInspectorGUI(GameContext& /*gameContext*/)
     {
         if (ImGui::CollapsingHeader("Light Component", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -70,7 +70,7 @@ namespace HEIN
         }
     }
 
-    void LightComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
+    void LightComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& /*world*/, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
     {
         if (!gameContext.isEditorMode) return;
 

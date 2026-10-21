@@ -1,6 +1,6 @@
 #pragma once
+#include "SimpleMath.h"
 #include "Components/IComponent.h"
-#include <SimpleMath.h>
 
 namespace HEIN
 {
@@ -30,7 +30,7 @@ namespace HEIN
         ~LightComponent() override = default;
 
         void Start() override {}
-        void Update(float deltaTime) override {}
+        void Update(float /*deltaTime*/) override {}
         void Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj) override;
 
         // Getters for the Render System

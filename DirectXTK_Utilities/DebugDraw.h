@@ -9,12 +9,10 @@
 
 #pragma once
 
-#include <DirectXColors.h>
-#include <DirectXCollision.h>
-
 #include "PrimitiveBatch.h"
 #include "VertexTypes.h"
-
+#include <DirectXCollision.h>
+#include <DirectXColors.h>
 
 namespace DX
 {

@@ -1,12 +1,12 @@
 #pragma once
-#include <Components/IComponent.h>
 #include "../Message/IObserver.h"
 #include "../Message/Message.h"
+#include "SimpleMath.h"
+#include "Components/IComponent.h"
 #include <array>
 #include <cstdint>
-#include <wrl/client.h>
 #include <d3d11.h>
-#include <SimpleMath.h>
+#include <wrl/client.h>
 
 namespace HEIN
 {

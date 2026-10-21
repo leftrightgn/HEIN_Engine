@@ -1,5 +1,6 @@
 #pragma once
-#include <BehaviourTree/BTNode.h>
+#include "BehaviourTree/BTNode.h"
+
 
 namespace HEIN
 {

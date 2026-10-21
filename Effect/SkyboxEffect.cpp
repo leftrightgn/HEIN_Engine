@@ -9,14 +9,10 @@
 
 #include "pch.h"
 #include "SkyboxEffect.h"
-
 #include "DirectXHelpers.h"
 #include "GraphicsMemory.h"
-
 #include "ReadData.h"
-
 #include <stdexcept>
-
 
 using namespace DirectX;
 using namespace DX;

@@ -1,7 +1,7 @@
 #pragma once
+#include "SimpleMath.h"
 #include <d3d11.h>
 #include <wrl/client.h>
-#include <SimpleMath.h>
 
 namespace HEIN {
     class ShadowSystem {

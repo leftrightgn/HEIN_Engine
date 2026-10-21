@@ -1,7 +1,7 @@
 #pragma once
 #include "IComponent.h"
-#include <string>
 #include "Common/TerrainCell.h"
+#include <string>
 
 namespace HEIN
 {
@@ -120,7 +120,7 @@ namespace HEIN
 			float textureTiling = 1.0f
 		);
 
-		void Update(float deltaTime) override {}
+		void Update(float /*deltaTime*/) override {}
 
 		void Draw(
 			GameContext& gameContext,

@@ -3,8 +3,8 @@
 #include "Components/SkinnedModelComponent.h"
 #include "Components/StaticModelComponent.h"
 #include "Components/TransformComponent.h"
+#include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
-#include <DebugingTools/DebugUIManager.h>
 
 HEIN::SocketComponent::SocketComponent(Actor* owner)
     : IComponent(owner)
@@ -37,7 +37,7 @@ void HEIN::SocketComponent::UpdateSocketOffset(
     }
 }
 
-void HEIN::SocketComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::SocketComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     bool isActive = (HEIN::g_ActiveGizmoTarget == this);
     if (ImGui::RadioButton("Edit socket with Gizmo", isActive))
@@ -137,7 +137,7 @@ void HEIN::SocketComponent::DrawGizmo(
             DirectX::SimpleMath::Matrix socketWorld = offsetMatrix * cleanBoneMatrix;
 
             // Scope identifier to prevent ImGuizmo state collision across multiple sockets
-            ImGuizmo::SetID(gizmoId++);
+            ImGuizmo::PushID(gizmoId++);
 
             ImGuizmo::Manipulate(
                 (float*)&view.m[0][0],
@@ -175,6 +175,7 @@ void HEIN::SocketComponent::DrawGizmo(
                     socket.localRotation.z = std::atan2(sinr, cosr);
                 }
             }
+            ImGuizmo::PopID();
         }
     }
 }

@@ -1,8 +1,8 @@
 #pragma once
+#include "pch.h"
+#include "Model.h"
 #include "Components/IComponent.h"
 #include "Framework/GameContext.h"
-#include "pch.h"
-#include <Model.h>
 
 namespace HEIN
 {

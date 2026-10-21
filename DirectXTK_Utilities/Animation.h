@@ -9,10 +9,9 @@
 //--------------------------------------------------------------------------------------
 #pragma once
 
+#include "Model.h"
+#include "SimpleMath.h"
 #include <DirectXMath.h>
-#include <Model.h>
-#include <SimpleMath.h>
-
 #include <memory>
 #include <utility>
 #include <vector>

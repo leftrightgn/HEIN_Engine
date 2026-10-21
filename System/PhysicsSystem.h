@@ -1,8 +1,8 @@
 #pragma once
-#include <vector>
-#include <memory>
-#include "Framework/GameContext.h"
 #include "CollisionDispatcher.h"
+#include "Framework/GameContext.h"
+#include <memory>
+#include <vector>
 
 namespace HEIN
 {

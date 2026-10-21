@@ -1,9 +1,9 @@
 #include "pch.h"
 #include "SocketAttachmentComponent.h"
-#include <Entities/ActorManager.h>
-#include <Components/SocketComponent.h>
-#include <Components/TransformComponent.h>
-#include <DebugingTools/DebugUIManager.h>
+#include "Components/SocketComponent.h"
+#include "Components/TransformComponent.h"
+#include "DebugingTools/DebugUIManager.h"
+#include "Entities/ActorManager.h"
 
 HEIN::SocketAttachmentComponent::SocketAttachmentComponent(Actor* owner, ActorManager* manager)
 	: IComponent(owner)
@@ -29,7 +29,7 @@ void HEIN::SocketAttachmentComponent::Initialize(HEIN::ActorID targetActorID, co
 	}
 }
 
-void HEIN::SocketAttachmentComponent::LateUpdate(float deltaTime)
+void HEIN::SocketAttachmentComponent::LateUpdate(float /*deltaTime*/)
 {
 	if (m_actorManager == nullptr) return;
 
@@ -164,7 +164,7 @@ void HEIN::SocketAttachmentComponent::Deserialize(const nlohmann::json& data)
     }
 }
 
-void HEIN::SocketAttachmentComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::SocketAttachmentComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	if (ImGui::CollapsingHeader("SocketAttachmentComponent", ImGuiTreeNodeFlags_DefaultOpen))
 	{

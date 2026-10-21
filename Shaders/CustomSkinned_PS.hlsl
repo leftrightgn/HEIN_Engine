@@ -20,29 +20,31 @@ float CalculateShadow(float4 lightSpacePos, float3 normal, float3 lightDir)
     projCoords.x = projCoords.x * 0.5f + 0.5f;
     projCoords.y = -projCoords.y * 0.5f + 0.5f;
 
-    if (projCoords.x < 0.0f || projCoords.x > 1.0f || projCoords.y < 0.0f || projCoords.y > 1.0f || projCoords.z > 1.0f)
-        return 1.0f;
-
-    float currentDepth = projCoords.z;
-    
-    // Slope-scaled bias prevents striped/sparkling shadow acne on curved armor and cloth
-    float cosTheta = saturate(dot(normal, lightDir));
-    float bias = max(0.002f * (1.0f - cosTheta), 0.0005f);
-    
-    float shadow = 0.0f;
-    float2 texelSize = 1.0f / 2048.0f;
-    
-    [unroll]
-    for (int x = -1; x <= 1; ++x)
+    float shadow = 1.0f;
+    if (!(projCoords.x < 0.0f || projCoords.x > 1.0f || projCoords.y < 0.0f || projCoords.y > 1.0f || projCoords.z > 1.0f))
     {
+        float currentDepth = projCoords.z;
+        
+        // Slope-scaled bias prevents striped/sparkling shadow acne on curved armor and cloth
+        float cosTheta = saturate(dot(normal, lightDir));
+        float bias = max(0.002f * (1.0f - cosTheta), 0.0005f);
+        
+        float shadowSum = 0.0f;
+        float2 texelSize = 1.0f / 2048.0f;
+        
         [unroll]
-        for (int y = -1; y <= 1; ++y)
+        for (int x = -1; x <= 1; ++x)
         {
-            float2 uv = projCoords.xy + float2(x, y) * texelSize;
-            shadow += ShadowMap.SampleCmpLevelZero(ShadowSampler, uv, currentDepth - bias).r;
+            [unroll]
+            for (int y = -1; y <= 1; ++y)
+            {
+                float2 uv = projCoords.xy + float2(x, y) * texelSize;
+                shadowSum += ShadowMap.SampleCmpLevelZero(ShadowSampler, uv, currentDepth - bias).r;
+            }
         }
+        shadow = shadowSum / 9.0f;
     }
-    return shadow / 9.0f;
+    return shadow;
 }
 
 // ==============================================================================
@@ -92,14 +94,14 @@ float4 main(VSOutput input) : SV_TARGET
         return float4(finalColor, finalAlpha);
     }
 
-    // 1. Clean Alpha Cutout for tattered cape / chainmail holes
+    // Clean Alpha Cutout for tattered cape / chainmail holes
     // Discards transparent pixels so they don't write garbage to the Depth Buffer
     clip(baseColor.a - 0.35f);
 
     float3 norm = normalize(input.Normal);
     float3 viewDir = normalize(CameraPos - input.WorldPos);
 
-    // 2. Flip normal for back-faces since SkinnedModelComponent uses CullNone!
+    // Flip normal for back-faces since SkinnedModelComponent uses CullNone.
     // Without this, the inside of the cape/armor has inverted normals and flickers black/lit
     if (dot(norm, viewDir) < 0.0f)
     {

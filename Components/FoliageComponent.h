@@ -1,14 +1,14 @@
 #pragma once
 #include "IComponent.h"
-#include <d3d11.h>
-#include <wrl/client.h>
-#include <SimpleMath.h>
-#include <vector>
-#include <string>
-#include <memory>
+#include "SimpleMath.h"
+#include "Common/json.hpp"
 #include <cstdint>
+#include <d3d11.h>
+#include <memory>
+#include <string>
 #include <unordered_map>
-#include <Common/json.hpp>
+#include <vector>
+#include <wrl/client.h>
 
 namespace HEIN
 {
@@ -35,10 +35,10 @@ namespace HEIN
 	/// </summary>
 	struct FoliageInstanceData
 	{
-		DirectX::SimpleMath::Vector3 worldPos; // 12 bytes: World-space position
-		float rotation;                        // 4 bytes: Yaw angle in radians for variation
-		float scale;                           // 4 bytes: Uniform scale multiplier
-		uint32_t type;                         // 4 bytes: Identifier (0 = Grass, 1 = Flower, 2 = Tree)
+		DirectX::SimpleMath::Vector3 worldPos{}; // 12 bytes: World-space position
+		float rotation = 0.0f;                   // 4 bytes: Yaw angle in radians for variation
+		float scale = 1.0f;                      // 4 bytes: Uniform scale multiplier
+		uint32_t type = 0;                       // 4 bytes: Identifier (0 = Grass, 1 = Flower, 2 = Tree)
 	};
 
 	/// <summary>

@@ -16,11 +16,10 @@
 #include <cstdint>
 #include <exception>
 #include <fstream>
+#include <libloaderapi.h>
 #include <stdexcept>
 #include <system_error>
 #include <vector>
-#include <libloaderapi.h>
-
 
 namespace DX
 {

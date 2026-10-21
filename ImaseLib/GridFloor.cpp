@@ -1,7 +1,7 @@
-//--------------------------------------------------------------------------------------
+ï»¿//--------------------------------------------------------------------------------------
 // File: GridFloor.cpp
 //
-// ƒOƒŠƒbƒh‚Ì°‚ğ•`‰æ‚·‚éƒNƒ‰ƒX
+// ã‚°ãƒªãƒƒãƒ‰ã®åºŠã‚’æç”»ã™ã‚‹ã‚¯ãƒ©ã‚¹
 //
 // Date: 2023.5.6
 // Author: Hideyasu Imase
@@ -12,7 +12,7 @@
 using namespace DirectX;
 using namespace Imase;
 
-// °‚Ì1•Ó‚ÌƒTƒCƒY
+// åºŠã®1è¾ºã®ã‚µã‚¤ã‚º
 const  float GridFloor::FLOOR_SIZE = 10.0f;
 
 GridFloor::GridFloor(
@@ -28,16 +28,16 @@ GridFloor::GridFloor(
 	, m_size(size)
 	, m_divs(divs)
 {
-	// ƒvƒŠƒ~ƒeƒBƒuƒoƒbƒ`‚Ìì¬
+	// ãƒ—ãƒªãƒŸãƒ†ã‚£ãƒ–ãƒãƒƒãƒã®ä½œæˆ
 	m_primitiveBatch = std::make_unique<PrimitiveBatch<VertexPositionColor>>(pContext);
 
-	// ƒx[ƒVƒbƒNƒGƒtƒFƒNƒg‚Ìì¬
+	// ãƒ™ãƒ¼ã‚·ãƒƒã‚¯ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã®ä½œæˆ
 	m_basicEffect = std::make_unique<BasicEffect>(pDevice);
 	m_basicEffect->SetVertexColorEnabled(true);
 	m_basicEffect->SetLightingEnabled(false);
 	m_basicEffect->SetTextureEnabled(false);
 
-	// “ü—ÍƒŒƒCƒAƒEƒg‚Ìì¬
+	// å…¥åŠ›ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆã®ä½œæˆ
 	DX::ThrowIfFailed(
 		CreateInputLayoutFromEffect<VertexPositionColor>(
 			pDevice,
@@ -53,26 +53,26 @@ void GridFloor::Render(
 	const SimpleMath::Matrix& proj
 )
 {
-	// ƒuƒŒƒ“ƒhƒXƒe[ƒg‚Ìİ’èi•s“§–¾j
+	// ãƒ–ãƒ¬ãƒ³ãƒ‰ã‚¹ãƒ†ãƒ¼ãƒˆã®è¨­å®šï¼ˆä¸é€æ˜ï¼‰
 	pContext->OMSetBlendState(m_pStates->Opaque(), nullptr, 0xFFFFFFFF);
-	// [“xƒoƒbƒtƒ@‚Ìİ’èi’Êíj
+	// æ·±åº¦ãƒãƒƒãƒ•ã‚¡ã®è¨­å®šï¼ˆé€šå¸¸ï¼‰
 	pContext->OMSetDepthStencilState(m_pStates->DepthDefault(), 0);
-	// ƒJƒŠƒ“ƒO‚Ìİ’èiƒJƒŠƒ“ƒO‚È‚µj
+	// ã‚«ãƒªãƒ³ã‚°ã®è¨­å®šï¼ˆã‚«ãƒªãƒ³ã‚°ãªã—ï¼‰
 	pContext->RSSetState(m_pStates->CullNone());
 
-	// Šes—ñ‚Ìİ’è
+	// å„è¡Œåˆ—ã®è¨­å®š
 	SimpleMath::Matrix world;
 	m_basicEffect->SetWorld(world);
 	m_basicEffect->SetView(view);
 	m_basicEffect->SetProjection(proj);
 
-	// ƒGƒtƒFƒNƒg‚ğ“K—p‚·‚é
+	// ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚’é©ç”¨ã™ã‚‹
 	m_basicEffect->Apply(pContext);
 
-	// “ü—ÍƒŒƒCƒAƒEƒg‚ğİ’è
+	// å…¥åŠ›ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆã‚’è¨­å®š
 	pContext->IASetInputLayout(m_inputLayout.Get());
 
-	// ƒOƒŠƒbƒh‚Ì°‚ğ•`‰æ
+	// ã‚°ãƒªãƒƒãƒ‰ã®åºŠã‚’æç”»
 	m_primitiveBatch->Begin();
 
 	DX::DrawGrid(

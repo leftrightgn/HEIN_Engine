@@ -1,7 +1,8 @@
 #include "pch.h"
 #include "ShadowSystem.h"
 
-namespace HEIN {
+namespace HEIN 
+{
     void ShadowSystem::Initialize(ID3D11Device* device, int width, int height) {
         m_width = width;
         m_height = height;

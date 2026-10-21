@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "Framework/GameContext.h"
 #include "Common/InputManager.h"
-#include "Common/ShadowSystem.h"
+#include "System/ShadowSystem.h"
 #include "DebugDisplayController.h"
 #include <Camera/DebugCameraMode.h>
 #include <Camera/CameraController.h>

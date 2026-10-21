@@ -75,7 +75,7 @@ PS_INPUT main(VS_INPUT input)
     // Create the new normal vector facing perpendicular to the wave slope
     float3 trueNormal = normalize(float3(-dYdX, 1.0f, -dYdZ));
 
-    // 3. Set Outputs
+    // Set Outputs
     output.WorldPos = posWorld.xyz;
     output.Pos = mul(posWorld, mul(view, projection));
     

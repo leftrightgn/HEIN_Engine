@@ -11,7 +11,7 @@ SamplerComparisonState g_shadowSampler : register(s2);
 
 float4 main(FoliagePixelInput input) : SV_Target
 {
-    // 1. Sample diffuse foliage texture
+    // Sample diffuse foliage texture
     float4 texColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
     if (flags.y > 0.5f)
     {
@@ -20,7 +20,7 @@ float4 main(FoliagePixelInput input) : SV_Target
 
     // Alpha Discard / Depth Handling ("think about the depth so it don't look weird")
     // Discard low-alpha pixels so opaque leaves/blades write solid depth to the Z-buffer.
-    // This completely eliminates transparent sorting artifacts, flicker, and back-to-front sorting bugs!
+    // This eliminates transparent sorting artifacts, flicker, and back-to-front sorting artifacts.
     clip(texColor.a - alphaCutoff);
 
     // Color Map Sampling (Color blending across terrain surface)
@@ -96,7 +96,7 @@ float4 main(FoliagePixelInput input) : SV_Target
     float3 finalLighting = ambientColor.rgb + lightColor.rgb * diffuse * shadow;
     float3 finalColor = baseColor * finalLighting;
 
-    // Fog Calculation (blends foliage seamlessly with terrain fog)
+    // Fog Calculation (blends foliage with terrain fog)
     float fogFactor = saturate((input.viewZ - fogStart) / (fogEnd - fogStart));
     finalColor = lerp(finalColor, fogColor.rgb, fogFactor);
 

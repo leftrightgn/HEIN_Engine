@@ -10,7 +10,7 @@ PixelInputType main(VertexInputType input)
     
     float4 viewPos = mul(output.position, viewMatrix);
     // In a right-handed system, objects in front of the camera have negative Z.
-    // We use abs() to get a positive distance for the fog calculation.
+    // Use abs() to get a positive distance for the fog calculation.
     output.viewZ = abs(viewPos.z);
     
     output.position = mul(viewPos, projectionMatrix);

@@ -1,11 +1,11 @@
 #include "pch.h"
 #include "BoneLinkComponent.h"
+#include "ColliderComponent/ColliderComponent.h"
 #include "SkinnedModelComponent.h"
 #include "StaticModelComponent.h"
-#include "Entities/Actor.h"
 #include "TransformComponent.h"
-#include "ColliderComponent/ColliderComponent.h"
-#include <DebugingTools/DebugUIManager.h>
+#include "DebugingTools/DebugUIManager.h"
+#include "Entities/Actor.h"
 
 HEIN::BoneLinkComponent::BoneLinkComponent(Actor* owner)
 	: IComponent(owner)
@@ -72,7 +72,7 @@ void HEIN::BoneLinkComponent::Start()
 {
 }
 
-void HEIN::BoneLinkComponent::LateUpdate(float deltaTime)
+void HEIN::BoneLinkComponent::LateUpdate(float /*deltaTime*/)
 {
 	if (m_owner != nullptr)
 	{
@@ -162,7 +162,7 @@ void HEIN::BoneLinkComponent::Deserialize(const nlohmann::json& data)
     }
 }
 
-void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	if (m_targetModel == nullptr && m_targetStaticModel == nullptr)
 	{

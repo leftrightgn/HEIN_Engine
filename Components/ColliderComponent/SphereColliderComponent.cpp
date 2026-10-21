@@ -2,8 +2,8 @@
 #include "SphereColliderComponent.h"
 #include "Components/StaticModelComponent.h"
 #include "Entities/Actor.h"
+#include "ImGui/imgui.h"
 #include <DirectXColors.h>
-#include <ImGui/imgui.h>
 
 HEIN::SphereColliderComponent::SphereColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::Sphere)
@@ -60,7 +60,7 @@ void HEIN::SphereColliderComponent::SyncColliderState()
     localSphere.Transform(m_worldSphere, worldMatrix);
 }
 
-void HEIN::SphereColliderComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
+void HEIN::SphereColliderComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& /*world*/, const DirectX::SimpleMath::Matrix& /*view*/, const DirectX::SimpleMath::Matrix& /*proj*/)
 {
     if (!gameContext.showColliders || gameContext.debugCollisionRenderer == nullptr) return;
 

@@ -1,23 +1,22 @@
 #include "pch.h"
-#include "Framework/GameContext.h"
 #include "SkinnedModelComponent.h"
-#include "Entities/Actor.h"
-#include <ImGui/imgui.h>
-#include <ImGui/imgui_stdlib.h>
-#include <Windows.h>
-#include "DebugingTools/EditorUtils.h"
-#include <string>
-#include <filesystem>
-#include <d3dcompiler.h>
-#include "Effect/ReadData.h"
-#include "TransformComponent.h"
-#include "Common/ShadowSystem.h"
-#include "Entities/ActorManager.h"
-#include "Common/ShaderStructures.h"
-#include "LightComponent.h"
-#include "Camera/CameraController.h"
 #include "FogComponent.h"
-
+#include "LightComponent.h"
+#include "TransformComponent.h"
+#include "Camera/CameraController.h"
+#include "Common/ShaderStructures.h"
+#include "System/ShadowSystem.h"
+#include "DebugingTools/EditorUtils.h"
+#include "Effect/ReadData.h"
+#include "Entities/Actor.h"
+#include "Entities/ActorManager.h"
+#include "Framework/GameContext.h"
+#include "ImGui/imgui.h"
+#include "ImGui/imgui_stdlib.h"
+#include <d3dcompiler.h>
+#include <filesystem>
+#include <string>
+#include <Windows.h>
 
 std::shared_ptr<DirectX::EffectFactory> HEIN::SkinnedModelComponent::s_fxFactory = nullptr;
 std::unordered_map<std::wstring, std::weak_ptr<DirectX::Model>> HEIN::SkinnedModelComponent::s_modelCache;
@@ -303,7 +302,7 @@ namespace HEIN
 			device->CreateBuffer(&cbDesc, nullptr, m_cbLighting.ReleaseAndGetAddressOf());
 		}
 
-		// Create Input Layout explicitly to match CustomSkinned_VS.hlsl shader using the actual vertex declaration from the model!
+		// Create Input Layout explicitly to match CustomSkinned_VS.hlsl shader using the actual vertex declaration from the model.
 		bool layoutCreated = false;
 		if (!m_model->meshes.empty() && !s_sharedSkinnedVSBytecode.empty())
 		{
@@ -1070,7 +1069,7 @@ namespace HEIN
 				auto skinnedEffect = dynamic_cast<DirectX::IEffectSkinning*>(part->effect.get());
 				if (skinnedEffect)
 				{
-					// Apply effect to bind textures, then immediately overwrite shaders/buffers with ours
+					// Apply effect to bind textures, then immediately overwrite shaders/buffers with custom shaders and buffers
 					part->effect->Apply(context);
 
 					context->IASetInputLayout(m_inputLayout.Get());
@@ -1082,7 +1081,7 @@ namespace HEIN
 					// Force CullNone
 					context->RSSetState(gameContext.commonStates.CullNone());
 
-					// Shadows also need depth testing enabled to calculate proper occlusions!
+					// Shadows also need depth testing enabled to calculate proper occlusions.
 					context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
 					context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
 
@@ -1187,7 +1186,7 @@ namespace HEIN
 
 		try 
 		{
-			// The Animation loader strictly requires backslashes in the file path or it will fail!
+			// The Animation loader strictly requires backslashes in the file path or loading will fail.
 			std::wstring safePath = animPath;
 			for (wchar_t& c : safePath) 
 			{

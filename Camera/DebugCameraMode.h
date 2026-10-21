@@ -1,6 +1,7 @@
 #pragma once
 #include "ICameraMode.h"
-#include <SimpleMath.h>
+#include "SimpleMath.h"
+
 
 namespace HEIN
 {

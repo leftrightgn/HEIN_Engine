@@ -1,8 +1,8 @@
 #pragma once
 #include "Components/IComponent.h"
-#include <string>
+#include "DebugingTools/IGizmoEditable.h"
 #include <cstdint>
-#include <DebugingTools/IGizmoEditable.h>
+#include <string>
 
 namespace HEIN
 {

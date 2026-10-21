@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "FogComponent.h"
-#include <ImGui/imgui.h>
+#include "ImGui/imgui.h"
+
 
 namespace HEIN
 {
@@ -37,7 +38,7 @@ namespace HEIN
 		}
 	}
 
-	void FogComponent::OnInspectorGUI(GameContext& gameContext)
+	void FogComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 	{
 		if (ImGui::CollapsingHeader("Fog Component", ImGuiTreeNodeFlags_DefaultOpen))
 		{

@@ -1,10 +1,9 @@
 #include "pch.h"
 #include "ActorManager.h"
+#include "Components/ColliderComponent/ColliderComponent.h"
+#include "Components/SocketAttachmentComponent.h"
+#include "Components/TransformComponent.h"
 #include "Framework/GameContext.h"
-#include <Components/TransformComponent.h>
-#include <Components/SocketAttachmentComponent.h>
-#include <Components/ColliderComponent/ColliderComponent.h>
-
 
 // LifeCycle
 HEIN::Actor* HEIN::ActorManager::CreateActor(const std::wstring& tag)
@@ -224,7 +223,7 @@ nlohmann::json HEIN::ActorManager::Serialize()
     {
         HEIN::Actor* actor = pair.second.get();
 
-        // Only serialize ROOT actors. Children are serialized recursively by their parents!
+        // Only serialize ROOT actors. Children are serialized recursively by their parents.
         if (actor != nullptr && actor->GetParentID() == HEIN::INVALID_ACTOR_ID)
         {
             actorsArray.push_back(actor->Serialize(this));

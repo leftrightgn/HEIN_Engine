@@ -2,13 +2,13 @@
 #include "AnimationEditorComponent.h"
 #include "Components/SkinnedModelComponent.h"
 #include "Components/TransformComponent.h"
+#include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
-#include <ImGui/imgui.h>
-#include <ImGui/ImGuizmo.h>
-#include <ImGui/imgui_stdlib.h>
-#include <DebugingTools/DebugUIManager.h>
-#include <fstream>
+#include "ImGui/imgui.h"
+#include "ImGui/imgui_stdlib.h"
+#include "ImGui/ImGuizmo.h"
 #include <algorithm>
+#include <fstream>
 
 using namespace HEIN;
 
@@ -71,7 +71,7 @@ void AnimationEditorComponent::Start()
     m_targetModel = m_owner->GetComponent<SkinnedModelComponent>();
 }
 
-void AnimationEditorComponent::Update(float deltaTime)
+void AnimationEditorComponent::Update(float /*deltaTime*/)
 {
     // If the editor is open, hijack the model's rendering every frame
     if (m_isEditorActive && m_targetModel != nullptr)
@@ -99,7 +99,7 @@ void AnimationEditorComponent::ApplyEditorPoseToModel()
         m_previousTime = m_currentTime;
 
         // Build the local matrix array for this exact frame
-        for (size_t i = 0; i < boneCount; ++i)
+        for (int i = 0; i < static_cast<int>(boneCount); ++i)
         {
             if (m_tracks.find(i) != m_tracks.end())
             {
@@ -120,12 +120,12 @@ void AnimationEditorComponent::ApplyEditorPoseToModel()
 // ------------------------------------------------------------------------------
 // ImGui Interface
 // ------------------------------------------------------------------------------
-void AnimationEditorComponent::OnInspectorGUI(GameContext& gameContext)
+void AnimationEditorComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     ImGui::TextDisabled("Use the ANIMATOR window in the toolbar to edit animations.");
 }
 
-void AnimationEditorComponent::DrawAnimatorWindow(GameContext& gameContext)
+void AnimationEditorComponent::DrawAnimatorWindow(GameContext& /*gameContext*/)
 {
     ImGui::Checkbox("Enable Animation Editing Mode", &m_isEditorActive);
 
@@ -203,7 +203,7 @@ void AnimationEditorComponent::DrawGizmo(
     // Query bone world-space transformation matrix
     DirectX::SimpleMath::Matrix boneWorld = m_targetModel->GetBoneWorldMatrix(m_selectedBoneIndex, actorWorld);
 
-    ImGuizmo::SetID(999);
+    ImGuizmo::PushID(999);
     ImGuizmo::Manipulate((float*)&view.m[0][0], (float*)&proj.m[0][0],
         (ImGuizmo::OPERATION)operation, (ImGuizmo::MODE)mode,
         (float*)&boneWorld.m[0][0]);
@@ -241,6 +241,7 @@ void AnimationEditorComponent::DrawGizmo(
 
         m_editorLocalBones[m_selectedBoneIndex] = newLocal;
     }
+    ImGuizmo::PopID();
 }
 
 // ------------------------------------------------------------------------------

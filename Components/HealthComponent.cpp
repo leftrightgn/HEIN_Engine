@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "HealthComponent.h"
-#include <DebugingTools/DebugUIManager.h>
-#include <Components/SkinnedModelComponent.h>
-#include <Entities/Actor.h>
+#include "Components/SkinnedModelComponent.h"
+#include "DebugingTools/DebugUIManager.h"
+#include "Entities/Actor.h"
 
 HEIN::HealthComponent::HealthComponent(Actor* owner)
 	: IComponent(owner)
@@ -73,7 +73,7 @@ void HEIN::HealthComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("HitFlashDuration")) m_hitFlashDuration = data["HitFlashDuration"];
 }
 
-void HEIN::HealthComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::HealthComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	if (ImGui::CollapsingHeader("HealthComponent", ImGuiTreeNodeFlags_DefaultOpen))
 	{

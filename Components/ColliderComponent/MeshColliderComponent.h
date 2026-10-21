@@ -1,10 +1,10 @@
 #pragma once
 #include "ColliderComponent.h"
-#include <Common/CollisionMath.h>
-#include <vector> 
-#include <VertexTypes.h>
-#include <wrl/client.h>
+#include "VertexTypes.h"
+#include "System/CollisionMath.h"
 #include <d3d11.h>
+#include <vector>
+#include <wrl/client.h>
 
 namespace HEIN
 {

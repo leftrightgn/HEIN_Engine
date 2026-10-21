@@ -1,3 +1,8 @@
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 26819)
+#pragma warning(disable : 26495)
+#endif
 // [DEAR IMGUI]
 // This is a slightly modified version of stb_truetype.h 1.26.
 // Mostly fixing for compiler and static analyzer warnings.
@@ -2145,6 +2150,7 @@ static int stbtt__run_charstring(const stbtt_fontinfo *info, int glyph_index, st
             has_subrs = 1;
          }
          // FALLTHROUGH
+         [[fallthrough]];
       case 0x1D: // callgsubr
          if (sp < 1) return STBTT__CSERR("call(g|)subr stack");
          v = (int) s[--sp];
@@ -5083,3 +5089,7 @@ ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 */
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif

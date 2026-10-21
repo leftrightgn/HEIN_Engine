@@ -7,9 +7,6 @@
     <ClCompile Include="Components\HealthComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
-    <ClCompile Include="Common\DamageSystem.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
     <ClCompile Include="Camera\LockOnCameraMode.cpp">
       <Filter>Camera</Filter>
     </ClCompile>
@@ -52,11 +49,26 @@
     <ClCompile Include="Components\LightComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
-    <ClCompile Include="Common\ShadowSystem.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
     <ClCompile Include="Components\GaugeComponent.cpp">
       <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Components\WeaponTrailComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="System\CollisionDispatcher.cpp">
+      <Filter>System</Filter>
+    </ClCompile>
+    <ClCompile Include="System\CollisionMath.cpp">
+      <Filter>System</Filter>
+    </ClCompile>
+    <ClCompile Include="System\DamageSystem.cpp">
+      <Filter>System</Filter>
+    </ClCompile>
+    <ClCompile Include="System\PhysicsSystem.cpp">
+      <Filter>System</Filter>
+    </ClCompile>
+    <ClCompile Include="System\ShadowSystem.cpp">
+      <Filter>System</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -69,9 +81,6 @@
     </ClInclude>
     <ClInclude Include="Components\HealthComponent.h">
       <Filter>Components</Filter>
-    </ClInclude>
-    <ClInclude Include="Common\DamageSystem.h">
-      <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="Camera\LockOnCameraMode.h">
       <Filter>Camera</Filter>
@@ -127,11 +136,26 @@
     <ClInclude Include="Common\ShaderStructures.h">
       <Filter>Common</Filter>
     </ClInclude>
-    <ClInclude Include="Common\ShadowSystem.h">
-      <Filter>Common</Filter>
-    </ClInclude>
     <ClInclude Include="Components\GaugeComponent.h">
       <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Components\WeaponTrailComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="System\CollisionDispatcher.h">
+      <Filter>System</Filter>
+    </ClInclude>
+    <ClInclude Include="System\CollisionMath.h">
+      <Filter>System</Filter>
+    </ClInclude>
+    <ClInclude Include="System\DamageSystem.h">
+      <Filter>System</Filter>
+    </ClInclude>
+    <ClInclude Include="System\PhysicsSystem.h">
+      <Filter>System</Filter>
+    </ClInclude>
+    <ClInclude Include="System\ShadowSystem.h">
+      <Filter>System</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -146,6 +170,9 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="Shaders\StaticModel_Common.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\SkyboxEffect_PS.hlsl">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>
@@ -174,10 +201,19 @@
     <FxCompile Include="Shaders\StaticModel_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\WeaponTrail_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\WeaponTrail_VS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Common">
       <UniqueIdentifier>{a355142e-3d25-4fca-922d-aeadbfedb2ae}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="System">
+      <UniqueIdentifier>{e27d2cf0-b2a2-4602-95fd-647e32638edb}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -285,12 +321,6 @@
     <ClInclude Include="Camera\ThirdPersonMode.h">
       <Filter>Camera</Filter>
     </ClInclude>
-    <ClInclude Include="Common\CollisionDispatcher.h">
-      <Filter>Common</Filter>
-    </ClInclude>
-    <ClInclude Include="Common\CollisionMath.h">
-      <Filter>Common</Filter>
-    </ClInclude>
     <ClInclude Include="Common\DeviceResources.h">
       <Filter>Common</Filter>
     </ClInclude>
@@ -301,9 +331,6 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="Common\InputManager.h">
-      <Filter>Common</Filter>
-    </ClInclude>
-    <ClInclude Include="Common\PhysicsSystem.h">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="Common\SkeletonProfile.h">
@@ -476,12 +503,6 @@
     <ClCompile Include="Camera\ThirdPersonMode.cpp">
       <Filter>Camera</Filter>
     </ClCompile>
-    <ClCompile Include="Common\CollisionDispatcher.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
-    <ClCompile Include="Common\CollisionMath.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
     <ClCompile Include="Common\DeviceResources.cpp">
       <Filter>Common</Filter>
     </ClCompile>
@@ -489,9 +510,6 @@
       <Filter>Common</Filter>
     </ClCompile>
     <ClCompile Include="Common\InputManager.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
-    <ClCompile Include="Common\PhysicsSystem.cpp">
       <Filter>Common</Filter>
     </ClCompile>
     <ClCompile Include="Components\BoneLinkComponent.cpp">

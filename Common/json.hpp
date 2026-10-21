@@ -1,4 +1,4 @@
-//     __ _____ _____ _____
+﻿//     __ _____ _____ _____
 //  __|  |   __|     |   | |  JSON for Modern C++
 // |  |  |__   |  |  | | | |  version 3.12.0
 // |_____|_____|_____|_|___|  https://github.com/nlohmann/json
@@ -17,6 +17,12 @@
 
 #ifndef INCLUDE_NLOHMANN_JSON_HPP_
 #define INCLUDE_NLOHMANN_JSON_HPP_
+
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable : 26819)
+    #pragma warning(disable : 26495)
+#endif
 
 // Workaround for GCC template redefinition errors in C++ modules
 // When nlohmann/json.hpp is included in a C++20 module preamble after
@@ -26763,6 +26769,10 @@ struct formatter<nlohmann::NLOHMANN_BASIC_JSON_TPL, char> // NOLINT(cert-dcl58-c
 // End of GCC diagnostic pragmas for C++ modules support
 #if defined(__GNUC__) && !defined(__clang__) && __cplusplus >= 202002L
     #pragma GCC diagnostic pop
+#endif
+
+#if defined(_MSC_VER)
+    #pragma warning(pop)
 #endif
 
 #endif  // INCLUDE_NLOHMANN_JSON_HPP_

@@ -1,12 +1,12 @@
 #pragma once
-#include <vector>
+#include "../Components/IComponent.h"
+#include "Common/json.hpp"
+#include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
-#include <algorithm>
-#include <cstdint>
-#include "../Components/IComponent.h"
-#include <Common/json.hpp>
+#include <vector>
 
 struct GameContext;
 
