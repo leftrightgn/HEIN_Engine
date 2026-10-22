@@ -1,6 +1,6 @@
 #pragma once
-#include <vector>
 #include "Event.h"
+#include <vector>
 
 namespace HEIN
 {
@@ -17,7 +17,7 @@ namespace HEIN
 
 		void AddTriggerListener(HEIN::TriggerEventCallback callback);
 		void DispatchTriggerEvent(const HEIN::TriggerEventPayLoad& payLoad);
+		void ClearTriggerListeners();
 	};
 
 }
-

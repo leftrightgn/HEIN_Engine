@@ -4,6 +4,7 @@
 #include <commdlg.h>
 #include <shobjidl.h>
 #include <filesystem>
+#include <vector>
 
 namespace HEIN
 {
@@ -53,6 +54,7 @@ namespace HEIN
 
 		return L"";
 	}
+
 	std::wstring EditorUtils::MakeRelativePath(const std::wstring& absolutePath)
 	{
 		if (absolutePath.empty()) return L"";
@@ -78,5 +80,90 @@ namespace HEIN
 
 		for (wchar_t& c : result) if (c == L'\\') c = L'/';
 		return result;
+	}
+
+	bool EditorUtils::DoesFontFileExistOnDisk(const std::wstring& path)
+	{
+		if (path.empty()) return false;
+
+		std::filesystem::path p(path);
+		std::wstring filename = p.filename().wstring();
+
+		std::vector<std::wstring> candidates = {
+			path,
+			std::wstring(L"Dual/") + path,
+			std::wstring(L"../Dual/") + path,
+			std::wstring(L"Resources/Font/") + filename,
+			std::wstring(L"Dual/Resources/Font/") + filename,
+			std::wstring(L"../Dual/Resources/Font/") + filename
+		};
+
+		for (const auto& candidate : candidates)
+		{
+			try
+			{
+				if (std::filesystem::exists(candidate) && std::filesystem::is_regular_file(candidate))
+				{
+					return true;
+				}
+			}
+			catch (...)
+			{
+			}
+		}
+		return false;
+	}
+
+	std::wstring EditorUtils::ImportFontFileToResources(const std::wstring& sourceFilePath)
+	{
+		if (sourceFilePath.empty()) return L"";
+
+		try
+		{
+			std::filesystem::path src(sourceFilePath);
+			if (!std::filesystem::exists(src) || !std::filesystem::is_regular_file(src))
+			{
+				return L"";
+			}
+
+			std::wstring filename = src.filename().wstring();
+			std::wstring relResult = std::wstring(L"Resources/Font/") + filename;
+
+			// Destination candidate folders for Font assets
+			std::vector<std::string> destDirs = {
+				"Resources/Font",
+				"Dual/Resources/Font",
+				"../Dual/Resources/Font"
+			};
+
+			for (const auto& dir : destDirs)
+			{
+				if (std::filesystem::exists(dir) && std::filesystem::is_directory(dir))
+				{
+					std::filesystem::path dest = std::filesystem::path(dir) / filename;
+					if (std::filesystem::absolute(src) != std::filesystem::absolute(dest))
+					{
+						std::filesystem::copy_file(src, dest, std::filesystem::copy_options::overwrite_existing);
+					}
+				}
+			}
+
+			// Mirror to desktop project if available
+			const std::string desktopFontDir = "C:/Users/it252195/Desktop/Dual/\xe3\x83\x97\xe3\x83\xad\xe3\x82\xb8\xe3\x82\xa7\xe3\x82\xaf\xe3\x83\x88/Dual/Resources/Font";
+			if (std::filesystem::exists(desktopFontDir))
+			{
+				std::filesystem::path dest = std::filesystem::path(desktopFontDir) / filename;
+				if (std::filesystem::absolute(src) != std::filesystem::absolute(dest))
+				{
+					std::filesystem::copy_file(src, dest, std::filesystem::copy_options::overwrite_existing);
+				}
+			}
+
+			return relResult;
+		}
+		catch (...)
+		{
+			return MakeRelativePath(sourceFilePath);
+		}
 	}
 }

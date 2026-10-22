@@ -1,6 +1,6 @@
 #pragma once
-#include "IComponent.h"
 #include "../Common/SkeletonProfile.h"
+#include "IComponent.h"
 #include "DirectXTK_Utilities/Animation.h"
 #include <map>
 
@@ -166,6 +166,20 @@ namespace HEIN
 		void CrossfadeAnimation(const std::string& name, float duration, bool forceRestart = false);
 		float GetAnimationDuration(const std::string& name) const;
 		bool HasAnimation(const std::string& name) const;
+		bool IsAnimationFinished() const
+		{
+			if (!m_currentAnimation) return true;
+			if (m_currentAnimation->IsLooping()) return false;
+			return m_currentAnimation->GetAnimTime() >= (m_currentAnimation->GetEndTime() - 0.001);
+		}
+		float GetCurrentAnimationTime() const
+		{
+			return m_currentAnimation ? static_cast<float>(m_currentAnimation->GetAnimTime()) : 0.0f;
+		}
+		float GetCurrentAnimationDuration() const
+		{
+			return m_currentAnimation ? static_cast<float>(m_currentAnimation->GetEndTime()) : 0.0f;
+		}
 
 		void SetVisible(bool visible) { m_isVisible = visible; }
 		bool IsVisible() const { return m_isVisible; }
@@ -235,7 +249,12 @@ namespace HEIN
 		std::string GetBoneName(int index) const
 		{
 			if (!m_model || index < 0 || index >= m_model->bones.size()) return "Unknown";
-			return std::string(m_model->bones[index].name.begin(), m_model->bones[index].name.end());
+			const auto& wname = m_model->bones[index].name;
+			if (wname.empty()) return "";
+			int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, wname.c_str(), static_cast<int>(wname.length()), nullptr, 0, nullptr, nullptr);
+			std::string result(sizeNeeded, 0);
+			WideCharToMultiByte(CP_UTF8, 0, wname.c_str(), static_cast<int>(wname.length()), &result[0], sizeNeeded, nullptr, nullptr);
+			return result;
 		}
 
 		int GetParentBoneIndex(int index) const

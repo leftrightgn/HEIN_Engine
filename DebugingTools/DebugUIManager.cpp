@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "DebugUIManager.h"
+#include "EditorUtils.h"
 #include "Components/SocketComponent.h"
 #include <Components/ColliderComponent/CapsuleColliderComponent.h>
 #include "Components/ColliderComponent/OBBColliderComponent.h"
@@ -489,7 +490,9 @@ namespace HEIN
 		}
 
 		std::wstring tag = actor->GetTag();
-		std::string narrowTag(tag.begin(), tag.end());
+		int tlen = WideCharToMultiByte(CP_UTF8, 0, tag.c_str(), -1, nullptr, 0, nullptr, nullptr);
+		std::string narrowTag(tlen > 0 ? tlen - 1 : 0, 0);
+		if (tlen > 1) WideCharToMultiByte(CP_UTF8, 0, tag.c_str(), -1, &narrowTag[0], tlen, nullptr, nullptr);
 
 		ImGui::PushID(static_cast<int>(actor->GetID()));
 
@@ -1611,7 +1614,9 @@ namespace HEIN
 		if (m_transitionStyleIndex > 0)
 		{
 			ImGui::Text("Texture Path (.dds):");
-			std::string texturePathStr(m_editorTransitionDesc.texturePath.begin(), m_editorTransitionDesc.texturePath.end());
+			int tlen = WideCharToMultiByte(CP_UTF8, 0, m_editorTransitionDesc.texturePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+			std::string texturePathStr(tlen > 0 ? tlen - 1 : 0, 0);
+			if (tlen > 1) WideCharToMultiByte(CP_UTF8, 0, m_editorTransitionDesc.texturePath.c_str(), -1, &texturePathStr[0], tlen, nullptr, nullptr);
 			char pathBuf[512] = {};
 			strcpy_s(pathBuf, sizeof(pathBuf), texturePathStr.c_str());
 
@@ -1755,6 +1760,11 @@ namespace HEIN
 				}
 
 				ImGui::Checkbox("Show Percentage Readout", &m_editorTransitionDesc.showPercentageText);
+				if (m_editorTransitionDesc.showPercentageText)
+				{
+					ImGui::SameLine();
+					ImGui::DragFloat("Percentage Font Size", &m_editorTransitionDesc.percentageFontSize, 0.05f, 0.2f, 3.0f, "%.2fx");
+				}
 
 				ImGui::ColorEdit4("Track Color", &m_editorTransitionDesc.barTrackColor.x);
 				ImGui::ColorEdit4("Fill Color", &m_editorTransitionDesc.barFillColor.x);
@@ -1765,7 +1775,9 @@ namespace HEIN
 				{
 					auto DrawTexPicker = [&](const char* label, std::wstring& targetPath)
 					{
-						std::string s(targetPath.begin(), targetPath.end());
+						int tlen = WideCharToMultiByte(CP_UTF8, 0, targetPath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+						std::string s(tlen > 0 ? tlen - 1 : 0, 0);
+						if (tlen > 1) WideCharToMultiByte(CP_UTF8, 0, targetPath.c_str(), -1, &s[0], tlen, nullptr, nullptr);
 						char buf[512] = {};
 						strcpy_s(buf, sizeof(buf), s.c_str());
 						ImGui::Text("%s:", label);
@@ -1823,6 +1835,118 @@ namespace HEIN
 			if (m_editorTransitionDesc.showTips)
 			{
 				ImGui::SliderFloat2("Tips Anchor (0..1)", &m_editorTransitionDesc.tipNormalizedPos.x, 0.0f, 1.0f, "%.3f");
+				ImGui::DragFloat("Global Font Scale", &m_editorTransitionDesc.fontSize, 0.05f, 0.2f, 3.0f, "%.2fx");
+				ImGui::DragFloat("Tip Title Font Size", &m_editorTransitionDesc.titleFontSize, 0.05f, 0.2f, 3.0f, "%.2fx");
+				ImGui::DragFloat("Tip Desc Font Size", &m_editorTransitionDesc.descFontSize, 0.05f, 0.2f, 3.0f, "%.2fx");
+
+				// SpriteFont Selection Dropdown Combo (Like UIButtonComponent)
+				if (!m_editorTransitionDesc.spriteFontPath.empty() && !EditorUtils::DoesFontFileExistOnDisk(m_editorTransitionDesc.spriteFontPath))
+				{
+					m_editorTransitionDesc.spriteFontPath = L"";
+					if (gameContext.sceneManager)
+					{
+						gameContext.sceneManager->SetSpriteFontPath(L"", gameContext.deviceResources.GetD3DDevice());
+					}
+				}
+
+				auto discoveredFonts = UIButtonComponent::GetDiscoveredFontPaths();
+				std::vector<std::string> comboItems;
+				comboItems.push_back("Default (Built-in / Fallback)");
+				int currentFontIdx = 0;
+
+				int lenCurrent = WideCharToMultiByte(CP_UTF8, 0, m_editorTransitionDesc.spriteFontPath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+				std::string currentPathStr(lenCurrent, 0);
+				WideCharToMultiByte(CP_UTF8, 0, m_editorTransitionDesc.spriteFontPath.c_str(), -1, &currentPathStr[0], lenCurrent, nullptr, nullptr);
+				if (!currentPathStr.empty() && currentPathStr.back() == '\0') currentPathStr.pop_back();
+
+				for (size_t i = 0; i < discoveredFonts.size(); ++i)
+				{
+					int len = WideCharToMultiByte(CP_UTF8, 0, discoveredFonts[i].c_str(), -1, nullptr, 0, nullptr, nullptr);
+					std::string fontName(len, 0);
+					WideCharToMultiByte(CP_UTF8, 0, discoveredFonts[i].c_str(), -1, &fontName[0], len, nullptr, nullptr);
+					if (!fontName.empty() && fontName.back() == '\0') fontName.pop_back();
+
+					std::string displayName = fontName;
+					auto slashPos = displayName.find_last_of("/\\");
+					if (slashPos != std::string::npos)
+					{
+						displayName = displayName.substr(slashPos + 1);
+					}
+
+					comboItems.push_back(displayName + " (" + fontName + ")");
+					if (!m_editorTransitionDesc.spriteFontPath.empty() && discoveredFonts[i] == m_editorTransitionDesc.spriteFontPath)
+					{
+						currentFontIdx = static_cast<int>(i + 1);
+					}
+				}
+
+				std::vector<const char*> comboItemPtrs;
+				for (const auto& item : comboItems)
+				{
+					comboItemPtrs.push_back(item.c_str());
+				}
+
+				if (ImGui::Combo("Transition Font", &currentFontIdx, comboItemPtrs.data(), static_cast<int>(comboItemPtrs.size())))
+				{
+					if (currentFontIdx == 0)
+					{
+						m_editorTransitionDesc.spriteFontPath = L"";
+						if (gameContext.sceneManager)
+						{
+							gameContext.sceneManager->SetSpriteFontPath(L"", gameContext.deviceResources.GetD3DDevice());
+						}
+					}
+					else
+					{
+						m_editorTransitionDesc.spriteFontPath = discoveredFonts[currentFontIdx - 1];
+						if (gameContext.sceneManager)
+						{
+							gameContext.sceneManager->SetSpriteFontPath(m_editorTransitionDesc.spriteFontPath, gameContext.deviceResources.GetD3DDevice());
+						}
+					}
+				}
+
+				if (ImGui::Button("+ Add / Browse New SpriteFont File##TransitionFont"))
+				{
+					OPENFILENAMEW ofn = {};
+					wchar_t szFile[MAX_PATH] = {};
+					ofn.lStructSize = sizeof(ofn);
+					ofn.hwndOwner = nullptr;
+					ofn.lpstrFile = szFile;
+					ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
+					ofn.lpstrFilter = L"SpriteFont Files (*.spritefont)\0*.spritefont\0All Files (*.*)\0*.*\0";
+					ofn.nFilterIndex = 1;
+					ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+					if (GetOpenFileNameW(&ofn))
+					{
+						std::wstring ws = EditorUtils::ImportFontFileToResources(szFile);
+						m_editorTransitionDesc.spriteFontPath = ws;
+						UIButtonComponent::RegisterDiscoveredFont(ws);
+						if (gameContext.sceneManager)
+						{
+							gameContext.sceneManager->SetSpriteFontPath(ws, gameContext.deviceResources.GetD3DDevice());
+						}
+					}
+				}
+
+				if (!m_editorTransitionDesc.spriteFontPath.empty())
+				{
+					ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Active Font: %s", currentPathStr.c_str());
+					ImGui::SameLine();
+					if (ImGui::SmallButton("Clear Font##TransitionFont"))
+					{
+						m_editorTransitionDesc.spriteFontPath = L"";
+						if (gameContext.sceneManager)
+						{
+							gameContext.sceneManager->SetSpriteFontPath(L"", gameContext.deviceResources.GetD3DDevice());
+						}
+					}
+				}
+				else
+				{
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Active Font: Default (Built-in / Fallback)");
+				}
 
 				ImGui::Text("Active Tips List (%d total):", static_cast<int>(m_editorTransitionDesc.tips.size()));
 				int tipToRemove = -1;

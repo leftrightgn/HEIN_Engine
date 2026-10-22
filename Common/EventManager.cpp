@@ -13,3 +13,8 @@ void HEIN::EventManager::DispatchTriggerEvent(const HEIN::TriggerEventPayLoad& p
 		listener(payLoad);
 	}
 }
+
+void HEIN::EventManager::ClearTriggerListeners()
+{
+	m_triggerListeners.clear();
+}

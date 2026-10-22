@@ -1,15 +1,15 @@
 #pragma once
 #include "IScene.h"
+#include "SimpleMath.h"
+#include "SpriteBatch.h"
+#include "SpriteFont.h"
+#include <d3d11.h>
+#include <functional>
+#include <memory>
 #include <string>
 #include <unordered_map>
-#include <memory>
-#include <functional>
 #include <vector>
-#include <d3d11.h>
 #include <wrl/client.h>
-#include <SimpleMath.h>
-#include <SpriteBatch.h>
-#include <SpriteFont.h>
 
 namespace HEIN
 {
@@ -96,6 +96,13 @@ namespace HEIN
         bool showTips = true;
         DirectX::SimpleMath::Vector2 tipNormalizedPos = DirectX::SimpleMath::Vector2(0.06f, 0.72f);
         std::vector<LoadingTip> tips;
+
+        // Typography / Font settings
+        std::wstring spriteFontPath = L"";
+        float fontSize = 1.0f;               // Overall transition font scale multiplier
+        float titleFontSize = 0.85f;         // Lore / Tip Title font scale
+        float descFontSize = 0.70f;          // Lore / Tip Description font scale
+        float percentageFontSize = 0.75f;    // Loading Bar percentage font scale
     };
 
     /**
@@ -153,7 +160,8 @@ namespace HEIN
 
         // Overlay GPU resources
         std::unique_ptr<DirectX::SpriteBatch> m_spriteBatch;
-        std::unique_ptr<DirectX::SpriteFont> m_spriteFont;
+        std::shared_ptr<DirectX::SpriteFont> m_spriteFont;
+        std::wstring m_loadedFontPath = L"";
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_whiteTextureSRV;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_transitionTextureSRV;
         std::wstring m_loadedTexturePath;
@@ -221,6 +229,12 @@ namespace HEIN
         void Update(GameContext& context);
         void Render(GameContext& context);
         void RenderTransitionOverlay(GameContext& gameContext, const D3D11_VIEWPORT& targetViewport);
+
+        // Font Management
+        void LoadFont(ID3D11Device* device, const std::wstring& path);
+        void SetSpriteFontPath(const std::wstring& path, ID3D11Device* device = nullptr);
+        const std::wstring& GetSpriteFontPath() const;
+        std::shared_ptr<DirectX::SpriteFont> GetSpriteFont() const { return m_spriteFont; }
 
     };
 }
