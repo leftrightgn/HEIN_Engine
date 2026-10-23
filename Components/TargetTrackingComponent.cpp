@@ -1,8 +1,9 @@
 #include "pch.h"
 #include "TargetTrackingComponent.h"
-#include <Entities/ActorManager.h>
-#include <Components/TransformComponent.h>
-#include <ImGui/imgui.h>
+#include "Components/HealthComponent.h"
+#include "Components/TransformComponent.h"
+#include "Entities/ActorManager.h"
+#include "ImGui/imgui.h"
 
 HEIN::ActorID HEIN::TargetTrackingComponent::FindBestTarget() const
 {
@@ -21,6 +22,9 @@ HEIN::ActorID HEIN::TargetTrackingComponent::FindBestTarget() const
 
 		if (actor->GetActorType() == m_targetTypeToFind)
 		{
+			auto* health = actor->GetComponent<HealthComponent>();
+			if (health && health->isDead()) continue;
+
 			HEIN::TransformComponent* targetTrans = actor->GetComponent<HEIN::TransformComponent>();
 
 			if (targetTrans != nullptr)
@@ -30,7 +34,8 @@ HEIN::ActorID HEIN::TargetTrackingComponent::FindBestTarget() const
 				DirectX::SimpleMath::Vector3 dist = targetPos - myPos;
 				float distSq = dist.LengthSquared();
 
-				if (distSq < minDistanceSq)
+				// Support arena-wide targeting range (600.0f units, matching MAX_LOCK_RANGE)
+				if (distSq < 360000.0f && distSq < minDistanceSq)
 				{
 					minDistanceSq = distSq;
 					closestTargetID = actor->GetID();
@@ -58,7 +63,7 @@ void HEIN::TargetTrackingComponent::Start()
 	m_transform = m_owner->GetComponent<HEIN::TransformComponent>();
 }
 
-void HEIN::TargetTrackingComponent::Update(float deltaTime)
+void HEIN::TargetTrackingComponent::Update(float /*deltaTime*/)
 {
 	if (!m_transform || !m_actorManager) return;
 
@@ -83,8 +88,8 @@ void HEIN::TargetTrackingComponent::Update(float deltaTime)
 	{
 		HEIN::Actor* target = m_actorManager->GetActor(m_targetID);
 
-		// Safety check: Did the enemy die and get destroyed by the garbage collector?
-		if (target != nullptr)
+		auto* health = target ? target->GetComponent<HealthComponent>() : nullptr;
+		if (target != nullptr && (!health || !health->isDead()))
 		{
 			HEIN::TransformComponent* targetTrans = target->GetComponent<HEIN::TransformComponent>();
 
@@ -107,12 +112,13 @@ void HEIN::TargetTrackingComponent::Update(float deltaTime)
 		}
 		else
 		{
-			// Target is dead/missing! Drop the lock-on cleanly.
+			// Target is dead or missing; drop the lock-on cleanly
 			m_targetID = HEIN::INVALID_ACTOR_ID;
 			m_isLockedOn = false;
 		}
 	}
 }
+
 nlohmann::json HEIN::TargetTrackingComponent::Serialize()
 {
     nlohmann::json data = IComponent::Serialize();
@@ -126,7 +132,7 @@ void HEIN::TargetTrackingComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("TargetType")) m_targetTypeToFind = static_cast<ActorType>(data["TargetType"]);
 }
 
-void HEIN::TargetTrackingComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::TargetTrackingComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     if (ImGui::CollapsingHeader("TargetTrackingComponent", ImGuiTreeNodeFlags_DefaultOpen))
     {

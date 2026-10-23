@@ -2,8 +2,8 @@
 #include "InputManager.h"
 #include "Camera/CameraController.h"
 #include "Framework/GameContext.h"
-#include <Message/Messenger.h>
-#include <Message/Message.h>
+#include "Message/Message.h"
+#include "Message/Messenger.h"
 
 namespace HEIN
 {
@@ -25,7 +25,10 @@ namespace HEIN
 		s_actionBindings[InputAction::ToggleModel] = { InputBinding::FromKey(DirectX::Keyboard::Keys::M) };
 		s_actionBindings[InputAction::Possess] = { InputBinding::FromKey(DirectX::Keyboard::Keys::Q) };
 
-		s_actionBindings[InputAction::CameraLockOn] = { InputBinding::FromMouse(InputMouseButton::Middle) };
+		s_actionBindings[InputAction::CameraLockOn] = { 
+			InputBinding::FromMouse(InputMouseButton::Middle),
+			InputBinding::FromKey(DirectX::Keyboard::Keys::Tab)
+		};
 		s_actionBindings[InputAction::CameraToggleDebug] = { InputBinding::FromKey(DirectX::Keyboard::Keys::Q) };
 		s_actionBindings[InputAction::CameraFirstPerson] = { InputBinding::FromKey(DirectX::Keyboard::Keys::P) };
 		s_actionBindings[InputAction::CameraThirdPerson] = { InputBinding::FromKey(DirectX::Keyboard::Keys::T) };
