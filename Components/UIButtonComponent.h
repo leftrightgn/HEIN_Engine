@@ -1,11 +1,14 @@
 #pragma once
-#include "Components/IComponent.h"
-#include "Framework/GameContext.h"
-#include "DebugingTools/IGizmoEditable.h"
-#include <string>
-#include <memory>
-#include <SimpleMath.h>
+#include "SimpleMath.h"
 #include "SpriteBatch.h"
+#include "SpriteFont.h"
+#include <unordered_map>
+#include "Components/IComponent.h"
+#include "DebugingTools/IGizmoEditable.h"
+#include "Framework/GameContext.h"
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace HEIN
 {
@@ -50,6 +53,22 @@ namespace HEIN
         std::string m_text = "";
         DirectX::SimpleMath::Vector4 m_textColor = DirectX::SimpleMath::Vector4(1.0f, 1.0f, 1.0f, 1.0f);
         float m_fontSize = 1.0f;
+        DirectX::SimpleMath::Vector2 m_textOffset = DirectX::SimpleMath::Vector2(0.0f, 0.0f);
+        std::wstring m_spriteFontPath = L"";
+        std::shared_ptr<DirectX::SpriteFont> m_spriteFont;
+
+        // Elden Ring Visual Styling & Light Effects
+        bool m_useEldenStyle = true;
+        bool m_drawFallbackBox = false;
+        bool m_drawDiamonds = true;
+        float m_hoverProgress = 0.0f;
+        float m_animTime = 0.0f;
+        float m_beamWidthScale = 1.35f;
+        float m_beamHeightScale = 1.4f;
+
+        DirectX::SimpleMath::Vector4 m_normalTextColor = DirectX::SimpleMath::Vector4(0.72f, 0.68f, 0.60f, 0.90f);
+        DirectX::SimpleMath::Vector4 m_hoverTextColor = DirectX::SimpleMath::Vector4(1.0f, 0.96f, 0.82f, 1.0f);
+        DirectX::SimpleMath::Vector4 m_glowColor = DirectX::SimpleMath::Vector4(1.0f, 0.82f, 0.35f, 0.70f);
 
         // Tint / Color Overlay
         DirectX::SimpleMath::Vector4 m_tintColor = DirectX::SimpleMath::Vector4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -58,16 +77,28 @@ namespace HEIN
         bool m_isClicked = false;
         bool m_isVisible = true;
 
+        // Keyboard keys (ImGuiKey values) that also activate this button. Empty = mouse only.
+        std::vector<int> m_submitKeys;
+        // Editor-only: inspector is waiting for the next key press to add to m_submitKeys (not serialized)
+        bool m_isCapturingSubmitKey = false;
+
         static constexpr float kRefWidth = 1280.0f;
         static constexpr float kRefHeight = 720.0f;
 
-        float m_lastScaleX = 1.0f;
-        float m_lastScaleY = 1.0f;
+        float m_lastScaleX = 0.0f;
+        float m_lastScaleY = 0.0f;
         float m_lastVpX = 0.0f;
         float m_lastVpY = 0.0f;
 
     public:
         UIButtonComponent(Actor* owner);
+
+        static std::shared_ptr<DirectX::SpriteFont> GetOrCreateFont(ID3D11Device* device, const std::wstring& path);
+        static std::vector<std::wstring> GetDiscoveredFontPaths();
+        static void RegisterDiscoveredFont(const std::wstring& path);
+        static void RefreshDiscoveredFonts();
+        static bool DoesFontExist(const std::wstring& path);
+        void LoadFont(ID3D11Device* device, const std::wstring& path);
 
         void Initialize(GameContext& gameContext,
             const wchar_t* normalTex = nullptr,
@@ -112,6 +143,37 @@ namespace HEIN
         float GetFontSize() const { return m_fontSize; }
         void SetFontSize(float size) { m_fontSize = size; }
 
+        DirectX::SimpleMath::Vector2 GetTextOffset() const { return m_textOffset; }
+        void SetTextOffset(const DirectX::SimpleMath::Vector2& offset) { m_textOffset = offset; }
+
+        const std::wstring& GetSpriteFontPath() const { return m_spriteFontPath; }
+        void SetSpriteFontPath(const std::wstring& path, ID3D11Device* device = nullptr);
+
+        // Elden Ring Visual Styling Getters & Setters
+        bool GetUseEldenStyle() const { return m_useEldenStyle; }
+        void SetUseEldenStyle(bool enable) { m_useEldenStyle = enable; }
+
+        bool GetDrawFallbackBox() const { return m_drawFallbackBox; }
+        void SetDrawFallbackBox(bool enable) { m_drawFallbackBox = enable; }
+
+        bool GetDrawDiamonds() const { return m_drawDiamonds; }
+        void SetDrawDiamonds(bool enable) { m_drawDiamonds = enable; }
+
+        DirectX::SimpleMath::Vector4 GetNormalTextColor() const { return m_normalTextColor; }
+        void SetNormalTextColor(const DirectX::SimpleMath::Vector4& col) { m_normalTextColor = col; }
+
+        DirectX::SimpleMath::Vector4 GetHoverTextColor() const { return m_hoverTextColor; }
+        void SetHoverTextColor(const DirectX::SimpleMath::Vector4& col) { m_hoverTextColor = col; }
+
+        DirectX::SimpleMath::Vector4 GetGlowColor() const { return m_glowColor; }
+        void SetGlowColor(const DirectX::SimpleMath::Vector4& col) { m_glowColor = col; }
+
+        float GetBeamWidthScale() const { return m_beamWidthScale; }
+        void SetBeamWidthScale(float scale) { m_beamWidthScale = scale; }
+
+        float GetBeamHeightScale() const { return m_beamHeightScale; }
+        void SetBeamHeightScale(float scale) { m_beamHeightScale = scale; }
+
         DirectX::SimpleMath::Vector4 GetTintColor() const { return m_tintColor; }
         void SetTintColor(const DirectX::SimpleMath::Vector4& tint) { m_tintColor = tint; }
 
@@ -122,5 +184,8 @@ namespace HEIN
 
         bool IsVisible() const { return m_isVisible; }
         void SetVisible(bool visible) { m_isVisible = visible; }
+
+        const std::vector<int>& GetSubmitKeys() const { return m_submitKeys; }
+        void SetSubmitKeys(const std::vector<int>& keys) { m_submitKeys = keys; }
     };
 }

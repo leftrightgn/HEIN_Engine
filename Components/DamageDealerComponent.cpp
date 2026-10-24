@@ -1,9 +1,9 @@
 #include "pch.h"
 #include "DamageDealerComponent.h"
-#include <ImGui/imgui.h>
-#include <Message/Messenger.h>
-#include <Entities/Actor.h>
-#include <Components/SocketAttachmentComponent.h>
+#include "Components/SocketAttachmentComponent.h"
+#include "Entities/Actor.h"
+#include "ImGui/imgui.h"
+#include "Message/Messenger.h"
 
 HEIN::DamageDealerComponent::DamageDealerComponent(Actor* owner)
 	: IComponent(owner)
@@ -29,17 +29,19 @@ void HEIN::DamageDealerComponent::RegisterToWielderMessages()
 {
 	if (!m_owner) return;
 
-	ActorID listenID = m_owner->GetOwnerID();
+	// Resolve wielder ID dynamically: prefer socket owner, then parent ID, then owner ID
+	ActorID listenID = INVALID_ACTOR_ID;
+	if (auto* socketAttach = m_owner->GetComponent<SocketAttachmentComponent>())
+	{
+		listenID = socketAttach->GetSocketOwnerActorID();
+	}
 	if (listenID == INVALID_ACTOR_ID && m_owner->GetParentID() != INVALID_ACTOR_ID)
 	{
 		listenID = m_owner->GetParentID();
 	}
-	if (listenID == INVALID_ACTOR_ID)
+	if (listenID == INVALID_ACTOR_ID && m_owner->GetOwnerID() != INVALID_ACTOR_ID && m_owner->GetOwnerID() != m_owner->GetID())
 	{
-		if (auto* socketAttach = m_owner->GetComponent<SocketAttachmentComponent>())
-		{
-			listenID = socketAttach->GetSocketOwnerActorID();
-		}
+		listenID = m_owner->GetOwnerID();
 	}
 
 	if (listenID != INVALID_ACTOR_ID && listenID != m_registeredListenID)
@@ -123,7 +125,7 @@ void HEIN::DamageDealerComponent::Deserialize(const nlohmann::json& data)
         m_hitstopFrames = m_causesStun ? 8 : 5;
 }
 
-void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& gameContext)
+void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     if (ImGui::CollapsingHeader("DamageDealerComponent", ImGuiTreeNodeFlags_DefaultOpen))
     {

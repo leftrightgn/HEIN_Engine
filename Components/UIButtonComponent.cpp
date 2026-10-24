@@ -1,13 +1,16 @@
 #include "pch.h"
+#include <filesystem>
+#include <cmath>
+#include <algorithm>
 #include "UIButtonComponent.h"
-#include <ImGui/imgui.h>
-#include <ImGui/imgui_stdlib.h>
-#include <ImGui/ImGuizmo.h>
-#include <DebugingTools/DebugUIManager.h>
-#include <DebugingTools/EditorUtils.h>
-#include <DDSTextureLoader.h>
-#include <WICTextureLoader.h>
+#include "DDSTextureLoader.h"
+#include "WICTextureLoader.h"
 #include "Components/StaticModelComponent.h"
+#include "DebugingTools/DebugUIManager.h"
+#include "DebugingTools/EditorUtils.h"
+#include "ImGui/imgui.h"
+#include "ImGui/imgui_stdlib.h"
+#include "ImGui/ImGuizmo.h"
 
 namespace
 {
@@ -37,6 +40,259 @@ namespace
 
         return srv;
     }
+
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> s_cachedEldenGlowTexture;
+
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> GetOrCreateEldenGlowTexture(ID3D11Device* device)
+    {
+        if (s_cachedEldenGlowTexture)
+        {
+            return s_cachedEldenGlowTexture;
+        }
+        if (!device) return nullptr;
+
+        constexpr UINT texW = 512;
+        constexpr UINT texH = 64;
+        std::vector<uint32_t> pixels(texW * texH);
+
+        for (UINT y = 0; y < texH; ++y)
+        {
+            float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(texH) * 2.0f - 1.0f;
+            float cosV = std::max(0.0f, std::cos(v * 1.57079632679f));
+            float vWeight = std::pow(cosV, 2.2f);
+
+            for (UINT x = 0; x < texW; ++x)
+            {
+                float u = (static_cast<float>(x) + 0.5f) / static_cast<float>(texW) * 2.0f - 1.0f;
+                float cosU = std::max(0.0f, std::cos(u * 1.57079632679f));
+                float uWeight = std::pow(cosU, 1.6f);
+
+                float alpha = std::clamp(uWeight * vWeight, 0.0f, 1.0f);
+                uint8_t aByte = static_cast<uint8_t>(alpha * 255.0f);
+
+                pixels[y * texW + x] = (static_cast<uint32_t>(aByte) << 24) | 0x00FFFFFF;
+            }
+        }
+
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Width = texW;
+        desc.Height = texH;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_IMMUTABLE;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        D3D11_SUBRESOURCE_DATA initData = {};
+        initData.pSysMem = pixels.data();
+        initData.SysMemPitch = texW * sizeof(uint32_t);
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
+        HRESULT hr = device->CreateTexture2D(&desc, &initData, tex.GetAddressOf());
+        if (FAILED(hr)) return nullptr;
+
+        hr = device->CreateShaderResourceView(tex.Get(), nullptr, s_cachedEldenGlowTexture.GetAddressOf());
+        if (FAILED(hr)) return nullptr;
+
+        return s_cachedEldenGlowTexture;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> s_cachedWhiteTexture;
+
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> GetOrCreateWhiteTexture(ID3D11Device* device)
+    {
+        if (s_cachedWhiteTexture) return s_cachedWhiteTexture;
+        if (!device) return nullptr;
+        s_cachedWhiteTexture = CreateSolidTexture(device, 0xFFFFFFFF);
+        return s_cachedWhiteTexture;
+    }
+}
+
+static std::unordered_map<std::wstring, std::shared_ptr<DirectX::SpriteFont>> s_uiButtonFontCache;
+static std::vector<std::wstring> s_discoveredFontPaths;
+
+bool HEIN::UIButtonComponent::DoesFontExist(const std::wstring& path)
+{
+    return HEIN::EditorUtils::DoesFontFileExistOnDisk(path);
+}
+
+void HEIN::UIButtonComponent::RefreshDiscoveredFonts()
+{
+    s_discoveredFontPaths.clear();
+
+    // Purge cached entries for fonts that no longer exist on disk
+    for (auto it = s_uiButtonFontCache.begin(); it != s_uiButtonFontCache.end();)
+    {
+        if (!DoesFontExist(it->first))
+        {
+            it = s_uiButtonFontCache.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    // Dynamic scanning of font directories on disk
+    std::vector<std::string> searchDirs = {
+        "Resources/Font",
+        "Dual/Resources/Font",
+        "../Dual/Resources/Font"
+    };
+
+    for (const auto& dir : searchDirs)
+    {
+        if (std::filesystem::exists(dir) && std::filesystem::is_directory(dir))
+        {
+            try
+            {
+                for (const auto& entry : std::filesystem::directory_iterator(dir))
+                {
+                    if (entry.is_regular_file() && entry.path().extension() == ".spritefont")
+                    {
+                        std::wstring relPath = entry.path().wstring();
+                        for (auto& ch : relPath) { if (ch == L'\\') ch = L'/'; }
+                        auto pos = relPath.find(L"Resources/Font/");
+                        if (pos != std::wstring::npos)
+                        {
+                            relPath = relPath.substr(pos);
+                        }
+
+                        bool alreadyDiscovered = false;
+                        for (const auto& existing : s_discoveredFontPaths)
+                        {
+                            if (existing == relPath)
+                            {
+                                alreadyDiscovered = true;
+                                break;
+                            }
+                        }
+                        if (!alreadyDiscovered)
+                        {
+                            s_discoveredFontPaths.push_back(relPath);
+                        }
+                    }
+                }
+            }
+            catch (...)
+            {
+            }
+        }
+    }
+}
+
+static void EnsureFontsDiscovered()
+{
+    HEIN::UIButtonComponent::RefreshDiscoveredFonts();
+}
+
+std::vector<std::wstring> HEIN::UIButtonComponent::GetDiscoveredFontPaths()
+{
+    RefreshDiscoveredFonts();
+    return s_discoveredFontPaths;
+}
+
+void HEIN::UIButtonComponent::RegisterDiscoveredFont(const std::wstring& path)
+{
+    if (path.empty() || !DoesFontExist(path)) return;
+
+    for (const auto& existing : s_discoveredFontPaths)
+    {
+        if (existing == path) return;
+    }
+    s_discoveredFontPaths.push_back(path);
+}
+
+std::shared_ptr<DirectX::SpriteFont> HEIN::UIButtonComponent::GetOrCreateFont(ID3D11Device* device, const std::wstring& path)
+{
+    if (!device || path.empty()) return nullptr;
+
+    if (!DoesFontExist(path))
+    {
+        s_uiButtonFontCache.erase(path);
+        return nullptr;
+    }
+
+    auto it = s_uiButtonFontCache.find(path);
+    if (it != s_uiButtonFontCache.end() && it->second) return it->second;
+
+    std::filesystem::path p(path);
+    std::wstring filename = p.filename().wstring();
+
+    std::vector<std::wstring> candidates = {
+        path,
+        std::wstring(L"Dual/") + path,
+        std::wstring(L"../Dual/") + path,
+        std::wstring(L"Resources/Font/") + filename,
+        std::wstring(L"Dual/Resources/Font/") + filename,
+        std::wstring(L"../Dual/Resources/Font/") + filename
+    };
+
+    for (const auto& candidate : candidates)
+    {
+        try
+        {
+            if (std::filesystem::exists(candidate) && std::filesystem::is_regular_file(candidate))
+            {
+                auto font = std::make_shared<DirectX::SpriteFont>(device, candidate.c_str());
+                if (font)
+                {
+                    font->SetDefaultCharacter(L'?');
+                    s_uiButtonFontCache[path] = font;
+                    RegisterDiscoveredFont(path);
+                    return font;
+                }
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+    return nullptr;
+}
+
+void HEIN::UIButtonComponent::LoadFont(ID3D11Device* device, const std::wstring& path)
+{
+    if (path.empty() || !DoesFontExist(path))
+    {
+        m_spriteFontPath = L"";
+        m_spriteFont.reset();
+        return;
+    }
+
+    m_spriteFontPath = path;
+    if (!device)
+    {
+        m_spriteFont.reset();
+        return;
+    }
+
+    m_spriteFont = GetOrCreateFont(device, m_spriteFontPath);
+    if (!m_spriteFont)
+    {
+        m_spriteFontPath = L"";
+    }
+}
+
+void HEIN::UIButtonComponent::SetSpriteFontPath(const std::wstring& path, ID3D11Device* device)
+{
+    if (path.empty() || !DoesFontExist(path))
+    {
+        m_spriteFontPath = L"";
+        m_spriteFont.reset();
+        return;
+    }
+
+    m_spriteFontPath = path;
+    if (device)
+    {
+        LoadFont(device, path);
+    }
+    else
+    {
+        m_spriteFont.reset();
+    }
 }
 
 HEIN::UIButtonComponent::UIButtonComponent(Actor* owner)
@@ -62,8 +318,6 @@ void HEIN::UIButtonComponent::Initialize(GameContext& gameContext, const wchar_t
     {
         srv.Reset();
         if (path.empty()) return;
-
-        // Shared cache: Hover and Pressed often reference the same file
         HEIN::TryLoadCachedTextureFile(device, path, srv.ReleaseAndGetAddressOf());
     };
 
@@ -71,13 +325,21 @@ void HEIN::UIButtonComponent::Initialize(GameContext& gameContext, const wchar_t
     loadTexture(m_hoverTexPath, m_hoverTexture);
     loadTexture(m_pressedTexPath, m_pressedTexture);
 
-    // Fallback solid color textures for button defaults if no custom texture provided
-    if (m_elementType == UIElementType::Button)
+    // Only create fallback background box textures if explicitly requested by the user
+    if (m_elementType == UIElementType::Button && m_drawFallbackBox)
     {
         if (!m_normalTexture)  m_normalTexture = CreateSolidTexture(device, 0xEE3A2E20);
         if (!m_hoverTexture)   m_hoverTexture = CreateSolidTexture(device, 0xFF654E35);
         if (!m_pressedTexture) m_pressedTexture = CreateSolidTexture(device, 0xFF9E7E5A);
     }
+
+    GetOrCreateEldenGlowTexture(device);
+
+    if (!m_spriteFontPath.empty() && !DoesFontExist(m_spriteFontPath))
+    {
+        m_spriteFontPath = L"";
+    }
+    LoadFont(device, m_spriteFontPath);
 }
 
 void HEIN::UIButtonComponent::Start()
@@ -88,6 +350,8 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
 {
     if (!m_isVisible) return;
 
+    m_animTime += deltaTime;
+
     // Reset clicked flag every frame
     m_isClicked = false;
 
@@ -95,25 +359,64 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
     if (m_elementType != UIElementType::Button)
     {
         m_currentState = ButtonState::Normal;
+        m_hoverProgress = 0.0f;
         return;
     }
 
-    // Ignore clicks when ImGui or ImGuizmo is capturing mouse
-    bool isUICapturingMouse = ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+    // Keyboard shortcuts configured per button (empty list = mouse-only button)
+    for (int key : m_submitKeys)
+    {
+        if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(key), false))
+        {
+            m_isClicked = true;
+            break;
+        }
+    }
+
+    // Ignore clicks when ImGuizmo is actively using gizmo controls
+    bool isUICapturingMouse = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
     if (isUICapturingMouse)
     {
         m_wasMouseDown = false;
         m_currentState = ButtonState::Normal;
+        float targetProgress = 0.0f;
+        m_hoverProgress += (targetProgress - m_hoverProgress) * std::min(1.0f, 12.0f * deltaTime);
         return;
     }
 
-    // Grab raw global mouse state
-    auto mouseState = DirectX::Mouse::Get().GetState();
-    float mouseX = static_cast<float>(mouseState.x);
-    float mouseY = static_cast<float>(mouseState.y);
+    // Grab true client window cursor position
+    float mouseX = 0.0f;
+    float mouseY = 0.0f;
+    bool hasValidMousePos = false;
 
-    float scaleX = (m_lastScaleX > 0.0001f) ? m_lastScaleX : (ImGui::GetIO().DisplaySize.x / kRefWidth);
-    float scaleY = (m_lastScaleY > 0.0001f) ? m_lastScaleY : (ImGui::GetIO().DisplaySize.y / kRefHeight);
+    if (ImGui::IsMousePosValid(&ImGui::GetIO().MousePos))
+    {
+        mouseX = ImGui::GetIO().MousePos.x;
+        mouseY = ImGui::GetIO().MousePos.y;
+        hasValidMousePos = true;
+    }
+    else
+    {
+        HWND hwnd = GetActiveWindow();
+        if (!hwnd) hwnd = GetForegroundWindow();
+        POINT pt;
+        if (hwnd && GetCursorPos(&pt) && ScreenToClient(hwnd, &pt))
+        {
+            mouseX = static_cast<float>(pt.x);
+            mouseY = static_cast<float>(pt.y);
+            hasValidMousePos = true;
+        }
+    }
+
+    auto mouseState = DirectX::Mouse::Get().GetState();
+    if (!hasValidMousePos)
+    {
+        mouseX = static_cast<float>(mouseState.x);
+        mouseY = static_cast<float>(mouseState.y);
+    }
+
+    float scaleX = (m_lastScaleX > 0.0001f) ? m_lastScaleX : (ImGui::GetIO().DisplaySize.x > 0.0f ? ImGui::GetIO().DisplaySize.x / kRefWidth : 1.0f);
+    float scaleY = (m_lastScaleY > 0.0001f) ? m_lastScaleY : (ImGui::GetIO().DisplaySize.y > 0.0f ? ImGui::GetIO().DisplaySize.y / kRefHeight : 1.0f);
     if (scaleX <= 0.0001f) scaleX = 1.0f;
     if (scaleY <= 0.0001f) scaleY = 1.0f;
 
@@ -125,7 +428,9 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
     bool isHovering = (canvasMouseX >= m_position.x && canvasMouseX <= m_position.x + m_size.x &&
         canvasMouseY >= m_position.y && canvasMouseY <= m_position.y + m_size.y);
 
-    bool isMouseDown = mouseState.leftButton;
+    bool isMouseDown = mouseState.leftButton ||
+                       ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) ||
+                       ImGui::IsMouseDown(ImGuiMouseButton_Left);
 
     if (isHovering)
     {
@@ -137,11 +442,17 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
         {
             m_currentState = ButtonState::Hover;
 
-            // If the mouse was down last frame, but isn't this frame (Mouse Up/Release) -> Trigger Click!
+            // If mouse was down last frame, but isn't this frame (Mouse Up/Release) -> Trigger Click
             if (m_wasMouseDown)
             {
                 m_isClicked = true;
             }
+        }
+
+        // Also register immediate click if triggered this frame
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_isClicked = true;
         }
     }
     else
@@ -150,6 +461,11 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
     }
 
     m_wasMouseDown = isMouseDown;
+
+    // Smooth hover progress interpolation for fluid Elden Ring light-up transition
+    float targetProgress = (m_currentState == ButtonState::Hover || m_currentState == ButtonState::Pressed) ? 1.0f : 0.0f;
+    float lerpSpeed = 12.0f;
+    m_hoverProgress += (targetProgress - m_hoverProgress) * std::min(1.0f, lerpSpeed * deltaTime);
 }
 
 void HEIN::UIButtonComponent::Draw2D(GameContext& gameContext)
@@ -158,7 +474,7 @@ void HEIN::UIButtonComponent::Draw2D(GameContext& gameContext)
     Draw(gameContext, DirectX::SimpleMath::Matrix::Identity, DirectX::SimpleMath::Matrix::Identity, DirectX::SimpleMath::Matrix::Identity);
 }
 
-void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& world, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
+void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& /*world*/, const DirectX::SimpleMath::Matrix& /*view*/, const DirectX::SimpleMath::Matrix& /*proj*/)
 {
     if (!m_isVisible || !gameContext.showUI || gameContext.isSceneViewPass) return;
 
@@ -181,7 +497,9 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
     float renderSizeX = m_size.x * m_lastScaleX;
     float renderSizeY = m_size.y * m_lastScaleY;
 
-    // Texture Pass: Button or Image elements
+    ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
+
+    // Texture Pass: custom textures only when assigned or explicitly requested
     if ((m_elementType == UIElementType::Button || m_elementType == UIElementType::Image) && m_spriteBatch)
     {
         ID3D11ShaderResourceView* textureToDraw = m_normalTexture.Get();
@@ -197,20 +515,51 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
         if (textureToDraw)
         {
             RECT drawRect;
-            drawRect.left = static_cast<LONG>(renderPosX);
-            drawRect.top = static_cast<LONG>(renderPosY);
-            drawRect.right = static_cast<LONG>(renderPosX + renderSizeX);
-            drawRect.bottom = static_cast<LONG>(renderPosY + renderSizeY);
+            drawRect.left = static_cast<LONG>(std::floor(renderPosX + 0.5f));
+            drawRect.top = static_cast<LONG>(std::floor(renderPosY + 0.5f));
+            drawRect.right = static_cast<LONG>(std::floor(renderPosX + renderSizeX + 0.5f));
+            drawRect.bottom = static_cast<LONG>(std::floor(renderPosY + renderSizeY + 0.5f));
 
-            DirectX::SimpleMath::Vector4 tint(m_tintColor.x, m_tintColor.y, m_tintColor.z, m_tintColor.w);
+            DirectX::SimpleMath::Vector4 tint = m_tintColor;
 
-            // UI overlay uses DepthNone and NonPremultiplied alpha blend so it is always on top of 3D geometry
             gameContext.deviceResources.GetD3DDeviceContext()->OMSetDepthStencilState(gameContext.commonStates.DepthNone(), 0);
             m_spriteBatch->Begin(DirectX::SpriteSortMode_Deferred, gameContext.commonStates.NonPremultiplied());
             m_spriteBatch->Draw(textureToDraw, drawRect, nullptr, tint);
             m_spriteBatch->End();
+            gameContext.deviceResources.GetD3DDeviceContext()->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+        }
+    }
 
-            // Reset depth state to default for any subsequent 3D passes
+    // Elden Ring Light-Up Horizontal Beam Pass
+    if (m_elementType == UIElementType::Button && m_useEldenStyle && m_hoverProgress > 0.001f && m_spriteBatch)
+    {
+        auto flareTex = GetOrCreateEldenGlowTexture(device);
+        if (flareTex)
+        {
+            float beamW = renderSizeX * m_beamWidthScale;
+            float beamH = renderSizeY * m_beamHeightScale;
+            float beamX = renderPosX + (renderSizeX - beamW) * 0.5f;
+            float beamY = renderPosY + (renderSizeY - beamH) * 0.5f;
+
+            RECT flareRect;
+            flareRect.left = static_cast<LONG>(std::floor(beamX + 0.5f));
+            flareRect.top = static_cast<LONG>(std::floor(beamY + 0.5f));
+            flareRect.right = static_cast<LONG>(std::floor(beamX + beamW + 0.5f));
+            flareRect.bottom = static_cast<LONG>(std::floor(beamY + beamH + 0.5f));
+
+            float pulse = 0.88f + 0.12f * std::sin(m_animTime * 3.5f);
+            if (m_currentState == ButtonState::Pressed)
+            {
+                pulse *= 1.35f;
+            }
+
+            DirectX::SimpleMath::Vector4 flareColor = m_glowColor;
+            flareColor.w *= std::clamp(m_hoverProgress * pulse, 0.0f, 1.0f);
+
+            gameContext.deviceResources.GetD3DDeviceContext()->OMSetDepthStencilState(gameContext.commonStates.DepthNone(), 0);
+            m_spriteBatch->Begin(DirectX::SpriteSortMode_Deferred, gameContext.commonStates.NonPremultiplied());
+            m_spriteBatch->Draw(flareTex.Get(), flareRect, nullptr, flareColor);
+            m_spriteBatch->End();
             gameContext.deviceResources.GetD3DDeviceContext()->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
         }
     }
@@ -218,44 +567,156 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
     // Text Pass: Text elements or labeled buttons
     if (!m_text.empty())
     {
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        if (drawList)
+        float uiScale = std::min(m_lastScaleX, m_lastScaleY);
+
+        DirectX::SimpleMath::Vector4 activeTextColor = m_textColor;
+        if (m_elementType == UIElementType::Button && m_useEldenStyle)
         {
-            ImU32 col = IM_COL32(
-                static_cast<int>(m_textColor.x * 255.0f),
-                static_cast<int>(m_textColor.y * 255.0f),
-                static_cast<int>(m_textColor.z * 255.0f),
-                static_cast<int>(m_textColor.w * 255.0f)
-            );
+            activeTextColor = DirectX::SimpleMath::Vector4::Lerp(m_normalTextColor, m_hoverTextColor, m_hoverProgress);
+        }
 
-            float uiScale = std::min(m_lastScaleX, m_lastScaleY);
-            float fontSize = ImGui::GetFontSize() * m_fontSize * uiScale;
-            ImVec2 textSize = ImGui::CalcTextSize(m_text.c_str());
-            textSize.x *= (m_fontSize * uiScale);
-            textSize.y *= (m_fontSize * uiScale);
+        if (m_spriteFont && m_spriteBatch)
+        {
+            int len = MultiByteToWideChar(CP_UTF8, 0, m_text.c_str(), -1, nullptr, 0);
+            std::wstring wtext(len, 0);
+            MultiByteToWideChar(CP_UTF8, 0, m_text.c_str(), -1, &wtext[0], len);
+            if (!wtext.empty() && wtext.back() == L'\0') wtext.pop_back();
 
-            ImVec2 textPos;
+            float fontScale = m_fontSize * uiScale;
+            DirectX::SimpleMath::Vector2 rawTextSize = m_spriteFont->MeasureString(wtext.c_str());
+            DirectX::SimpleMath::Vector2 textSize(rawTextSize.x * fontScale, rawTextSize.y * fontScale);
+
+            DirectX::SimpleMath::Vector2 textPos;
             if (m_elementType == UIElementType::Button)
             {
-                // Center text inside button bounds at viewport screen position
-                textPos = ImVec2(
-                    m_lastVpX + renderPosX + (renderSizeX - textSize.x) * 0.5f,
-                    m_lastVpY + renderPosY + (renderSizeY - textSize.y) * 0.5f
+                textPos = DirectX::SimpleMath::Vector2(
+                    renderPosX + (renderSizeX - textSize.x) * 0.5f + m_textOffset.x * m_lastScaleX,
+                    renderPosY + (renderSizeY - textSize.y) * 0.5f + m_textOffset.y * m_lastScaleY
                 );
             }
             else
             {
-                // Top-left aligned for Text / Labels
-                textPos = ImVec2(
-                    m_lastVpX + renderPosX,
-                    m_lastVpY + renderPosY
+                textPos = DirectX::SimpleMath::Vector2(
+                    renderPosX + m_textOffset.x * m_lastScaleX,
+                    renderPosY + m_textOffset.y * m_lastScaleY
                 );
             }
 
-            // Drop shadow
-            float shadowOff = std::max(1.0f, 2.0f * uiScale);
-            drawList->AddText(ImGui::GetFont(), fontSize, ImVec2(textPos.x + shadowOff, textPos.y + shadowOff), IM_COL32(0, 0, 0, static_cast<int>(m_textColor.w * 190.0f)), m_text.c_str());
-            drawList->AddText(ImGui::GetFont(), fontSize, textPos, col, m_text.c_str());
+            // Snap text position to whole pixels to prevent sub-pixel sampling blur
+            textPos.x = std::floor(textPos.x + 0.5f);
+            textPos.y = std::floor(textPos.y + 0.5f);
+
+            DirectX::SimpleMath::Vector4 shadowCol(0.0f, 0.0f, 0.0f, activeTextColor.w * 0.85f);
+            float shadowOff = std::max(1.0f, std::floor(1.5f * uiScale + 0.5f));
+
+            float pulse = 0.88f + 0.12f * std::sin(m_animTime * 3.5f);
+
+            gameContext.deviceResources.GetD3DDeviceContext()->OMSetDepthStencilState(gameContext.commonStates.DepthNone(), 0);
+            m_spriteBatch->Begin(DirectX::SpriteSortMode_Deferred, gameContext.commonStates.NonPremultiplied());
+
+            // Soft shadow pass behind text
+            m_spriteFont->DrawString(m_spriteBatch.get(), wtext.c_str(),
+                DirectX::SimpleMath::Vector2(textPos.x + shadowOff, textPos.y + shadowOff),
+                shadowCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+
+            // Radiant golden text bloom pass for Elden Ring light-up effect
+            if (m_elementType == UIElementType::Button && m_useEldenStyle && m_hoverProgress > 0.05f)
+            {
+                DirectX::SimpleMath::Vector4 glowPassColor = m_glowColor;
+                glowPassColor.w *= (0.28f * m_hoverProgress * pulse);
+
+                float bloomSpread = std::max(1.0f, std::floor(1.0f * uiScale + 0.5f));
+                m_spriteFont->DrawString(m_spriteBatch.get(), wtext.c_str(),
+                    DirectX::SimpleMath::Vector2(textPos.x - bloomSpread, textPos.y),
+                    glowPassColor, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+                m_spriteFont->DrawString(m_spriteBatch.get(), wtext.c_str(),
+                    DirectX::SimpleMath::Vector2(textPos.x + bloomSpread, textPos.y),
+                    glowPassColor, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+                m_spriteFont->DrawString(m_spriteBatch.get(), wtext.c_str(),
+                    DirectX::SimpleMath::Vector2(textPos.x, textPos.y - bloomSpread),
+                    glowPassColor, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+                m_spriteFont->DrawString(m_spriteBatch.get(), wtext.c_str(),
+                    DirectX::SimpleMath::Vector2(textPos.x, textPos.y + bloomSpread),
+                    glowPassColor, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+
+                // Flanking diamond accents when hovered
+                if (m_drawDiamonds)
+                {
+                    auto whiteTex = GetOrCreateWhiteTexture(device);
+                    if (whiteTex)
+                    {
+                        DirectX::SimpleMath::Vector4 diamondColor = m_hoverTextColor;
+                        diamondColor.w *= (m_hoverProgress * pulse);
+
+                        float markerOffset = std::floor(24.0f * uiScale + 0.5f);
+                        float diamondSide = std::max(4.0f, std::floor(7.0f * fontScale + 0.5f));
+                        DirectX::SimpleMath::Vector2 dScale(diamondSide, diamondSide);
+                        DirectX::SimpleMath::Vector2 dOrigin(0.5f, 0.5f);
+
+                        DirectX::SimpleMath::Vector2 leftMarkerPos(textPos.x - markerOffset, textPos.y + textSize.y * 0.5f);
+                        DirectX::SimpleMath::Vector2 rightMarkerPos(textPos.x + textSize.x + markerOffset, textPos.y + textSize.y * 0.5f);
+
+                        // Soft diamond glow halo
+                        DirectX::SimpleMath::Vector4 dGlow = m_glowColor;
+                        dGlow.w *= (0.35f * m_hoverProgress * pulse);
+                        DirectX::SimpleMath::Vector2 dGlowScale(diamondSide * 1.5f, diamondSide * 1.5f);
+                        m_spriteBatch->Draw(whiteTex.Get(), leftMarkerPos, nullptr, dGlow, 0.785398f, dOrigin, dGlowScale);
+                        m_spriteBatch->Draw(whiteTex.Get(), rightMarkerPos, nullptr, dGlow, 0.785398f, dOrigin, dGlowScale);
+
+                        // Sharp diamond core
+                        m_spriteBatch->Draw(whiteTex.Get(), leftMarkerPos, nullptr, diamondColor, 0.785398f, dOrigin, dScale);
+                        m_spriteBatch->Draw(whiteTex.Get(), rightMarkerPos, nullptr, diamondColor, 0.785398f, dOrigin, dScale);
+                    }
+                }
+            }
+
+            // Razor-sharp foreground text
+            m_spriteFont->DrawString(m_spriteBatch.get(), wtext.c_str(),
+                textPos, activeTextColor, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+
+            m_spriteBatch->End();
+            gameContext.deviceResources.GetD3DDeviceContext()->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
+        }
+        else
+        {
+            ImDrawList* drawList = ImGui::GetForegroundDrawList();
+            if (drawList)
+            {
+                ImU32 col = IM_COL32(
+                    static_cast<int>(activeTextColor.x * 255.0f),
+                    static_cast<int>(activeTextColor.y * 255.0f),
+                    static_cast<int>(activeTextColor.z * 255.0f),
+                    static_cast<int>(activeTextColor.w * 255.0f)
+                );
+
+                float fontSize = ImGui::GetFontSize() * m_fontSize * uiScale;
+                ImVec2 textSize = ImGui::CalcTextSize(m_text.c_str());
+                textSize.x *= (m_fontSize * uiScale);
+                textSize.y *= (m_fontSize * uiScale);
+
+                ImVec2 textPos;
+                if (m_elementType == UIElementType::Button)
+                {
+                    textPos = ImVec2(
+                        m_lastVpX + renderPosX + (renderSizeX - textSize.x) * 0.5f + m_textOffset.x * m_lastScaleX,
+                        m_lastVpY + renderPosY + (renderSizeY - textSize.y) * 0.5f + m_textOffset.y * m_lastScaleY
+                    );
+                }
+                else
+                {
+                    textPos = ImVec2(
+                        m_lastVpX + renderPosX + m_textOffset.x * m_lastScaleX,
+                        m_lastVpY + renderPosY + m_textOffset.y * m_lastScaleY
+                    );
+                }
+
+                textPos.x = std::floor(textPos.x + 0.5f);
+                textPos.y = std::floor(textPos.y + 0.5f);
+
+                float shadowOff = std::max(1.0f, std::floor(1.5f * uiScale + 0.5f));
+                drawList->AddText(ImGui::GetFont(), fontSize, ImVec2(textPos.x + shadowOff, textPos.y + shadowOff), IM_COL32(0, 0, 0, static_cast<int>(activeTextColor.w * 190.0f)), m_text.c_str());
+                drawList->AddText(ImGui::GetFont(), fontSize, textPos, col, m_text.c_str());
+            }
         }
     }
 }
@@ -267,6 +728,13 @@ bool HEIN::UIButtonComponent::IsClicked()
 
 nlohmann::json HEIN::UIButtonComponent::Serialize()
 {
+    // Clean out deleted font path so it is never kept in the resource data
+    if (!m_spriteFontPath.empty() && !DoesFontExist(m_spriteFontPath))
+    {
+        m_spriteFontPath = L"";
+        m_spriteFont.reset();
+    }
+
     nlohmann::json data = IComponent::Serialize();
     data["ElementType"] = static_cast<int>(m_elementType);
     data["PosX"] = m_position.x;
@@ -279,6 +747,42 @@ nlohmann::json HEIN::UIButtonComponent::Serialize()
     data["TextColorB"] = m_textColor.z;
     data["TextColorA"] = m_textColor.w;
     data["FontSize"] = m_fontSize;
+    data["TextOffsetX"] = m_textOffset.x;
+    data["TextOffsetY"] = m_textOffset.y;
+
+    data["UseEldenStyle"] = m_useEldenStyle;
+    data["DrawFallbackBox"] = m_drawFallbackBox;
+    data["DrawDiamonds"] = m_drawDiamonds;
+    data["BeamWidthScale"] = m_beamWidthScale;
+    data["BeamHeightScale"] = m_beamHeightScale;
+
+    data["NormalTextColorR"] = m_normalTextColor.x;
+    data["NormalTextColorG"] = m_normalTextColor.y;
+    data["NormalTextColorB"] = m_normalTextColor.z;
+    data["NormalTextColorA"] = m_normalTextColor.w;
+
+    data["HoverTextColorR"] = m_hoverTextColor.x;
+    data["HoverTextColorG"] = m_hoverTextColor.y;
+    data["HoverTextColorB"] = m_hoverTextColor.z;
+    data["HoverTextColorA"] = m_hoverTextColor.w;
+
+    data["GlowColorR"] = m_glowColor.x;
+    data["GlowColorG"] = m_glowColor.y;
+    data["GlowColorB"] = m_glowColor.z;
+    data["GlowColorA"] = m_glowColor.w;
+
+    if (!m_spriteFontPath.empty() && DoesFontExist(m_spriteFontPath))
+    {
+        int len = WideCharToMultiByte(CP_UTF8, 0, m_spriteFontPath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+        std::string s(len, 0);
+        WideCharToMultiByte(CP_UTF8, 0, m_spriteFontPath.c_str(), -1, &s[0], len, nullptr, nullptr);
+        if (!s.empty() && s.back() == '\0') s.pop_back();
+        data["SpriteFontPath"] = s;
+    }
+    else
+    {
+        data["SpriteFontPath"] = "";
+    }
     data["TintR"] = m_tintColor.x;
     data["TintG"] = m_tintColor.y;
     data["TintB"] = m_tintColor.z;
@@ -287,6 +791,7 @@ nlohmann::json HEIN::UIButtonComponent::Serialize()
     data["HoverTex"] = std::string(m_hoverTexPath.begin(), m_hoverTexPath.end());
     data["PressedTex"] = std::string(m_pressedTexPath.begin(), m_pressedTexPath.end());
     data["IsVisible"] = m_isVisible;
+    data["SubmitKeys"] = m_submitKeys;
     return data;
 }
 
@@ -300,7 +805,61 @@ void HEIN::UIButtonComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("SizeY")) m_size.y = data["SizeY"];
     if (data.contains("Text")) m_text = data["Text"];
     if (data.contains("FontSize")) m_fontSize = data["FontSize"];
+    if (data.contains("TextOffsetX")) m_textOffset.x = data["TextOffsetX"];
+    if (data.contains("TextOffsetY")) m_textOffset.y = data["TextOffsetY"];
+
+    if (data.contains("UseEldenStyle")) m_useEldenStyle = data["UseEldenStyle"];
+    if (data.contains("DrawFallbackBox")) m_drawFallbackBox = data["DrawFallbackBox"];
+    if (data.contains("DrawDiamonds")) m_drawDiamonds = data["DrawDiamonds"];
+    if (data.contains("BeamWidthScale")) m_beamWidthScale = data["BeamWidthScale"];
+    if (data.contains("BeamHeightScale")) m_beamHeightScale = data["BeamHeightScale"];
+
+    if (data.contains("NormalTextColorR"))
+    {
+        m_normalTextColor.x = data["NormalTextColorR"];
+        m_normalTextColor.y = data["NormalTextColorG"];
+        m_normalTextColor.z = data["NormalTextColorB"];
+        m_normalTextColor.w = data.value("NormalTextColorA", 0.90f);
+    }
+    if (data.contains("HoverTextColorR"))
+    {
+        m_hoverTextColor.x = data["HoverTextColorR"];
+        m_hoverTextColor.y = data["HoverTextColorG"];
+        m_hoverTextColor.z = data["HoverTextColorB"];
+        m_hoverTextColor.w = data.value("HoverTextColorA", 1.0f);
+    }
+    if (data.contains("GlowColorR"))
+    {
+        m_glowColor.x = data["GlowColorR"];
+        m_glowColor.y = data["GlowColorG"];
+        m_glowColor.z = data["GlowColorB"];
+        m_glowColor.w = data.value("GlowColorA", 0.70f);
+    }
+
+    if (data.contains("SpriteFontPath"))
+    {
+        std::string path = data["SpriteFontPath"];
+        int len = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+        m_spriteFontPath.resize(len);
+        MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, &m_spriteFontPath[0], len);
+        if (!m_spriteFontPath.empty() && m_spriteFontPath.back() == L'\0') m_spriteFontPath.pop_back();
+
+        // Prune path if the file does not exist on disk
+        if (!m_spriteFontPath.empty() && !DoesFontExist(m_spriteFontPath))
+        {
+            m_spriteFontPath = L"";
+        }
+    }
     if (data.contains("IsVisible")) m_isVisible = data["IsVisible"];
+    // Older scene files have no SubmitKeys entry and stay mouse-only
+    m_submitKeys.clear();
+    if (data.contains("SubmitKeys") && data["SubmitKeys"].is_array())
+    {
+        for (const auto& key : data["SubmitKeys"])
+        {
+            if (key.is_number_integer()) m_submitKeys.push_back(key.get<int>());
+        }
+    }
 
     if (data.contains("TextColorR"))
     {
@@ -337,6 +896,11 @@ void HEIN::UIButtonComponent::Deserialize(const nlohmann::json& data)
 void HEIN::UIButtonComponent::InitializeAfterDeserialize(GameContext& gameContext)
 {
     Initialize(gameContext, m_normalTexPath.c_str(), m_hoverTexPath.c_str(), m_pressedTexPath.c_str());
+    if (!m_spriteFontPath.empty() && !DoesFontExist(m_spriteFontPath))
+    {
+        m_spriteFontPath = L"";
+    }
+    LoadFont(gameContext.deviceResources.GetD3DDevice(), m_spriteFontPath);
 }
 
 void HEIN::UIButtonComponent::OnInspectorGUI(GameContext& gameContext)
@@ -364,6 +928,61 @@ void HEIN::UIButtonComponent::OnInspectorGUI(GameContext& gameContext)
         ImGui::DragFloat2("Position (Screen X, Y)", &m_position.x, 1.0f);
         ImGui::DragFloat2("Size (Width, Height)", &m_size.x, 1.0f, 10.0f, 4000.0f);
         ImGui::Checkbox("Is Visible", &m_isVisible);
+
+        // Keyboard shortcuts: keys that also activate this button (empty = mouse only)
+        if (m_elementType == UIElementType::Button)
+        {
+            ImGui::Separator();
+            ImGui::Text("Keyboard Shortcuts:");
+            if (m_submitKeys.empty())
+            {
+                ImGui::TextDisabled("None (left mouse click only)");
+            }
+            for (size_t i = 0; i < m_submitKeys.size(); )
+            {
+                ImGui::PushID(static_cast<int>(i));
+                ImGui::BulletText("%s", ImGui::GetKeyName(static_cast<ImGuiKey>(m_submitKeys[i])));
+                ImGui::SameLine();
+                bool removed = ImGui::SmallButton("Remove");
+                ImGui::PopID();
+                if (removed)
+                {
+                    m_submitKeys.erase(m_submitKeys.begin() + i);
+                    continue;
+                }
+                ++i;
+            }
+
+            if (!m_isCapturingSubmitKey)
+            {
+                if (ImGui::Button("Add Shortcut Key")) m_isCapturingSubmitKey = true;
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Press any keyboard key...");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Cancel##SubmitKey"))
+                {
+                    m_isCapturingSubmitKey = false;
+                }
+                else
+                {
+                    // Keyboard keys occupy the named-key range before the gamepad block
+                    for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_GamepadStart; ++key)
+                    {
+                        if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(key), false))
+                        {
+                            if (std::find(m_submitKeys.begin(), m_submitKeys.end(), key) == m_submitKeys.end())
+                            {
+                                m_submitKeys.push_back(key);
+                            }
+                            m_isCapturingSubmitKey = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         // Texture & Tint Controls for Button and Image
         if (m_elementType == UIElementType::Button || m_elementType == UIElementType::Image)
@@ -428,14 +1047,126 @@ void HEIN::UIButtonComponent::OnInspectorGUI(GameContext& gameContext)
             ImGui::ColorEdit4("Tint Color", &m_tintColor.x);
         }
 
+        // Elden Ring Visual Styling Controls
+        if (m_elementType == UIElementType::Button)
+        {
+            ImGui::Separator();
+            if (ImGui::TreeNodeEx("Elden Ring Light-Up Button Effect", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Checkbox("Enable Elden Ring Style", &m_useEldenStyle);
+                if (m_useEldenStyle)
+                {
+                    ImGui::ColorEdit4("Normal Text Color (Parchment)", &m_normalTextColor.x);
+                    ImGui::ColorEdit4("Focused Text Color (Luminous)", &m_hoverTextColor.x);
+                    ImGui::ColorEdit4("Horizontal Beam Glow Color", &m_glowColor.x);
+                    ImGui::Checkbox("Draw Flanking Diamonds (< * >)", &m_drawDiamonds);
+                    ImGui::DragFloat("Beam Width Scale", &m_beamWidthScale, 0.05f, 0.5f, 3.0f, "%.2fx");
+                    ImGui::DragFloat("Beam Height Scale", &m_beamHeightScale, 0.05f, 0.5f, 3.0f, "%.2fx");
+                }
+                ImGui::Checkbox("Draw Fallback Background Box", &m_drawFallbackBox);
+                ImGui::TreePop();
+            }
+        }
+
         // Text & Typography Controls for Button and Text
         if (m_elementType == UIElementType::Button || m_elementType == UIElementType::Text)
         {
             ImGui::Separator();
-            ImGui::Text(m_elementType == UIElementType::Button ? "Button Label Settings:" : "Text Settings:");
+            ImGui::Text(m_elementType == UIElementType::Button ? "Button Label & Typography Settings:" : "Text & Typography Settings:");
             ImGui::InputText(m_elementType == UIElementType::Button ? "Button Text" : "Content Text", &m_text);
-            ImGui::ColorEdit4("Text Color", &m_textColor.x);
-            ImGui::SliderFloat("Font Scale", &m_fontSize, 0.5f, 5.0f, "%.2fx");
+            if (!m_useEldenStyle || m_elementType != UIElementType::Button)
+            {
+                ImGui::ColorEdit4("Text Color", &m_textColor.x);
+            }
+            ImGui::DragFloat("Font Size / Scale", &m_fontSize, 0.02f, 0.1f, 10.0f, "%.2fx");
+            ImGui::DragFloat2("Text Offset (X, Y)", &m_textOffset.x, 1.0f);
+
+            // Dynamically refresh discovered font paths and prune any deleted files from the list
+            RefreshDiscoveredFonts();
+
+            // Verify active font path still exists on disk; if deleted, remove path keeping
+            if (!m_spriteFontPath.empty() && !DoesFontExist(m_spriteFontPath))
+            {
+                m_spriteFontPath = L"";
+                m_spriteFont.reset();
+            }
+
+            std::vector<std::string> comboItems;
+            comboItems.push_back("Default (ImGui)");
+            int currentFontIdx = 0;
+
+            int lenCurrent = WideCharToMultiByte(CP_UTF8, 0, m_spriteFontPath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+            std::string currentPathStr(lenCurrent, 0);
+            WideCharToMultiByte(CP_UTF8, 0, m_spriteFontPath.c_str(), -1, &currentPathStr[0], lenCurrent, nullptr, nullptr);
+            if (!currentPathStr.empty() && currentPathStr.back() == '\0') currentPathStr.pop_back();
+
+            for (size_t i = 0; i < s_discoveredFontPaths.size(); ++i)
+            {
+                int len = WideCharToMultiByte(CP_UTF8, 0, s_discoveredFontPaths[i].c_str(), -1, nullptr, 0, nullptr, nullptr);
+                std::string fontName(len, 0);
+                WideCharToMultiByte(CP_UTF8, 0, s_discoveredFontPaths[i].c_str(), -1, &fontName[0], len, nullptr, nullptr);
+                if (!fontName.empty() && fontName.back() == '\0') fontName.pop_back();
+
+                std::string displayName = fontName;
+                auto slashPos = displayName.find_last_of("/\\");
+                if (slashPos != std::string::npos)
+                {
+                    displayName = displayName.substr(slashPos + 1);
+                }
+
+                comboItems.push_back(displayName + " (" + fontName + ")");
+                if (!m_spriteFontPath.empty() && s_discoveredFontPaths[i] == m_spriteFontPath)
+                {
+                    currentFontIdx = static_cast<int>(i + 1);
+                }
+            }
+
+            std::vector<const char*> comboItemPtrs;
+            for (const auto& item : comboItems)
+            {
+                comboItemPtrs.push_back(item.c_str());
+            }
+
+            if (ImGui::Combo("SpriteFont Choice", &currentFontIdx, comboItemPtrs.data(), static_cast<int>(comboItemPtrs.size())))
+            {
+                if (currentFontIdx == 0)
+                {
+                    m_spriteFontPath = L"";
+                    m_spriteFont.reset();
+                }
+                else
+                {
+                    m_spriteFontPath = s_discoveredFontPaths[currentFontIdx - 1];
+                    LoadFont(gameContext.deviceResources.GetD3DDevice(), m_spriteFontPath);
+                }
+            }
+
+            // Function button to add a new SpriteFont file from disk: automatically imports to Resources/Font
+            if (ImGui::Button("+ Add / Browse New SpriteFont File"))
+            {
+                std::wstring file = HEIN::EditorUtils::OpenFileDialog(L"SpriteFont Files\0*.spritefont\0All Files\0*.*\0", windowHandle);
+                if (!file.empty())
+                {
+                    m_spriteFontPath = HEIN::EditorUtils::ImportFontFileToResources(file);
+                    RegisterDiscoveredFont(m_spriteFontPath);
+                    LoadFont(gameContext.deviceResources.GetD3DDevice(), m_spriteFontPath);
+                }
+            }
+
+            if (!m_spriteFontPath.empty())
+            {
+                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Active Font: %s", currentPathStr.c_str());
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Clear Font"))
+                {
+                    m_spriteFontPath = L"";
+                    m_spriteFont.reset();
+                }
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Active Font: Built-in ImGui (Default)");
+            }
         }
 
         ImGui::Separator();
@@ -464,7 +1195,7 @@ void HEIN::UIButtonComponent::DrawGizmo(
     ImGuizmo::SetRect(vpX, vpY, displayW, displayH);
     ImGuizmo::SetGizmoSizeClipSpace(0.12f);
 
-    // 2D Orthographic View & Projection for pixel screen space inside the active viewport
+    // 2D Orthographic View & Projection for pixel screen space inside active viewport
     DirectX::SimpleMath::Matrix orthoView = DirectX::SimpleMath::Matrix::Identity;
     DirectX::SimpleMath::Matrix orthoProj = DirectX::SimpleMath::Matrix::CreateOrthographicOffCenter(
         vpX, vpX + displayW, vpY + displayH, vpY, -1000.0f, 1000.0f
@@ -475,7 +1206,7 @@ void HEIN::UIButtonComponent::DrawGizmo(
     float screenSizeX = m_size.x * scaleX;
     float screenSizeY = m_size.y * scaleY;
 
-    // Center position for the element matrix
+    // Center position for element matrix
     DirectX::SimpleMath::Vector3 centerPos(screenPosX + screenSizeX * 0.5f, screenPosY + screenSizeY * 0.5f, 0.0f);
     DirectX::SimpleMath::Vector3 scale(screenSizeX, screenSizeY, 1.0f);
     DirectX::SimpleMath::Matrix worldMat = DirectX::SimpleMath::Matrix::CreateScale(scale) *

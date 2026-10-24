@@ -1,6 +1,6 @@
 #pragma once
 #include "IComponent.h"
-#include <SimpleMath.h>
+#include "SimpleMath.h"
 #include <string>
 
 namespace HEIN
@@ -31,6 +31,7 @@ namespace HEIN
 		float m_moveSpeed = 3.0f;              // Units per second
 		float m_triggerDistance = 5.0f;        // Distance to player for auto-open
 		bool m_useProximityTrigger = true;     // Open when player approaches
+		uint32_t m_triggerActorTypeMask = 1;   // Mask of ActorTypes that can trigger (1 = Player)
 		bool m_useCollisionTrigger = true;     // Open when player touches collider
 		bool m_autoClose = true;               // Automatically close when player leaves
 		float m_closeDelay = 2.0f;             // Delay before closing in seconds
@@ -72,6 +73,9 @@ namespace HEIN
 		uint32_t GetTargetActorID() const { return m_targetActorID; }
 
 		void SetActorManager(ActorManager* manager) { m_actorManager = manager; }
+
+		uint32_t GetTriggerActorTypeMask() const { return m_triggerActorTypeMask; }
+		void SetTriggerActorTypeMask(uint32_t mask) { m_triggerActorTypeMask = mask; }
 
 		void OnInspectorGUI(GameContext& gameContext) override;
 		nlohmann::json Serialize() override;

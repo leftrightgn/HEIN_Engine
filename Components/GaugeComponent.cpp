@@ -1,18 +1,18 @@
 #include "pch.h"
 #include "GaugeComponent.h"
-#include "Entities/Actor.h"
-#include "Entities/ActorManager.h"
-#include "Components/TransformComponent.h"
-#include "Camera/CameraController.h"
-#include "DebugingTools/EditorUtils.h"
-#include "DebugingTools/DebugUIManager.h"
+#include "DDSTextureLoader.h"
 #include "HealthComponent.h"
 #include "StaticModelComponent.h"
-#include <ImGui/imgui.h>
-#include <ImGui/imgui_stdlib.h>
-#include <ImGui/ImGuizmo.h>
-#include <DDSTextureLoader.h>
-#include <WICTextureLoader.h>
+#include "WICTextureLoader.h"
+#include "Camera/CameraController.h"
+#include "Components/TransformComponent.h"
+#include "DebugingTools/DebugUIManager.h"
+#include "DebugingTools/EditorUtils.h"
+#include "Entities/Actor.h"
+#include "Entities/ActorManager.h"
+#include "ImGui/imgui.h"
+#include "ImGui/imgui_stdlib.h"
+#include "ImGui/ImGuizmo.h"
 #include <algorithm>
 #include <filesystem>
 
@@ -157,7 +157,53 @@ void HEIN::GaugeComponent::Initialize(GameContext& gameContext)
     for (auto& bar : m_bars)
     {
         LoadBarTextures(device, bar);
+        LoadBarFont(device, bar);
     }
+}
+
+static std::unordered_map<std::wstring, std::shared_ptr<DirectX::SpriteFont>> s_gaugeFontCache;
+
+std::shared_ptr<DirectX::SpriteFont> HEIN::GaugeComponent::GetOrCreateFont(ID3D11Device* device, const std::wstring& path)
+{
+    if (!device || path.empty()) return nullptr;
+
+    auto it = s_gaugeFontCache.find(path);
+    if (it != s_gaugeFontCache.end() && it->second) return it->second;
+
+    std::vector<std::wstring> candidates = {
+        path,
+        std::wstring(L"Dual/") + path,
+        std::wstring(L"../Dual/") + path,
+        std::wstring(L"../../Dual/Dual/") + path,
+        std::wstring(L"../") + path
+    };
+
+    for (const auto& candidate : candidates)
+    {
+        try
+        {
+            auto font = std::make_shared<DirectX::SpriteFont>(device, candidate.c_str());
+            if (font)
+            {
+                s_gaugeFontCache[path] = font;
+                return font;
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+    return nullptr;
+}
+
+void HEIN::GaugeComponent::LoadBarFont(ID3D11Device* device, GaugeBarDef& bar)
+{
+    if (!device || bar.spriteFontPath.empty())
+    {
+        bar.spriteFont.reset();
+        return;
+    }
+    bar.spriteFont = GetOrCreateFont(device, bar.spriteFontPath);
 }
 
 // ============================================================================
@@ -168,6 +214,7 @@ void HEIN::GaugeComponent::LoadBarTextures(ID3D11Device* device, GaugeBarDef& ba
     LoadTextureFromPath(device, bar.backgroundTexPath, bar.backgroundTex);
     LoadTextureFromPath(device, bar.fillTexPath, bar.fillTex);
     LoadTextureFromPath(device, bar.borderTexPath, bar.borderTex);
+    LoadBarFont(device, bar);
 }
 
 // ============================================================================
@@ -246,7 +293,7 @@ HEIN::Actor* HEIN::GaugeComponent::FindPlayerActor(GameContext& gameContext)
 
     for (auto& pair : gameContext.actorManager->GetAllActors())
     {
-        if (pair.second && (pair.second->GetActorType() == HEIN::ActorType::Player || pair.second->GetTag() == L"Player"))
+        if (pair.second && pair.second->GetActorType() == HEIN::ActorType::Player)
         {
             return pair.second.get();
         }
@@ -337,7 +384,7 @@ void HEIN::GaugeComponent::Draw(
     // Auto-sync bound bar values from data source components
     SyncBoundBars(gameContext);
 
-    // Filter ScreenSpace mode: Only the active controlled Player and Enemy boss draw ScreenSpace HUDs!
+    // Filter ScreenSpace mode: Only the active controlled Player and Enemy boss draw ScreenSpace HUDs.
     if (m_anchorMode == GaugeAnchorMode::ScreenSpace)
     {
         if (m_owner)
@@ -359,7 +406,7 @@ void HEIN::GaugeComponent::Draw(
             else
             {
                 // Dormant vessels (ActorType::Default), corpses, props, Ghost, etc.
-                // MUST NOT draw a screen-space HUD unless actively being edited in editor!
+                // Do not draw a screen-space HUD unless actively being edited in editor.
                 if (!gameContext.isEditorMode || HEIN::g_ActiveGizmoTarget != this)
                 {
                     return;
@@ -484,7 +531,8 @@ void HEIN::GaugeComponent::DrawBar(
 
     if (device && ((!bar.fillTex && !bar.fillTexPath.empty()) ||
                    (!bar.backgroundTex && !bar.backgroundTexPath.empty()) ||
-                   (!bar.borderTex && !bar.borderTexPath.empty())))
+                   (!bar.borderTex && !bar.borderTexPath.empty()) ||
+                   (!bar.spriteFont && !bar.spriteFontPath.empty())))
     {
         const_cast<GaugeComponent*>(this)->LoadBarTextures(device, const_cast<GaugeBarDef&>(bar));
     }
@@ -603,17 +651,64 @@ void HEIN::GaugeComponent::DrawBar(
             }
         }
 
+        // Draw text using custom SpriteFont if available
+        if (bar.spriteFont && gameContext.showUI && !gameContext.isSceneViewPass)
+        {
+            float uiScale = std::min(scaleX, scaleY);
+            float fontScale = bar.fontSize * uiScale * 0.75f;
+            DirectX::SimpleMath::Vector4 textCol = bar.labelColor;
+            DirectX::SimpleMath::Vector4 shadowCol = { 0.0f, 0.0f, 0.0f, 0.85f };
+
+            if (bar.showLabel && !bar.name.empty())
+            {
+                int len = MultiByteToWideChar(CP_UTF8, 0, bar.name.c_str(), -1, nullptr, 0);
+                std::wstring wname(len, 0);
+                MultiByteToWideChar(CP_UTF8, 0, bar.name.c_str(), -1, &wname[0], len);
+                if (!wname.empty() && wname.back() == L'\0') wname.pop_back();
+
+                DirectX::SimpleMath::Vector2 labelPos(
+                    barX + (4.0f + bar.textOffset.x) * scaleX,
+                    barY + (barH * 0.5f) - (10.0f * fontScale) + bar.textOffset.y * scaleY
+                );
+                // Drop shadow
+                bar.spriteFont->DrawString(m_spriteBatch.get(), wname.c_str(),
+                    DirectX::SimpleMath::Vector2(labelPos.x + 1.5f, labelPos.y + 1.5f),
+                    shadowCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+                bar.spriteFont->DrawString(m_spriteBatch.get(), wname.c_str(),
+                    labelPos, textCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+            }
+
+            if (bar.showValue)
+            {
+                wchar_t valBuf[64];
+                swprintf_s(valBuf, L"%.0f/%.0f", bar.currentValue, bar.maxValue);
+                DirectX::SimpleMath::Vector2 valMetrics = bar.spriteFont->MeasureString(valBuf);
+                float valWidth = valMetrics.x * fontScale;
+
+                DirectX::SimpleMath::Vector2 valPos(
+                    barX + barW - valWidth - 4.0f * scaleX + bar.textOffset.x * scaleX,
+                    barY + (barH * 0.5f) - (10.0f * fontScale) + bar.textOffset.y * scaleY
+                );
+                // Drop shadow
+                bar.spriteFont->DrawString(m_spriteBatch.get(), valBuf,
+                    DirectX::SimpleMath::Vector2(valPos.x + 1.5f, valPos.y + 1.5f),
+                    shadowCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+                bar.spriteFont->DrawString(m_spriteBatch.get(), valBuf,
+                    valPos, textCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
+            }
+        }
+
         m_spriteBatch->End();
     }
 
     // Reset depth state
     context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
 
-    // Label and Value text using ImGui draw list (always on top)
+    // Label and Value text fallback using ImGui draw list (if no custom SpriteFont loaded)
     if (!gameContext.showUI || gameContext.isSceneViewPass) return;
 
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
-    if (drawList)
+    if (drawList && !bar.spriteFont)
     {
         float uiScale = std::min(scaleX, scaleY);
         float fontSize = ImGui::GetFontSize() * bar.fontSize * uiScale;
@@ -808,6 +903,17 @@ nlohmann::json HEIN::GaugeComponent::Serialize()
         b["LabelColorA"] = bar.labelColor.w;
         b["TextOffsetX"] = bar.textOffset.x;
         b["TextOffsetY"] = bar.textOffset.y;
+        if (!bar.spriteFontPath.empty())
+        {
+            int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, bar.spriteFontPath.c_str(), static_cast<int>(bar.spriteFontPath.length()), nullptr, 0, nullptr, nullptr);
+            std::string s(sizeNeeded, 0);
+            WideCharToMultiByte(CP_UTF8, 0, bar.spriteFontPath.c_str(), static_cast<int>(bar.spriteFontPath.length()), &s[0], sizeNeeded, nullptr, nullptr);
+            b["SpriteFontPath"] = s;
+        }
+        else
+        {
+            b["SpriteFontPath"] = "";
+        }
 
         barsArray.push_back(b);
     }
@@ -917,6 +1023,17 @@ void HEIN::GaugeComponent::Deserialize(const nlohmann::json& data)
             }
             if (b.contains("TextOffsetX")) bar.textOffset.x = b["TextOffsetX"];
             if (b.contains("TextOffsetY")) bar.textOffset.y = b["TextOffsetY"];
+            if (b.contains("SpriteFontPath"))
+            {
+                std::string s = b["SpriteFontPath"];
+                if (!s.empty())
+                {
+                    int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), static_cast<int>(s.length()), nullptr, 0);
+                    std::wstring ws(sizeNeeded, 0);
+                    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), static_cast<int>(s.length()), &ws[0], sizeNeeded);
+                    bar.spriteFontPath = ws;
+                }
+            }
 
             m_bars.push_back(bar);
         }
@@ -1275,6 +1392,80 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                 ImGui::SliderFloat("Font Size", &bar.fontSize, 0.3f, 3.0f, "%.2fx");
                 ImGui::ColorEdit4("Label Color", &bar.labelColor.x);
                 ImGui::DragFloat2("Text Offset (X, Y)", &bar.textOffset.x, 0.5f);
+
+                // SpriteFont resource selector
+                {
+                    int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, bar.spriteFontPath.c_str(), static_cast<int>(bar.spriteFontPath.length()), nullptr, 0, nullptr, nullptr);
+                    std::string fontPathStr(sizeNeeded, 0);
+                    if (sizeNeeded > 0)
+                    {
+                        WideCharToMultiByte(CP_UTF8, 0, bar.spriteFontPath.c_str(), static_cast<int>(bar.spriteFontPath.length()), &fontPathStr[0], sizeNeeded, nullptr, nullptr);
+                    }
+
+                    if (ImGui::InputText("SpriteFont Path", &fontPathStr))
+                    {
+                        int wlen = MultiByteToWideChar(CP_UTF8, 0, fontPathStr.c_str(), static_cast<int>(fontPathStr.length()), nullptr, 0);
+                        std::wstring ws(wlen, 0);
+                        if (wlen > 0)
+                        {
+                            MultiByteToWideChar(CP_UTF8, 0, fontPathStr.c_str(), static_cast<int>(fontPathStr.length()), &ws[0], wlen);
+                        }
+                        bar.spriteFontPath = ws;
+                        LoadBarFont(gameContext.deviceResources.GetD3DDevice(), bar);
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Browse##SpriteFont"))
+                    {
+                        std::wstring file = HEIN::EditorUtils::OpenFileDialog(
+                            L"SpriteFont Files\0*.spritefont\0All Files\0*.*\0", windowHandle);
+                        if (!file.empty())
+                        {
+                            bar.spriteFontPath = HEIN::EditorUtils::MakeRelativePath(file);
+                            LoadBarFont(gameContext.deviceResources.GetD3DDevice(), bar);
+                        }
+                    }
+
+                    // Resource Presets Dropdown
+                    const char* fontPresets[] = {
+                        "(Default / ImGui Font)",
+                        "Resources/Font/GraenMetal.spritefont",
+                        "Resources/Font/Shadows.spritefont",
+                        "Resources/Font/SegoeUI_18.spritefont"
+                    };
+                    int currentPreset = 0;
+                    for (int pIdx = 1; pIdx < 4; ++pIdx)
+                    {
+                        int wlen = MultiByteToWideChar(CP_UTF8, 0, fontPresets[pIdx], -1, nullptr, 0);
+                        std::wstring pW(wlen, 0);
+                        MultiByteToWideChar(CP_UTF8, 0, fontPresets[pIdx], -1, &pW[0], wlen);
+                        if (!pW.empty() && pW.back() == L'\0') pW.pop_back();
+
+                        if (bar.spriteFontPath == pW)
+                        {
+                            currentPreset = pIdx;
+                            break;
+                        }
+                    }
+                    if (ImGui::Combo("Font Preset", &currentPreset, fontPresets, 4))
+                    {
+                        if (currentPreset == 0)
+                        {
+                            bar.spriteFontPath.clear();
+                            bar.spriteFont.reset();
+                        }
+                        else
+                        {
+                            const char* sel = fontPresets[currentPreset];
+                            int wlen = MultiByteToWideChar(CP_UTF8, 0, sel, -1, nullptr, 0);
+                            std::wstring pW(wlen, 0);
+                            MultiByteToWideChar(CP_UTF8, 0, sel, -1, &pW[0], wlen);
+                            if (!pW.empty() && pW.back() == L'\0') pW.pop_back();
+
+                            bar.spriteFontPath = pW;
+                            LoadBarFont(gameContext.deviceResources.GetD3DDevice(), bar);
+                        }
+                    }
+                }
 
                 ImGui::Separator();
                 if (ImGui::Button("Reload Textures"))

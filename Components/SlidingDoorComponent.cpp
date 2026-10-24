@@ -1,10 +1,10 @@
 #include "pch.h"
 #include "SlidingDoorComponent.h"
-#include "Components/TransformComponent.h"
 #include "Components/ColliderComponent/ColliderComponent.h"
+#include "Components/TransformComponent.h"
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
-#include <ImGui/imgui.h>
+#include "ImGui/imgui.h"
 #include <cmath>
 
 HEIN::SlidingDoorComponent::SlidingDoorComponent(Actor* owner, ActorManager* manager)
@@ -79,11 +79,11 @@ bool HEIN::SlidingDoorComponent::CheckPlayerInteraction(TransformComponent* door
 			Actor* actor = pair.second.get();
 			if (actor == nullptr || actor == m_owner) continue;
 
-			bool isPlayer = (actor->GetActorType() == ActorType::Player) ||
-				(actor->GetTag() == L"Player") ||
-				(actor->GetTag() == L"Knight");
+			// Generic trigger check: compare actor type mask (eliminates hardcoded string tags)
+			uint32_t actorTypeBit = 1 << static_cast<uint32_t>(actor->GetActorType());
+			bool canTrigger = (actorTypeBit & m_triggerActorTypeMask) != 0 || (m_triggerActorTypeMask == 1 && actor->GetActorType() == ActorType::Player);
 
-			if (isPlayer)
+			if (canTrigger)
 			{
 				TransformComponent* playerTrans = actor->GetComponent<TransformComponent>();
 				if (playerTrans != nullptr)
@@ -282,6 +282,7 @@ nlohmann::json HEIN::SlidingDoorComponent::Serialize()
 	data["UseProximity"] = m_useProximityTrigger;
 	data["UseCollision"] = m_useCollisionTrigger;
 	data["AutoClose"] = m_autoClose;
+	data["TriggerActorTypeMask"] = m_triggerActorTypeMask;
 	data["CloseDelay"] = m_closeDelay;
 
 	data["TargetActorID"] = m_targetActorID;
@@ -308,6 +309,7 @@ void HEIN::SlidingDoorComponent::Deserialize(const nlohmann::json& data)
 	if (data.contains("UseProximity")) m_useProximityTrigger = data["UseProximity"];
 	if (data.contains("UseCollision")) m_useCollisionTrigger = data["UseCollision"];
 	if (data.contains("AutoClose")) m_autoClose = data["AutoClose"];
+	if (data.contains("TriggerActorTypeMask")) m_triggerActorTypeMask = data["TriggerActorTypeMask"];
 	if (data.contains("CloseDelay")) m_closeDelay = data["CloseDelay"];
 
 	if (data.contains("TargetActorID")) m_targetActorID = data["TargetActorID"];

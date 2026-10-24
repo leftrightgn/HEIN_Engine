@@ -1,13 +1,13 @@
 #pragma once
-#include <SimpleMath.h>
-#include <Entities/ActorManager.h>
-#include <Components/ColliderComponent/MeshColliderComponent.h>
-#include <Components/ColliderComponent/AABBColliderComponent.h>
-#include <Components/ColliderComponent/OBBColliderComponent.h>
-#include <Components/ColliderComponent/TerrainColliderComponent.h>
-#include <Common/CollisionMath.h>
-#include <vector>
+#include "SimpleMath.h"
+#include "System/CollisionMath.h"
+#include "Components/ColliderComponent/AABBColliderComponent.h"
+#include "Components/ColliderComponent/MeshColliderComponent.h"
+#include "Components/ColliderComponent/OBBColliderComponent.h"
+#include "Components/ColliderComponent/TerrainColliderComponent.h"
+#include "Entities/ActorManager.h"
 #include <algorithm>
+#include <vector>
 
 namespace HEIN
 {
@@ -32,12 +32,16 @@ namespace HEIN
 			{
 				Actor* actor = pair.second.get();
 				if (actor == nullptr || actor->GetID() == ignoredActorID) continue;
+				// Never treat character entities (Player, Enemy, Ghost) as camera-occluding walls
+				if (actor->GetActorType() == ActorType::Player || actor->GetActorType() == ActorType::Enemy || actor->GetActorType() == ActorType::Ghost) continue;
 
 				// Mesh Colliders
 				std::vector<MeshColliderComponent*> meshes = actor->GetComponents<MeshColliderComponent>();
 				for (auto* mesh : meshes)
 				{
 					if (mesh == nullptr || mesh->IsTrigger()) continue;
+					uint32_t layer = mesh->GetCollisionLayer();
+					if ((layer & (CollisionLayer::Layer_Player | CollisionLayer::Layer_Enemy | CollisionLayer::Layer_PlayerWeapon | CollisionLayer::Layer_EnemyWeapon)) != 0) continue;
 					mesh->SyncColliderState();
 
 					const auto& triangles = mesh->GetWorldTriangles();
