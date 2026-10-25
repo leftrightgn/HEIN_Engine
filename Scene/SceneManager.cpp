@@ -1,12 +1,13 @@
 #include "pch.h"
 #include "SceneManager.h"
 #include "Components/StaticModelComponent.h"
-#include <malloc.h>
-#include <fstream>
-#include <filesystem>
+#include "Components/UIButtonComponent.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <malloc.h>
 
 namespace
 {
@@ -21,6 +22,27 @@ namespace
         }
         fs::create_directories(fs::path(target).parent_path(), ec);
         return target;
+    }
+}
+
+namespace
+{
+    std::string WStringToUtf8(const std::wstring& wstr)
+    {
+        if (wstr.empty()) return "";
+        int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.length()), nullptr, 0, nullptr, nullptr);
+        std::string str(size, 0);
+        WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.length()), &str[0], size, nullptr, nullptr);
+        return str;
+    }
+
+    std::wstring Utf8ToWString(const std::string& str)
+    {
+        if (str.empty()) return L"";
+        int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0);
+        std::wstring wstr(size, 0);
+        MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.length()), &wstr[0], size);
+        return wstr;
     }
 }
 
@@ -82,26 +104,102 @@ namespace HEIN
 
     void SceneManager::EnsureFont(ID3D11Device* device)
     {
-        if (m_spriteFont || !device) return;
+        if (!device) return;
 
-        std::vector<std::wstring> fontCandidates = {
-            L"Resources/Font/SegoeUI_18.spritefont",
-            L"Dual/Resources/Font/SegoeUI_18.spritefont",
-            L"../Dual/Resources/Font/SegoeUI_18.spritefont"
-        };
-
-        for (const auto& candidate : fontCandidates)
+        // If active font path does not exist on disk, remove path keeping
+        if (!m_currentTransitionDesc.spriteFontPath.empty() && !UIButtonComponent::DoesFontExist(m_currentTransitionDesc.spriteFontPath))
         {
-            try
+            m_currentTransitionDesc.spriteFontPath = L"";
+            m_defaultTransitionDesc.spriteFontPath = L"";
+            m_loadedFontPath = L"";
+            m_spriteFont.reset();
+        }
+
+        const std::wstring& desiredPath = m_currentTransitionDesc.spriteFontPath;
+        if (m_spriteFont && m_loadedFontPath == desiredPath && !desiredPath.empty())
+        {
+            return;
+        }
+
+        if (!desiredPath.empty())
+        {
+            m_spriteFont = UIButtonComponent::GetOrCreateFont(device, desiredPath);
+            if (m_spriteFont)
             {
-                m_spriteFont = std::make_unique<DirectX::SpriteFont>(device, candidate.c_str());
-                if (m_spriteFont) break;
+                m_loadedFontPath = desiredPath;
+                return;
             }
-            catch (...)
+            else
             {
-                m_spriteFont.reset();
+                m_currentTransitionDesc.spriteFontPath = L"";
+                m_defaultTransitionDesc.spriteFontPath = L"";
             }
         }
+
+        // Fallback candidate fonts from discovered font assets on disk
+        const auto fontCandidates = UIButtonComponent::GetDiscoveredFontPaths();
+        for (const auto& candidate : fontCandidates)
+        {
+            m_spriteFont = UIButtonComponent::GetOrCreateFont(device, candidate);
+            if (m_spriteFont)
+            {
+                m_loadedFontPath = candidate;
+                break;
+            }
+        }
+    }
+
+    void SceneManager::LoadFont(ID3D11Device* device, const std::wstring& path)
+    {
+        if (path.empty() || !UIButtonComponent::DoesFontExist(path))
+        {
+            m_currentTransitionDesc.spriteFontPath = L"";
+            m_loadedFontPath = L"";
+            m_spriteFont.reset();
+            return;
+        }
+
+        m_currentTransitionDesc.spriteFontPath = path;
+        m_loadedFontPath = path;
+        if (!device)
+        {
+            m_spriteFont.reset();
+            return;
+        }
+        m_spriteFont = UIButtonComponent::GetOrCreateFont(device, path);
+        if (!m_spriteFont)
+        {
+            m_currentTransitionDesc.spriteFontPath = L"";
+        }
+    }
+
+    void SceneManager::SetSpriteFontPath(const std::wstring& path, ID3D11Device* device)
+    {
+        if (path.empty() || !UIButtonComponent::DoesFontExist(path))
+        {
+            m_defaultTransitionDesc.spriteFontPath = L"";
+            m_currentTransitionDesc.spriteFontPath = L"";
+            m_loadedFontPath = L"";
+            m_spriteFont.reset();
+            return;
+        }
+
+        m_defaultTransitionDesc.spriteFontPath = path;
+        m_currentTransitionDesc.spriteFontPath = path;
+        if (device)
+        {
+            LoadFont(device, path);
+        }
+        else
+        {
+            m_loadedFontPath = path;
+            m_spriteFont.reset();
+        }
+    }
+
+    const std::wstring& SceneManager::GetSpriteFontPath() const
+    {
+        return m_currentTransitionDesc.spriteFontPath;
     }
 
     void SceneManager::EnsureTransitionTexture(ID3D11Device* device, const std::wstring& path)
@@ -306,8 +404,7 @@ namespace HEIN
 
             if (j.contains("TexturePath"))
             {
-                std::string tp = j["TexturePath"].get<std::string>();
-                m_defaultTransitionDesc.texturePath = std::wstring(tp.begin(), tp.end());
+                m_defaultTransitionDesc.texturePath = Utf8ToWString(j["TexturePath"].get<std::string>());
             }
             if (j.contains("FadeOutDuration")) m_defaultTransitionDesc.fadeOutDuration = j["FadeOutDuration"].get<float>();
             if (j.contains("MinLoadingHoldDuration"))
@@ -389,19 +486,28 @@ namespace HEIN
 
             if (j.contains("BarTrackTexturePath"))
             {
-                std::string s = j["BarTrackTexturePath"].get<std::string>();
-                m_defaultTransitionDesc.barTrackTexturePath = std::wstring(s.begin(), s.end());
+                m_defaultTransitionDesc.barTrackTexturePath = Utf8ToWString(j["BarTrackTexturePath"].get<std::string>());
             }
             if (j.contains("BarFillTexturePath"))
             {
-                std::string s = j["BarFillTexturePath"].get<std::string>();
-                m_defaultTransitionDesc.barFillTexturePath = std::wstring(s.begin(), s.end());
+                m_defaultTransitionDesc.barFillTexturePath = Utf8ToWString(j["BarFillTexturePath"].get<std::string>());
             }
             if (j.contains("BarNeedleTexturePath"))
             {
-                std::string s = j["BarNeedleTexturePath"].get<std::string>();
-                m_defaultTransitionDesc.barNeedleTexturePath = std::wstring(s.begin(), s.end());
+                m_defaultTransitionDesc.barNeedleTexturePath = Utf8ToWString(j["BarNeedleTexturePath"].get<std::string>());
             }
+            if (j.contains("SpriteFontPath"))
+            {
+                m_defaultTransitionDesc.spriteFontPath = Utf8ToWString(j["SpriteFontPath"].get<std::string>());
+                if (!m_defaultTransitionDesc.spriteFontPath.empty() && !UIButtonComponent::DoesFontExist(m_defaultTransitionDesc.spriteFontPath))
+                {
+                    m_defaultTransitionDesc.spriteFontPath = L"";
+                }
+            }
+            if (j.contains("FontSize")) m_defaultTransitionDesc.fontSize = j["FontSize"].get<float>();
+            if (j.contains("TitleFontSize")) m_defaultTransitionDesc.titleFontSize = j["TitleFontSize"].get<float>();
+            if (j.contains("DescFontSize")) m_defaultTransitionDesc.descFontSize = j["DescFontSize"].get<float>();
+            if (j.contains("PercentageFontSize")) m_defaultTransitionDesc.percentageFontSize = j["PercentageFontSize"].get<float>();
 
             // Lore / Tips
             if (j.contains("ShowTips")) m_defaultTransitionDesc.showTips = j["ShowTips"].get<bool>();
@@ -432,7 +538,7 @@ namespace HEIN
         }
     }
 
-    bool SceneManager::SaveTransitionConfig(const std::string& path) const
+     bool SceneManager::SaveTransitionConfig(const std::string& path) const
     {
         std::string writePath = path;
         if (writePath == "Resources/Data/SceneTransition.json")
@@ -443,8 +549,7 @@ namespace HEIN
         try
         {
             nlohmann::json j;
-            std::string tp(m_defaultTransitionDesc.texturePath.begin(), m_defaultTransitionDesc.texturePath.end());
-            j["TexturePath"] = tp;
+            j["TexturePath"] = WStringToUtf8(m_defaultTransitionDesc.texturePath);
             j["FadeOutDuration"] = m_defaultTransitionDesc.fadeOutDuration;
             j["MinLoadingHoldDuration"] = m_defaultTransitionDesc.minLoadingHoldDuration;
             j["HoldDuration"] = m_defaultTransitionDesc.minLoadingHoldDuration;
@@ -496,12 +601,19 @@ namespace HEIN
                 m_defaultTransitionDesc.barNeedleColor.w
             };
 
-            std::string sTrack(m_defaultTransitionDesc.barTrackTexturePath.begin(), m_defaultTransitionDesc.barTrackTexturePath.end());
-            std::string sFill(m_defaultTransitionDesc.barFillTexturePath.begin(), m_defaultTransitionDesc.barFillTexturePath.end());
-            std::string sNeedle(m_defaultTransitionDesc.barNeedleTexturePath.begin(), m_defaultTransitionDesc.barNeedleTexturePath.end());
-            j["BarTrackTexturePath"] = sTrack;
-            j["BarFillTexturePath"] = sFill;
-            j["BarNeedleTexturePath"] = sNeedle;
+            j["BarTrackTexturePath"] = WStringToUtf8(m_defaultTransitionDesc.barTrackTexturePath);
+            j["BarFillTexturePath"] = WStringToUtf8(m_defaultTransitionDesc.barFillTexturePath);
+            j["BarNeedleTexturePath"] = WStringToUtf8(m_defaultTransitionDesc.barNeedleTexturePath);
+            std::wstring fontToSave = m_defaultTransitionDesc.spriteFontPath;
+            if (!fontToSave.empty() && !UIButtonComponent::DoesFontExist(fontToSave))
+            {
+                fontToSave = L"";
+            }
+            j["SpriteFontPath"] = WStringToUtf8(fontToSave);
+            j["FontSize"] = m_defaultTransitionDesc.fontSize;
+            j["TitleFontSize"] = m_defaultTransitionDesc.titleFontSize;
+            j["DescFontSize"] = m_defaultTransitionDesc.descFontSize;
+            j["PercentageFontSize"] = m_defaultTransitionDesc.percentageFontSize;
 
             j["ShowTips"] = m_defaultTransitionDesc.showTips;
             j["TipNormalizedPos"] = { m_defaultTransitionDesc.tipNormalizedPos.x, m_defaultTransitionDesc.tipNormalizedPos.y };
@@ -560,6 +672,10 @@ namespace HEIN
         {
             context.showUI = false;
         }
+        else
+        {
+            context.showUI = true;
+        }
 
         // Process pending scene unloads
         if (!m_pendingUnloads.empty())
@@ -588,7 +704,7 @@ namespace HEIN
                 d3dContext->ClearState();
                 d3dContext->Flush();
             }
-            _heapmin();
+            (void)_heapmin();
             SetProcessWorkingSetSize(GetCurrentProcess(), static_cast<SIZE_T>(-1), static_cast<SIZE_T>(-1));
         }
 
@@ -631,7 +747,7 @@ namespace HEIN
                         d3dContext->ClearState();
                         d3dContext->Flush();
                     }
-                    _heapmin();
+                    (void)_heapmin();
                     SetProcessWorkingSetSize(GetCurrentProcess(), static_cast<SIZE_T>(-1), static_cast<SIZE_T>(-1));
                 }
             }
@@ -693,7 +809,7 @@ namespace HEIN
                         d3dContext->ClearState();
                         d3dContext->Flush();
                     }
-                    _heapmin();
+                    (void)_heapmin();
                     SetProcessWorkingSetSize(GetCurrentProcess(), static_cast<SIZE_T>(-1), static_cast<SIZE_T>(-1));
 
                     auto it = m_sceneRegistry.find(m_pendingTargetScene);
@@ -713,7 +829,7 @@ namespace HEIN
                             d3dContext->ClearState();
                             d3dContext->Flush();
                         }
-                        _heapmin();
+                        (void)_heapmin();
                         SetProcessWorkingSetSize(GetCurrentProcess(), static_cast<SIZE_T>(-1), static_cast<SIZE_T>(-1));
                     }
 
@@ -780,7 +896,7 @@ namespace HEIN
         }
     }
 
-    void SceneManager::RenderLoadingBar(GameContext& context, const D3D11_VIEWPORT& vp, float alpha)
+    void SceneManager::RenderLoadingBar(GameContext& /*context*/, const D3D11_VIEWPORT& vp, float alpha)
     {
         if (!m_currentTransitionDesc.showLoadingBar || !m_whiteTextureSRV || !m_spriteBatch) return;
 
@@ -1018,15 +1134,16 @@ namespace HEIN
             DirectX::SimpleMath::Vector4 textCol = m_currentTransitionDesc.barNeedleColor;
             textCol.w *= alpha;
 
-            float textX = trackX + length + 18.0f * uiScale;
-            float textY = anchorY - 10.0f * uiScale;
+            float textX = std::floor(trackX + length + 18.0f * uiScale + 0.5f);
+            float textY = std::floor(anchorY - 10.0f * uiScale + 0.5f);
             if (!isHorizontal)
             {
-                textX = anchorX - 16.0f * uiScale;
-                textY = trackY + length + 14.0f * uiScale;
+                textX = std::floor(anchorX - 16.0f * uiScale + 0.5f);
+                textY = std::floor(trackY + length + 14.0f * uiScale + 0.5f);
             }
 
-            m_spriteFont->DrawString(m_spriteBatch.get(), pBuf, DirectX::SimpleMath::Vector2(textX, textY), textCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.75f * uiScale);
+            float percentScale = m_currentTransitionDesc.percentageFontSize * m_currentTransitionDesc.fontSize * uiScale;
+            m_spriteFont->DrawString(m_spriteBatch.get(), pBuf, DirectX::SimpleMath::Vector2(textX, textY), textCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, percentScale);
         }
     }
 
@@ -1039,36 +1156,40 @@ namespace HEIN
         size_t idx = m_activeTipIndex % m_currentTransitionDesc.tips.size();
         const auto& tip = m_currentTransitionDesc.tips[idx];
 
-        float tipX = m_currentTransitionDesc.tipNormalizedPos.x * vp.Width;
-        float tipY = m_currentTransitionDesc.tipNormalizedPos.y * vp.Height;
+        float tipX = std::floor(m_currentTransitionDesc.tipNormalizedPos.x * vp.Width + 0.5f);
+        float tipY = std::floor(m_currentTransitionDesc.tipNormalizedPos.y * vp.Height + 0.5f);
 
         DirectX::SimpleMath::Vector4 titleCol = DirectX::SimpleMath::Vector4(0.88f, 0.82f, 0.62f, alpha);
         DirectX::SimpleMath::Vector4 descCol  = DirectX::SimpleMath::Vector4(0.72f, 0.70f, 0.62f, alpha * 0.90f);
 
+        float titleScale = m_currentTransitionDesc.titleFontSize * m_currentTransitionDesc.fontSize * uiScale;
+        float descScale = m_currentTransitionDesc.descFontSize * m_currentTransitionDesc.fontSize * uiScale;
+
         // Title
-        m_spriteFont->DrawString(m_spriteBatch.get(), tip.title.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY), titleCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.85f * uiScale);
+        m_spriteFont->DrawString(m_spriteBatch.get(), tip.title.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY), titleCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, titleScale);
 
         // Subtle divider underline
         if (m_whiteTextureSRV)
         {
             RECT lineRect;
             lineRect.left = static_cast<LONG>(tipX);
-            lineRect.top = static_cast<LONG>(tipY + 22.0f * uiScale);
-            lineRect.right = static_cast<LONG>(tipX + 220.0f * uiScale);
-            lineRect.bottom = static_cast<LONG>(std::max(lineRect.top + 1L, static_cast<LONG>(tipY + 23.0f * uiScale)));
+            lineRect.top = static_cast<LONG>(tipY + 22.0f * (titleScale / 0.85f));
+            lineRect.right = static_cast<LONG>(tipX + 220.0f * (titleScale / 0.85f));
+            lineRect.bottom = static_cast<LONG>(std::max(lineRect.top + 1L, static_cast<LONG>(tipY + 23.0f * (titleScale / 0.85f))));
             DirectX::SimpleMath::Vector4 lineCol = titleCol;
             lineCol.w *= 0.5f;
             m_spriteBatch->Draw(m_whiteTextureSRV.Get(), lineRect, nullptr, lineCol);
         }
 
         // Description
-        m_spriteFont->DrawString(m_spriteBatch.get(), tip.description.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY + 30.0f * uiScale), descCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, 0.70f * uiScale);
+        float descOffsetY = 30.0f * (titleScale / 0.85f);
+        m_spriteFont->DrawString(m_spriteBatch.get(), tip.description.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY + descOffsetY), descCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, descScale);
     }
 
     void SceneManager::Render(GameContext& context)
     {
         // Skip rendering active scenes only in full-screen game mode when 100% covered by the loading screen.
-        // In Editor Mode, active.instance->Render(context) must run so the Editor UI and viewports render!
+        // In Editor Mode, active.instance->Render(context) must run so the Editor UI and viewports render.
         bool skipSceneRender = !context.isEditorMode && !m_isPreviewOnly && !m_isTransitionPaused &&
                                (m_transitionPhase == TransitionPhase::LoadingSwitch || m_transitionAlpha >= 0.99f);
         if (!skipSceneRender)
