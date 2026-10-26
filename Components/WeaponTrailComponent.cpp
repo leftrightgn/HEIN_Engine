@@ -21,70 +21,81 @@
 
 namespace HEIN
 {
-	namespace
+	static ID3D11Device* s_trailCachedDevice = nullptr;
+	static Microsoft::WRL::ComPtr<ID3D11VertexShader> s_sharedTrailVS;
+	static Microsoft::WRL::ComPtr<ID3D11PixelShader> s_sharedTrailPS;
+	static Microsoft::WRL::ComPtr<ID3D11InputLayout> s_sharedTrailInputLayout;
+	static Microsoft::WRL::ComPtr<ID3D11SamplerState> s_sharedTrailSampler;
+	static Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> s_sharedNoiseSRV;
+
+	static void EnsureSharedTrailResources(ID3D11Device* device)
 	{
-		ID3D11Device* s_trailCachedDevice = nullptr;
-		Microsoft::WRL::ComPtr<ID3D11VertexShader> s_sharedTrailVS;
-		Microsoft::WRL::ComPtr<ID3D11PixelShader> s_sharedTrailPS;
-		Microsoft::WRL::ComPtr<ID3D11InputLayout> s_sharedTrailInputLayout;
-		Microsoft::WRL::ComPtr<ID3D11SamplerState> s_sharedTrailSampler;
-		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> s_sharedNoiseSRV;
+		if (!device) return;
 
-		void EnsureSharedTrailResources(ID3D11Device* device)
+		if (s_trailCachedDevice != device)
 		{
-			if (!device) return;
+			s_sharedTrailVS.Reset();
+			s_sharedTrailPS.Reset();
+			s_sharedTrailInputLayout.Reset();
+			s_sharedTrailSampler.Reset();
+			s_sharedNoiseSRV.Reset();
+			s_trailCachedDevice = device;
+		}
 
-			if (s_trailCachedDevice != device)
+		if (!s_sharedTrailVS || !s_sharedTrailPS || !s_sharedTrailInputLayout)
+		{
+			bool loadedCso = false;
+			std::vector<uint8_t> vsData, psData;
+			try
 			{
-				s_sharedTrailVS.Reset();
-				s_sharedTrailPS.Reset();
-				s_sharedTrailInputLayout.Reset();
-				s_sharedTrailSampler.Reset();
-				s_sharedNoiseSRV.Reset();
-				s_trailCachedDevice = device;
+				vsData = DX::ReadData(L"Resources/Shaders/WeaponTrail_VS.cso");
+				psData = DX::ReadData(L"Resources/Shaders/WeaponTrail_PS.cso");
+				loadedCso = true;
 			}
-
-			if (!s_sharedTrailVS || !s_sharedTrailPS || !s_sharedTrailInputLayout)
+			catch (...)
 			{
-				bool loadedCso = false;
-				std::vector<uint8_t> vsData, psData;
 				try
 				{
-					vsData = DX::ReadData(L"Resources/Shaders/WeaponTrail_VS.cso");
-					psData = DX::ReadData(L"Resources/Shaders/WeaponTrail_PS.cso");
+					vsData = DX::ReadData(L"WeaponTrail_VS.cso");
+					psData = DX::ReadData(L"WeaponTrail_PS.cso");
 					loadedCso = true;
 				}
 				catch (...)
 				{
-					try
-					{
-						vsData = DX::ReadData(L"WeaponTrail_VS.cso");
-						psData = DX::ReadData(L"WeaponTrail_PS.cso");
-						loadedCso = true;
-					}
-					catch (...)
-					{
-						loadedCso = false;
-					}
+					loadedCso = false;
 				}
+			}
 
-				Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
-				const void* vsBytecode = nullptr;
-				size_t vsBytecodeSize = 0;
-				const void* psBytecode = nullptr;
-				size_t psBytecodeSize = 0;
+			Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
+			const void* vsBytecode = nullptr;
+			size_t vsBytecodeSize = 0;
+			const void* psBytecode = nullptr;
+			size_t psBytecodeSize = 0;
 
-				if (loadedCso)
+			if (loadedCso)
+			{
+				vsBytecode = vsData.data();
+				vsBytecodeSize = vsData.size();
+				psBytecode = psData.data();
+				psBytecodeSize = psData.size();
+			}
+			else
+			{
+				HRESULT hr = D3DCompileFromFile(
+					L"../External/Engine/Shaders/WeaponTrail_VS.hlsl",
+					nullptr,
+					D3D_COMPILE_STANDARD_FILE_INCLUDE,
+					"main",
+					"vs_5_0",
+					0,
+					0,
+					&vsBlob,
+					&errorBlob
+				);
+				if (FAILED(hr))
 				{
-					vsBytecode = vsData.data();
-					vsBytecodeSize = vsData.size();
-					psBytecode = psData.data();
-					psBytecodeSize = psData.size();
-				}
-				else
-				{
-					HRESULT hr = D3DCompileFromFile(
-						L"../External/Engine/Shaders/WeaponTrail_VS.hlsl",
+					hr = D3DCompileFromFile(
+						L"External/Engine/Shaders/WeaponTrail_VS.hlsl",
 						nullptr,
 						D3D_COMPILE_STANDARD_FILE_INCLUDE,
 						"main",
@@ -94,31 +105,31 @@ namespace HEIN
 						&vsBlob,
 						&errorBlob
 					);
-					if (FAILED(hr))
+				}
+				if (FAILED(hr))
+				{
+					if (errorBlob)
 					{
-						hr = D3DCompileFromFile(
-							L"External/Engine/Shaders/WeaponTrail_VS.hlsl",
-							nullptr,
-							D3D_COMPILE_STANDARD_FILE_INCLUDE,
-							"main",
-							"vs_5_0",
-							0,
-							0,
-							&vsBlob,
-							&errorBlob
-						);
+						OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
 					}
-					if (FAILED(hr))
-					{
-						if (errorBlob)
-						{
-							OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
-						}
-						return;
-					}
+					return;
+				}
 
+				hr = D3DCompileFromFile(
+					L"../External/Engine/Shaders/WeaponTrail_PS.hlsl",
+					nullptr,
+					D3D_COMPILE_STANDARD_FILE_INCLUDE,
+					"main",
+					"ps_5_0",
+					0,
+					0,
+					&psBlob,
+					&errorBlob
+				);
+				if (FAILED(hr))
+				{
 					hr = D3DCompileFromFile(
-						L"../External/Engine/Shaders/WeaponTrail_PS.hlsl",
+						L"External/Engine/Shaders/WeaponTrail_PS.hlsl",
 						nullptr,
 						D3D_COMPILE_STANDARD_FILE_INCLUDE,
 						"main",
@@ -128,101 +139,87 @@ namespace HEIN
 						&psBlob,
 						&errorBlob
 					);
-					if (FAILED(hr))
+				}
+				if (FAILED(hr))
+				{
+					if (errorBlob)
 					{
-						hr = D3DCompileFromFile(
-							L"External/Engine/Shaders/WeaponTrail_PS.hlsl",
-							nullptr,
-							D3D_COMPILE_STANDARD_FILE_INCLUDE,
-							"main",
-							"ps_5_0",
-							0,
-							0,
-							&psBlob,
-							&errorBlob
-						);
+						OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
 					}
-					if (FAILED(hr))
-					{
-						if (errorBlob)
-						{
-							OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
-						}
-						return;
-					}
-
-					vsBytecode = vsBlob->GetBufferPointer();
-					vsBytecodeSize = vsBlob->GetBufferSize();
-					psBytecode = psBlob->GetBufferPointer();
-					psBytecodeSize = psBlob->GetBufferSize();
+					return;
 				}
 
-				device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, s_sharedTrailVS.ReleaseAndGetAddressOf());
-				device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, s_sharedTrailPS.ReleaseAndGetAddressOf());
-
-				static const D3D11_INPUT_ELEMENT_DESC trailInputLayoutDesc[] = {
-					{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D11_INPUT_PER_VERTEX_DATA, 0 },
-					{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-					{ "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 }
-				};
-				device->CreateInputLayout(
-					trailInputLayoutDesc,
-					static_cast<UINT>(_countof(trailInputLayoutDesc)),
-					vsBytecode,
-					vsBytecodeSize,
-					s_sharedTrailInputLayout.ReleaseAndGetAddressOf()
-				);
+				vsBytecode = vsBlob->GetBufferPointer();
+				vsBytecodeSize = vsBlob->GetBufferSize();
+				psBytecode = psBlob->GetBufferPointer();
+				psBytecodeSize = psBlob->GetBufferSize();
 			}
 
-			if (!s_sharedTrailSampler)
-			{
-				D3D11_SAMPLER_DESC sampDesc = {};
-				sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-				sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-				sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-				sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-				device->CreateSamplerState(&sampDesc, s_sharedTrailSampler.ReleaseAndGetAddressOf());
-			}
+			device->CreateVertexShader(vsBytecode, vsBytecodeSize, nullptr, s_sharedTrailVS.ReleaseAndGetAddressOf());
+			device->CreatePixelShader(psBytecode, psBytecodeSize, nullptr, s_sharedTrailPS.ReleaseAndGetAddressOf());
 
-			if (!s_sharedNoiseSRV)
+			static const D3D11_INPUT_ELEMENT_DESC trailInputLayoutDesc[] = {
+				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D11_INPUT_PER_VERTEX_DATA, 0 },
+				{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+				{ "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+			};
+			device->CreateInputLayout(
+				trailInputLayoutDesc,
+				static_cast<UINT>(_countof(trailInputLayoutDesc)),
+				vsBytecode,
+				vsBytecodeSize,
+				s_sharedTrailInputLayout.ReleaseAndGetAddressOf()
+			);
+		}
+
+		if (!s_sharedTrailSampler)
+		{
+			D3D11_SAMPLER_DESC sampDesc = {};
+			sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+			device->CreateSamplerState(&sampDesc, s_sharedTrailSampler.ReleaseAndGetAddressOf());
+		}
+
+		if (!s_sharedNoiseSRV)
+		{
+			if (!TryLoadCachedTextureFile(device, L"Resources/Textures/waternoise.dds", s_sharedNoiseSRV.ReleaseAndGetAddressOf()))
 			{
-				if (!TryLoadCachedTextureFile(device, L"Resources/Textures/waternoise.dds", s_sharedNoiseSRV.ReleaseAndGetAddressOf()))
+				// Procedural 64x64 anisotropic streaky noise texture fallback
+				constexpr int TEX_SIZE = 64;
+				std::vector<uint32_t> pixels(TEX_SIZE * TEX_SIZE, 0);
+				for (int y = 0; y < TEX_SIZE; ++y)
 				{
-					// Procedural 64x64 anisotropic streaky noise texture fallback
-					constexpr int TEX_SIZE = 64;
-					std::array<uint32_t, TEX_SIZE * TEX_SIZE> pixels{};
-					for (int y = 0; y < TEX_SIZE; ++y)
+					uint32_t rowSeed = static_cast<uint32_t>(y * 1973u + 9277u);
+					for (int x = 0; x < TEX_SIZE; ++x)
 					{
-						uint32_t rowSeed = static_cast<uint32_t>(y * 1973u + 9277u);
-						for (int x = 0; x < TEX_SIZE; ++x)
-						{
-							uint32_t h = (rowSeed ^ static_cast<uint32_t>(x * 269u)) * 2654435761u;
-							float streak = 0.55f + 0.45f * std::sin(static_cast<float>(y) * 0.65f + static_cast<float>(x) * 0.18f);
-							float fine = static_cast<float>((h >> 16) & 0xFF) / 255.0f;
-							uint8_t val = static_cast<uint8_t>(std::clamp((streak * 0.7f + fine * 0.3f) * 255.0f, 32.0f, 255.0f));
-							pixels[y * TEX_SIZE + x] = (0xFFu << 24) | (val << 16) | (val << 8) | val;
-						}
+						uint32_t h = (rowSeed ^ static_cast<uint32_t>(x * 269u)) * 2654435761u;
+						float streak = 0.55f + 0.45f * std::sin(static_cast<float>(y) * 0.65f + static_cast<float>(x) * 0.18f);
+						float fine = static_cast<float>((h >> 16) & 0xFF) / 255.0f;
+						uint8_t val = static_cast<uint8_t>(std::clamp((streak * 0.7f + fine * 0.3f) * 255.0f, 32.0f, 255.0f));
+						pixels[y * TEX_SIZE + x] = (0xFFu << 24) | (val << 16) | (val << 8) | val;
 					}
+				}
 
-					D3D11_TEXTURE2D_DESC desc = {};
-					desc.Width = TEX_SIZE;
-					desc.Height = TEX_SIZE;
-					desc.MipLevels = 1;
-					desc.ArraySize = 1;
-					desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-					desc.SampleDesc.Count = 1;
-					desc.Usage = D3D11_USAGE_IMMUTABLE;
-					desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+				D3D11_TEXTURE2D_DESC desc = {};
+				desc.Width = TEX_SIZE;
+				desc.Height = TEX_SIZE;
+				desc.MipLevels = 1;
+				desc.ArraySize = 1;
+				desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+				desc.SampleDesc.Count = 1;
+				desc.Usage = D3D11_USAGE_IMMUTABLE;
+				desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
-					D3D11_SUBRESOURCE_DATA initData = {};
-					initData.pSysMem = pixels.data();
-					initData.SysMemPitch = TEX_SIZE * sizeof(uint32_t);
+				D3D11_SUBRESOURCE_DATA initData = {};
+				initData.pSysMem = pixels.data();
+				initData.SysMemPitch = TEX_SIZE * sizeof(uint32_t);
 
-					Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
-					if (SUCCEEDED(device->CreateTexture2D(&desc, &initData, tex.GetAddressOf())))
-					{
-						device->CreateShaderResourceView(tex.Get(), nullptr, s_sharedNoiseSRV.ReleaseAndGetAddressOf());
-					}
+				Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
+				if (SUCCEEDED(device->CreateTexture2D(&desc, &initData, tex.GetAddressOf())))
+				{
+					device->CreateShaderResourceView(tex.Get(), nullptr, s_sharedNoiseSRV.ReleaseAndGetAddressOf());
 				}
 			}
 		}
@@ -833,7 +830,7 @@ namespace HEIN
 
 	void WeaponTrailComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 	{
-		if (ImGui::CollapsingHeader("WeaponTrailComponent (Elden Ring VFX)", ImGuiTreeNodeFlags_DefaultOpen))
+		if (ImGui::CollapsingHeader("WeaponTrailComponent", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::TextDisabled("Active Ring-Buffer Knots: %zu / %zu", m_count, MAX_KNOTS);
 			ImGui::Checkbox("Always Emit (Editor Preview)", &m_alwaysEmitPreview);

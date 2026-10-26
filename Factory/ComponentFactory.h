@@ -28,6 +28,7 @@
 #include "Components/TwoBoneLinkComponent.h"
 #include "Components/UIButtonComponent.h"
 #include "Components/WeaponTrailComponent.h"
+#include "Components/HitEffectComponent.h"
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -129,6 +130,7 @@ namespace HEIN
 			RegisterComponent<FoliageComponent>("FoliageComponent");
 			RegisterComponent<GaugeComponent>("GaugeComponent");
 			RegisterComponent<WeaponTrailComponent>("WeaponTrailComponent");
+			RegisterComponent<HitEffectComponent>("HitEffectComponent");
 		}
 	};
 }

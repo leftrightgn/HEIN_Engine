@@ -44,6 +44,7 @@ namespace HEIN
 		DirectX::SimpleMath::Quaternion m_rotationOffset;
 		ColliderShape m_shape;
 		bool m_isTrigger;
+		bool m_isEnabled = true;
 
 		TransformComponent* m_transform = nullptr;
 		
@@ -94,6 +95,8 @@ namespace HEIN
 		ColliderShape GetShape() { return m_shape; }
 		void SetTrigger(bool active) { m_isTrigger = active; }
 		bool IsTrigger() const { return m_isTrigger; }
+		void SetEnabled(bool enabled) { m_isEnabled = enabled; }
+		bool IsEnabled() const { return m_isEnabled; }
 		void SetOffset(const DirectX::SimpleMath::Vector3& offset) { m_offset = offset; }
 		DirectX::SimpleMath::Vector3 GetOffset() const { return m_offset; }
 		void SetRotationOffset(const DirectX::SimpleMath::Vector3& rotation)

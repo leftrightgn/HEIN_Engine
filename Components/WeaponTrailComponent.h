@@ -20,7 +20,7 @@ namespace HEIN
 
 	/**
 	 * @class WeaponTrailComponent
-	 * @brief High-performance Elden Ring-style weapon ribbon trail VFX component.
+	 * @brief High-performance weapon ribbon trail VFX component.
 	 *
 	 * ARCHITECTURE HIGHLIGHTS:
 	 * - Zero-Allocation Ring Buffer: Fixed-capacity contiguous std::array<TrailKnot, MAX_KNOTS>
@@ -51,7 +51,7 @@ namespace HEIN
 			DirectX::SimpleMath::Vector4 color;
 		};
 
-		__declspec(align(16)) struct CB_WeaponTrail
+		struct alignas(16) CB_WeaponTrail
 		{
 			DirectX::SimpleMath::Matrix  ViewProj;
 			DirectX::SimpleMath::Vector4 CoreColor;

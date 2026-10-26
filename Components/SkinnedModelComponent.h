@@ -69,6 +69,7 @@ namespace HEIN
 		DirectX::SimpleMath::Vector3 m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
 		DirectX::SimpleMath::Vector3 m_rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
 		DirectX::SimpleMath::Vector3 m_initialRootTranslation = DirectX::SimpleMath::Vector3::Zero;
+		float m_rootBoneLocalDeltaY = 0.0f;
 		bool m_hasPrevRootTranslation = false;
 		double m_prevAnimTime = 0.0;
 
@@ -219,6 +220,7 @@ namespace HEIN
 		bool HasActiveRootMotion() const { return m_enableRootMotion && m_hasActiveRootMotion; }
 		DirectX::SimpleMath::Vector3 GetRootMotionDelta() const { return m_rootMotionDelta; }
 		DirectX::SimpleMath::Vector3 GetRootMotionVelocity() const { return m_rootMotionVelocity; }
+		float GetRootBoneLocalDeltaY() const { return m_rootBoneLocalDeltaY; }
 		int GetRootBoneIndex() const;
 
 		void ResetRootMotionTracking()
@@ -230,6 +232,7 @@ namespace HEIN
 			m_hasActiveRootMotion = false;
 			m_rootMotionDelta = DirectX::SimpleMath::Vector3::Zero;
 			m_rootMotionVelocity = DirectX::SimpleMath::Vector3::Zero;
+			m_rootBoneLocalDeltaY = 0.0f;
 		}
 		const DirectX::SimpleMath::Matrix* GetCurrentLocalBones() const
 		{

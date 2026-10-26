@@ -519,6 +519,7 @@ namespace HEIN
 		{
 			// Preserve vertical Y translation so hip bobbing / dips stay on the mesh
 			lockedTrans = DirectX::SimpleMath::Vector3(initialPos.x, currentPos.y, initialPos.z);
+			m_rootBoneLocalDeltaY = currentPos.y - initialPos.y;
 		}
 
 		localBones[rootIdx] = DirectX::XMMatrixScalingFromVector(scale) *

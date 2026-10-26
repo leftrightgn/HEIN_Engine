@@ -23,6 +23,7 @@ namespace HEIN
 
 		// Ground snapping flag
 		bool m_needsInitialSnap = true;
+		bool m_allowDistanceCulling = false;
 
 	public:
 		std::string GetComponentName() const override { return "RigidBodyComponent"; }
@@ -68,6 +69,8 @@ namespace HEIN
 		void SetKinematic(bool isKinematic) { m_isKinematic = isKinematic; }
 		bool UsesGravity() const { return m_useGravity; }
 		bool IsGrounded() const { return m_isGrounded; }
+		bool AllowsDistanceCulling() const { return m_allowDistanceCulling; }
+		void SetAllowDistanceCulling(bool allow) { m_allowDistanceCulling = allow; }
 	};
 
 }
