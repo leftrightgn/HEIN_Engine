@@ -4,6 +4,9 @@
 #include "Framework/GameContext.h"
 #include <DirectXColors.h>
 
+
+namespace HEIN
+{
 HEIN::CapsuleColliderComponent::CapsuleColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::Capsule)
 	, m_radius(0.5f)
@@ -69,7 +72,9 @@ void HEIN::CapsuleColliderComponent::Draw(
 
 	SyncColliderState();
 
-	DirectX::SimpleMath::Color debugColor = DirectX::SimpleMath::Color(DirectX::Colors::Red);
+	DirectX::SimpleMath::Color debugColor = m_isEnabled
+		? DirectX::SimpleMath::Color(DirectX::Colors::Red)
+		: DirectX::SimpleMath::Color(DirectX::Colors::Gray);
 	if (m_isCollidingThisFrame)
 	{
 		debugColor = DirectX::Colors::Yellow;
@@ -107,7 +112,7 @@ void HEIN::CapsuleColliderComponent::Draw(
 	DirectX::SimpleMath::Vector3 prevBottomForward = m_worldBottomCenter + (m_worldforwardDir * m_radius);
 
 	DirectX::SimpleMath::Vector3 prevTopRing = m_worldTopCenter + (m_worldrightDir * m_radius);
-	DirectX::SimpleMath::Vector3 prevBottomRing = m_worldBottomCenter + (m_worldforwardDir * m_radius);
+	DirectX::SimpleMath::Vector3 prevBottomRing = m_worldBottomCenter + (m_worldrightDir * m_radius);
 
 	for (int i = 1; i <= segments; i++)
 	{
@@ -228,3 +233,6 @@ bool HEIN::CapsuleColliderComponent::IntersectsFrustum(const DirectX::BoundingFr
     box.Extents.z *= 1.3f;
     return frustum.Intersects(box);
 }
+
+
+} // namespace HEIN

@@ -34,7 +34,6 @@ namespace HEIN
 		std::optional<CameraType> m_savedCameraType = std::nullopt;
 
 	public:
-
 		CameraController(Actor* owner);
 
 		void Start() override;
@@ -55,13 +54,9 @@ namespace HEIN
 
 		// Sets the initial camera instantly
 		void SetFirstCamera(CameraType key);
-		
 
 		void Update(float deltaTime) override;
-		
-
 		void ProcessInput(const CameraInputState& input);
-		
 
 		// Getters for GameScene.cpp
 		DirectX::SimpleMath::Matrix GetView() const { return m_data.viewMatrix; }
@@ -81,21 +76,16 @@ namespace HEIN
 		CameraData& GetCameraDataRef() { return m_data; }
 
 		bool LocksPlayerRotation() const;
-		
+
 		void RequestSwitch(CameraType type) override;
-		
-
 		void RequestPush(CameraType type) override;
-		
-
 		void RequestPop(CameraType type) override;
-		
+
 		void UpdateMouseMode();
 
 		std::optional<CameraType> GetCurrentCameraType() const
 		{
 			if (m_cameraStack.empty()) return std::nullopt;
-
 			return m_cameraStack.back()->GetType();
 		}
 
@@ -106,7 +96,6 @@ namespace HEIN
 		}
 
 	public:
-
 		bool HasSavedCinematicTracks() const
 		{
 			if (m_cinematicTracksJson.is_array()) return !m_cinematicTracksJson.empty();
@@ -127,8 +116,5 @@ namespace HEIN
 		void SetSavedCameraType(CameraType type) { m_savedCameraType = type; }
 
 		void ApplyRequest();
-		
-		
-		
 	};
 }

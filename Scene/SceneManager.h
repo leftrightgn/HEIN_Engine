@@ -95,6 +95,17 @@ namespace HEIN
         // Lore / Tips Cycler (Bottom-Left)
         bool showTips = true;
         DirectX::SimpleMath::Vector2 tipNormalizedPos = DirectX::SimpleMath::Vector2(0.06f, 0.72f);
+        DirectX::SimpleMath::Vector2 tipTitleOffset   = DirectX::SimpleMath::Vector2(0.0f, 0.0f);
+        DirectX::SimpleMath::Vector2 tipDescOffset    = DirectX::SimpleMath::Vector2(0.0f, 30.0f);
+        bool showTipLine                              = true;
+        DirectX::SimpleMath::Vector2 tipLineOffset    = DirectX::SimpleMath::Vector2(0.0f, 22.0f);
+        float tipLineLength                           = 220.0f;
+        float tipLineThickness                        = 1.0f;
+
+        // Tip Typography Colors
+        DirectX::SimpleMath::Vector4 tipTitleColor = DirectX::SimpleMath::Vector4(0.88f, 0.82f, 0.62f, 1.0f);
+        DirectX::SimpleMath::Vector4 tipDescColor  = DirectX::SimpleMath::Vector4(0.72f, 0.70f, 0.62f, 0.90f);
+        DirectX::SimpleMath::Vector4 tipLineColor  = DirectX::SimpleMath::Vector4(0.88f, 0.82f, 0.62f, 0.50f);
         std::vector<LoadingTip> tips;
 
         // Typography / Font settings
@@ -228,6 +239,7 @@ namespace HEIN
 
         void Update(GameContext& context);
         void Render(GameContext& context);
+        void SaveCurrentScene(GameContext& gameContext);
         void RenderTransitionOverlay(GameContext& gameContext, const D3D11_VIEWPORT& targetViewport);
 
         // Font Management

@@ -7,6 +7,9 @@
 #include "ImGui/imgui.h"
 #include <cmath>
 
+
+namespace HEIN
+{
 HEIN::SlidingDoorComponent::SlidingDoorComponent(Actor* owner, ActorManager* manager)
 	: IComponent(owner)
 	, m_actorManager(manager)
@@ -319,3 +322,6 @@ void HEIN::SlidingDoorComponent::Deserialize(const nlohmann::json& data)
 		m_targetActorTag = std::wstring(tagStr.begin(), tagStr.end());
 	}
 }
+
+
+} // namespace HEIN

@@ -90,6 +90,27 @@ public:
         m_sceneManager.UnloadScene(name);
     }
 
+    /**
+     * @brief Configures whether the engine is running in dedicated Editor suite mode or standalone game mode.
+     * @param isEditor True for dedicated editor application, false for standalone game.
+     */
+    void SetEditorApplication(bool isEditor) noexcept
+    {
+        if (m_gameContext)
+        {
+            m_gameContext->isEditorApplication = isEditor;
+            m_gameContext->isEditorMode = isEditor;
+        }
+    }
+
+    /**
+     * @brief Queries whether the engine is running in dedicated Editor suite mode.
+     */
+    bool IsEditorApplication() const noexcept
+    {
+        return m_gameContext ? m_gameContext->isEditorApplication : false;
+    }
+
 private:
 
     void Update(DX::StepTimer const& timer);

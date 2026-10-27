@@ -7,6 +7,9 @@
 #include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
 
+
+namespace HEIN
+{
 HEIN::TwoBoneLinkComponent::TwoBoneLinkComponent(Actor* owner)
 	: IComponent(owner)
 	, m_targetModel(nullptr)
@@ -236,3 +239,6 @@ void HEIN::TwoBoneLinkComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 	}
 }
 
+
+
+} // namespace HEIN

@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "TerrainCell.h"
 
+
+namespace HEIN
+{
 HEIN::TerrainCell::TerrainCell()
 	: m_vertexCount(0)
 	, m_indexCount(0)
@@ -67,3 +70,6 @@ void HEIN::TerrainCell::Draw(ID3D11DeviceContext* context)
 
 	context->DrawIndexed(m_indexCount, 0, 0);
 }
+
+
+} // namespace HEIN

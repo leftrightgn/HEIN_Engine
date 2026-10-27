@@ -3,6 +3,9 @@
 #include "Entities/ActorManager.h"
 #include <algorithm>
 
+
+namespace HEIN
+{
 HEIN::CinematicMode::CinematicMode(
 	HEIN::ActorManager* manager,
 	HEIN::ActorID targetID,
@@ -674,3 +677,6 @@ void HEIN::CinematicMode::DeserializeTracks(const nlohmann::json& data)
 		m_selectedSlotIndex = 0;
 	}
 }
+
+
+} // namespace HEIN

@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "CollisionMath.h"
 #include "Components/ColliderComponent/AABBColliderComponent.h"
 #include "Components/ColliderComponent/CapsuleColliderComponent.h"
@@ -7,6 +7,9 @@
 #include "Components/ColliderComponent/OBBColliderComponent.h"
 #include "Components/ColliderComponent/TerrainColliderComponent.h"
 
+
+namespace HEIN
+{
 HEIN::CollisionManifold HEIN::CollisionMath::CheckCapsuleVsOBB(HEIN::CapsuleColliderComponent* capsule, HEIN::OBBColliderComponent* obb)
 {
     HEIN::CollisionManifold manifold;
@@ -720,3 +723,8 @@ bool HEIN::CollisionMath::RayCapsuleIntersect(
 
     return false;
 }
+
+
+
+
+} // namespace HEIN

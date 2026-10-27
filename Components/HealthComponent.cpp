@@ -4,6 +4,9 @@
 #include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
 
+
+namespace HEIN
+{
 HEIN::HealthComponent::HealthComponent(Actor* owner)
 	: IComponent(owner)
 	, m_maxHealth()
@@ -119,3 +122,6 @@ void HEIN::HealthComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 		}
 	}
 }
+
+
+} // namespace HEIN

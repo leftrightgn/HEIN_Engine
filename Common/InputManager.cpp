@@ -271,11 +271,12 @@ namespace HEIN
 			messenger->Notify(playerID, Message::PLAYER_ACTION_DODGE);
 		}
 
-		if (WasActionPressed(gameContext, InputAction::Block))
+		bool canBlock = !gameContext.isEditorApplication || gameContext.isGameMouseCaptured;
+		if (canBlock && WasActionPressed(gameContext, InputAction::Block))
 		{
 			messenger->Notify(playerID, Message::PLAYER_ACTION_BLOCK);
 		}
-		else if (WasActionReleased(gameContext, InputAction::Block))
+		else if (canBlock && WasActionReleased(gameContext, InputAction::Block))
 		{
 			messenger->Notify(playerID, Message::PLAYER_STOP_BLOCK);
 		}

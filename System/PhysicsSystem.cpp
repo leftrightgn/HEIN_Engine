@@ -8,6 +8,10 @@
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 
+
+
+namespace HEIN
+{
 void HEIN::PhysicsSystem::UpdateMovement(GameContext& /*gameContext*/, HEIN::ActorManager& actorManager, float deltaTime)
 {
     // Dynamic terrain collider lookup for ground alignment
@@ -117,16 +121,15 @@ void HEIN::PhysicsSystem::UpdateMovement(GameContext& /*gameContext*/, HEIN::Act
         }
 
         // Distance-Based Simulation Culling (Hibernation)
-        // Exempt Player, Ghost avatar, and primary environmental roots from simulation culling
-        if (actor->GetActorType() != HEIN::ActorType::Player &&
-            actor->GetActorType() != HEIN::ActorType::Ghost &&
-            actor->GetTag() != L"StageRoot")
+        // Only cull dormant bodies that explicitly opt into distance culling and have no active velocity/acceleration
+        if (rb->AllowsDistanceCulling() &&
+            rb->m_velocity.LengthSquared() <= 0.0001f &&
+            rb->m_acceleration.LengthSquared() <= 0.0001f)
         {
             float distSq = DirectX::SimpleMath::Vector3::DistanceSquared(playerPos, transform->GetPosition());
 
             if (distSq > SIMULATION_RADIUS_SQ)
             {
-
                 // Bypass remaining dynamics calculations for dormant actor
                 continue;
             }
@@ -190,6 +193,7 @@ void HEIN::PhysicsSystem::UpdateCollisions(GameContext& gameContext, HEIN::Actor
         std::vector<HEIN::ColliderComponent*> actorColliders = actor->GetComponents<HEIN::ColliderComponent>();
         for (HEIN::ColliderComponent* col : actorColliders)
         {
+            if (!col->IsEnabled()) continue;
             col->SyncColliderState();
             allColliders.push_back(col);
         }
@@ -333,3 +337,8 @@ void HEIN::PhysicsSystem::ResolvePhysicalOverlap(HEIN::ColliderComponent* colA, 
     }
 }
 
+
+
+
+
+} // namespace HEIN

@@ -8,9 +8,13 @@
 #include "Components/ColliderComponent/OBBColliderComponent.h"
 #include "Components/ColliderComponent/TerrainColliderComponent.h"
 
+
+namespace HEIN
+{
 // Dispatches appropriate SAT geometry tests based on collider shapes.
 // Ensures consistent Minimum Translation Vector (MTV) direction by inverting the normal 
 // if the argument order is swapped (e.g., AABB vs Capsule -> Capsule vs AABB).
+
 HEIN::CollisionManifold HEIN::CollisionDispatcher::CheckCollision(HEIN::ColliderComponent* colA, HEIN::ColliderComponent* colB)
 {
     HEIN::CollisionManifold resultManifold;
@@ -106,3 +110,8 @@ HEIN::CollisionManifold HEIN::CollisionDispatcher::CheckCollision(HEIN::Collider
     return resultManifold;
 
 }
+
+
+
+
+} // namespace HEIN

@@ -89,9 +89,13 @@ namespace HEIN
 
         m_debugUI.Update(gameContext, mainActorManager, GetViewMatrix(), m_projMatrix, cameraComp);
         m_isMagnified = (m_debugUI.GetViewportLayout() != EditorViewportLayout::GameViewOnly);
+        D3D11_VIEWPORT gameVp = m_debugUI.GetGameViewport(gameContext);
+        const_cast<GameContext&>(gameContext).gameViewport = gameVp;
+        UIButtonComponent::SetActiveUIViewport(gameVp);
         const_cast<GameContext&>(gameContext).viewportLayout = m_debugUI.GetViewportLayout();
         const_cast<GameContext&>(gameContext).showUI = m_debugUI.IsShowUIEnabled();
         const_cast<GameContext&>(gameContext).showColliders = m_isMagnified && m_debugUI.IsShowCollidersEnabled();
+        const_cast<GameContext&>(gameContext).isGameMouseCaptured = m_debugUI.IsGameViewCaptured();
 
         const float deltaTime = static_cast<float>(gameContext.timer.GetElapsedSeconds());
 
@@ -191,8 +195,11 @@ namespace HEIN
         auto RenderSceneViewPass = [&](const D3D11_VIEWPORT& vp)
         {
             DebugUIManager::SetActiveViewportRect(vp.TopLeftX, vp.TopLeftY, vp.Width, vp.Height);
-            context->RSSetViewports(1, &vp);
-            context->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+            ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
+            int targetW = std::max(1, static_cast<int>(vp.Width));
+            int targetH = std::max(1, static_cast<int>(vp.Height));
+            m_sceneRenderTarget.Resize(device, targetW, targetH);
+            m_sceneRenderTarget.Begin(context, editorClearColor);
 
             float aspectRatio = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : 1.777f;
             float fov = (cameraComp != nullptr) ? cameraComp->GetFov() : (DirectX::XM_PI / 4.0f);
@@ -244,13 +251,18 @@ namespace HEIN
                 else
                     gameContext.debugCollisionRenderer->Clear();
             }
+            m_sceneRenderTarget.End(context);
         };
 
         // Helper: Render Game View pass (Main Camera + Game HUD + Scene Transitions, NO Colliders/Gizmos)
         auto RenderGameViewPass = [&](const D3D11_VIEWPORT& vp)
         {
-            context->RSSetViewports(1, &vp);
-            context->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+            ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
+            int targetW = std::max(1, static_cast<int>(vp.Width));
+            int targetH = std::max(1, static_cast<int>(vp.Height));
+            m_gameRenderTarget.Resize(device, targetW, targetH);
+            const float gameClearColor[4] = { 0.10f, 0.10f, 0.12f, 1.0f };
+            m_gameRenderTarget.Begin(context, gameClearColor);
 
             float aspectRatio = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : 1.777f;
             float fov = (gameContext.mainCamera != nullptr) ? gameContext.mainCamera->GetFov() : (DirectX::XM_PI / 4.0f);
@@ -259,6 +271,8 @@ namespace HEIN
             bool isTransitioning = (gameContext.sceneManager && gameContext.sceneManager->IsTransitioning() && gameContext.sceneManager->GetTransitionAlpha() > 0.05f);
             bool isTransitionPaused = (gameContext.sceneManager && gameContext.sceneManager->IsTransitionPaused());
 
+            gameContext.gameViewport = vp;
+            UIButtonComponent::SetActiveUIViewport(vp);
             gameContext.isSceneViewPass = false;
             gameContext.showUI = m_debugUI.IsShowUIEnabled() && !isTransitioning; // Suppress HUD underneath active transition
             gameContext.showColliders = false; // NO Colliders in Game View!
@@ -283,7 +297,8 @@ namespace HEIN
             // Render transition overlay ONLY inside the Game View panel
             if (gameContext.sceneManager && gameContext.sceneManager->IsTransitioning())
             {
-                gameContext.sceneManager->RenderTransitionOverlay(gameContext, vp);
+                D3D11_VIEWPORT texViewport = m_gameRenderTarget.GetViewport();
+                gameContext.sceneManager->RenderTransitionOverlay(gameContext, texViewport);
 
                 // When the transition is PAUSED in the editor and Show UI is enabled,
                 // render scene UI elements (UI Text / Buttons / Gauges) ON TOP of the paused transition
@@ -309,6 +324,7 @@ namespace HEIN
                     }
                 }
             }
+            m_gameRenderTarget.End(context);
         };
 
         // Execute Viewport Layout Passes
@@ -347,8 +363,10 @@ namespace HEIN
             RenderGameViewPass(gameVp);
         }
 
-        // Reset viewport to fullscreen for ImGui UI draw pass
+        // Re-bind backbuffer and pass offscreen SRVs to DebugUIManager
+        context->OMSetRenderTargets(1, &rtv, dsv);
         context->RSSetViewports(1, &fullscreen);
+        m_debugUI.SetViewportSRVs(m_sceneRenderTarget.GetShaderResourceView(), m_gameRenderTarget.GetShaderResourceView());
 
         // Unbind shadow SRV and sampler to eliminate pipeline hazards across frame boundaries
         ID3D11ShaderResourceView* nullSRV = nullptr;

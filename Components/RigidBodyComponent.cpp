@@ -4,6 +4,9 @@
 #include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
 
+
+namespace HEIN
+{
 HEIN::RigidBodyComponent::RigidBodyComponent(Actor* owner)
 	: IComponent(owner)
 	, m_transform(nullptr)
@@ -63,6 +66,7 @@ nlohmann::json HEIN::RigidBodyComponent::Serialize()
     data["UseGravity"] = m_useGravity;
     data["IsKinematic"] = m_isKinematic;
 	data["NeedsInitialSnap"] = m_needsInitialSnap;
+	data["AllowDistanceCulling"] = m_allowDistanceCulling;
     return data;
 }
 
@@ -73,6 +77,7 @@ void HEIN::RigidBodyComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("UseGravity")) m_useGravity = data["UseGravity"];
     if (data.contains("IsKinematic")) m_isKinematic = data["IsKinematic"];
 	if (data.contains("NeedsInitialSnap")) m_needsInitialSnap = data["NeedsInitialSnap"];
+	if (data.contains("AllowDistanceCulling")) m_allowDistanceCulling = data["AllowDistanceCulling"];
 }
 
 void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& /*gameContext*/)
@@ -82,6 +87,7 @@ void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 		ImGui::DragFloat("Mass", &m_mass, 0.1f, 0.0f, 1000.0f);
 		ImGui::Checkbox("Use Gravity", &m_useGravity);
 		ImGui::Checkbox("Is Kinematic", &m_isKinematic);
+		ImGui::Checkbox("Allow Distance Culling", &m_allowDistanceCulling);
 		ImGui::Text("Terrain Tools");
 		ImGui::Checkbox("Snap To Ground on Play/Load", &m_needsInitialSnap);
 
@@ -91,3 +97,6 @@ void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 		}
 	}
 }
+
+
+} // namespace HEIN

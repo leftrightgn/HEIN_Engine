@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cmath>
 
+
+namespace HEIN
+{
 HEIN::SpringCameraMode::SpringCameraMode(
 	HEIN::ActorManager* manager,
 	HEIN::ActorID targetID,
@@ -174,3 +177,6 @@ void HEIN::SpringCameraMode::Update(CameraData& outData, float deltaTime, ICamer
 void HEIN::SpringCameraMode::SetFrequency(float /*freq*/)
 {
 }
+
+
+} // namespace HEIN

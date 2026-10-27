@@ -91,6 +91,11 @@ namespace HEIN
         float m_lastVpY = 0.0f;
 
     public:
+        static D3D11_VIEWPORT s_activeUIViewport;
+
+        static void SetActiveUIViewport(const D3D11_VIEWPORT& vp);
+        static D3D11_VIEWPORT GetActiveUIViewport();
+
         UIButtonComponent(Actor* owner);
 
         static std::shared_ptr<DirectX::SpriteFont> GetOrCreateFont(ID3D11Device* device, const std::wstring& path);

@@ -6,6 +6,9 @@
 #include <fstream>
 #include <sstream>
 
+
+namespace HEIN
+{
 HEIN::MeshColliderComponent::MeshColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::Mesh)
 {
@@ -349,3 +352,6 @@ bool HEIN::MeshColliderComponent::IntersectsFrustum(const DirectX::BoundingFrust
     box.Extents.z *= 1.2f;
     return frustum.Intersects(box);
 }
+
+
+} // namespace HEIN

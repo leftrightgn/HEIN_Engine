@@ -5,6 +5,9 @@
 #include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
 
+
+namespace HEIN
+{
 HEIN::ColliderComponent::ColliderComponent(
 	Actor* owner,
 	ColliderShape shape
@@ -173,6 +176,11 @@ void HEIN::ColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/)
         }
 
         // Trigger
+        bool isEnabled = IsEnabled();
+        if (ImGui::Checkbox("Enabled", &isEnabled))
+        {
+            SetEnabled(isEnabled);
+        }
         bool isTrigger = IsTrigger();
         if (ImGui::Checkbox("Is Trigger", &isTrigger))
         {
@@ -200,7 +208,13 @@ void HEIN::ColliderComponent::DrawGizmo(
     DirectX::SimpleMath::Matrix worldMat = GetCalculateWorldMatrix();
 
     // Use the operation/mode passed in from the UI manager
-    ImGuizmo::Manipulate((float*)&view.m[0][0], (float*)&proj.m[0][0], (ImGuizmo::OPERATION)operation, (ImGuizmo::MODE)mode, (float*)&worldMat.m[0][0]);
+    ImGuizmo::Manipulate(
+        (float*)&view.m[0][0], 
+        (float*)&proj.m[0][0], 
+        (ImGuizmo::OPERATION)operation, 
+        (ImGuizmo::MODE)mode, 
+        (float*)&worldMat.m[0][0]
+    );
 
     if (ImGuizmo::IsUsing())
     {
@@ -261,6 +275,7 @@ nlohmann::json HEIN::ColliderComponent::Serialize()
     data["RotW"] = m_rotationOffset.w;
 
     data["IsTrigger"] = m_isTrigger;
+    data["Enabled"] = m_isEnabled;
     data["Layer"] = m_layer;
     data["Mask"] = m_mask;
     return data;
@@ -285,6 +300,10 @@ void HEIN::ColliderComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("RotW")) m_rotationOffset.w = data["RotW"];
 
     if (data.contains("IsTrigger")) m_isTrigger = data["IsTrigger"];
+    if (data.contains("Enabled")) m_isEnabled = data["Enabled"];
     if (data.contains("Layer")) m_layer = data["Layer"];
     if (data.contains("Mask")) m_mask = data["Mask"];
 }
+
+
+} // namespace HEIN

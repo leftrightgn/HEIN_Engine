@@ -218,6 +218,7 @@
     <ClInclude Include="Components\GaugeComponent.h" />
     <ClInclude Include="Components\UIButtonComponent.h" />
     <ClInclude Include="Components\WeaponTrailComponent.h" />
+    <ClInclude Include="Components\HitEffectComponent.h" />
     <ClInclude Include="DebugingTools\EditorUtils.h" />
     <ClInclude Include="Factory\ComponentFactory.h" />
     <ClInclude Include="pch.h" />
@@ -235,6 +236,7 @@
     <ClCompile Include="Components\GaugeComponent.cpp" />
     <ClCompile Include="Components\UIButtonComponent.cpp" />
     <ClCompile Include="Components\WeaponTrailComponent.cpp" />
+    <ClCompile Include="Components\HitEffectComponent.cpp" />
     <ClCompile Include="Components\LightComponent.cpp" />
     <ClCompile Include="DebugingTools\EditorUtils.cpp" />
     <ClCompile Include="pch.cpp">
@@ -335,7 +337,37 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
+    <FxCompile Include="Shaders\HitEffect_VS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shaders\HitEffect_PS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
     <FxCompile Include="Shaders\WeaponTrail_PS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shaders\GaugeUI_PS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -386,6 +418,7 @@
     <ClInclude Include="System\CollisionDispatcher.h" />
     <ClInclude Include="System\CollisionMath.h" />
     <ClInclude Include="Common\DeviceResources.h" />
+    <ClInclude Include="Common\OffscreenRenderTarget.h" />
     <ClInclude Include="Common\Event.h" />
     <ClInclude Include="Common\EventManager.h" />
     <ClInclude Include="Common\InputManager.h" />
@@ -452,6 +485,7 @@
     <ClCompile Include="System\CollisionDispatcher.cpp" />
     <ClCompile Include="System\CollisionMath.cpp" />
     <ClCompile Include="Common\DeviceResources.cpp" />
+    <ClCompile Include="Common\OffscreenRenderTarget.cpp" />
     <ClCompile Include="Common\EventManager.cpp" />
     <ClCompile Include="Common\InputManager.cpp" />
     <ClCompile Include="System\PhysicsSystem.cpp" />
@@ -523,6 +557,7 @@
     <None Include="Shaders\SkyboxEffect_VS.hlsl" />
     <None Include="Shaders\StaticModel_Common.hlsli" />
     <None Include="Shaders\Terrain_Common.hlsli" />
+    <None Include="Shaders\HitEffect_Common.hlsli" />
     <None Include="Shaders\WaterPs.hlsl" />
     <None Include="Shaders\WaterVs.hlsl" />
   </ItemGroup>

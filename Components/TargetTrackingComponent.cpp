@@ -5,6 +5,9 @@
 #include "Entities/ActorManager.h"
 #include "ImGui/imgui.h"
 
+
+namespace HEIN
+{
 HEIN::ActorID HEIN::TargetTrackingComponent::FindBestTarget() const
 {
 	if (m_actorManager == nullptr || m_transform == nullptr) return HEIN::INVALID_ACTOR_ID;
@@ -145,3 +148,6 @@ void HEIN::TargetTrackingComponent::OnInspectorGUI(GameContext& /*gameContext*/)
         ImGui::Text("Distance: %.2f", m_distanceToTarget);
     }
 }
+
+
+} // namespace HEIN

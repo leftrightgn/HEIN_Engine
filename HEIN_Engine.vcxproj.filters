@@ -52,6 +52,9 @@
     <ClCompile Include="Components\GaugeComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
+    <ClCompile Include="Components\HitEffectComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
     <ClCompile Include="Components\WeaponTrailComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
@@ -139,6 +142,9 @@
     <ClInclude Include="Components\GaugeComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
+    <ClInclude Include="Components\HitEffectComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
     <ClInclude Include="Components\WeaponTrailComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
@@ -167,6 +173,9 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="Shaders\Foliage_Common.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Shaders\HitEffect_Common.hlsli">
       <Filter>Shaders</Filter>
     </None>
     <None Include="Shaders\StaticModel_Common.hlsli">
@@ -201,7 +210,16 @@
     <FxCompile Include="Shaders\StaticModel_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\HitEffect_VS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\HitEffect_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\WeaponTrail_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\GaugeUI_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\WeaponTrail_VS.hlsl">
@@ -322,6 +340,9 @@
       <Filter>Camera</Filter>
     </ClInclude>
     <ClInclude Include="Common\DeviceResources.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\OffscreenRenderTarget.h">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="Common\Event.h">
@@ -504,6 +525,9 @@
       <Filter>Camera</Filter>
     </ClCompile>
     <ClCompile Include="Common\DeviceResources.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\OffscreenRenderTarget.cpp">
       <Filter>Common</Filter>
     </ClCompile>
     <ClCompile Include="Common\EventManager.cpp">

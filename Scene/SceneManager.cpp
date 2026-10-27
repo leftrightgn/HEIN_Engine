@@ -518,6 +518,57 @@ namespace HEIN
                     j["TipNormalizedPos"][1].get<float>()
                 );
             }
+            if (j.contains("TipTitleOffset") && j["TipTitleOffset"].is_array() && j["TipTitleOffset"].size() >= 2)
+            {
+                m_defaultTransitionDesc.tipTitleOffset = DirectX::SimpleMath::Vector2(
+                    j["TipTitleOffset"][0].get<float>(),
+                    j["TipTitleOffset"][1].get<float>()
+                );
+            }
+            if (j.contains("TipDescOffset") && j["TipDescOffset"].is_array() && j["TipDescOffset"].size() >= 2)
+            {
+                m_defaultTransitionDesc.tipDescOffset = DirectX::SimpleMath::Vector2(
+                    j["TipDescOffset"][0].get<float>(),
+                    j["TipDescOffset"][1].get<float>()
+                );
+            }
+            if (j.contains("ShowTipLine")) m_defaultTransitionDesc.showTipLine = j["ShowTipLine"].get<bool>();
+            if (j.contains("TipLineOffset") && j["TipLineOffset"].is_array() && j["TipLineOffset"].size() >= 2)
+            {
+                m_defaultTransitionDesc.tipLineOffset = DirectX::SimpleMath::Vector2(
+                    j["TipLineOffset"][0].get<float>(),
+                    j["TipLineOffset"][1].get<float>()
+                );
+            }
+            if (j.contains("TipLineLength")) m_defaultTransitionDesc.tipLineLength = j["TipLineLength"].get<float>();
+            if (j.contains("TipLineThickness")) m_defaultTransitionDesc.tipLineThickness = j["TipLineThickness"].get<float>();
+            if (j.contains("TipTitleColor") && j["TipTitleColor"].is_array() && j["TipTitleColor"].size() >= 4)
+            {
+                m_defaultTransitionDesc.tipTitleColor = DirectX::SimpleMath::Vector4(
+                    j["TipTitleColor"][0].get<float>(),
+                    j["TipTitleColor"][1].get<float>(),
+                    j["TipTitleColor"][2].get<float>(),
+                    j["TipTitleColor"][3].get<float>()
+                );
+            }
+            if (j.contains("TipDescColor") && j["TipDescColor"].is_array() && j["TipDescColor"].size() >= 4)
+            {
+                m_defaultTransitionDesc.tipDescColor = DirectX::SimpleMath::Vector4(
+                    j["TipDescColor"][0].get<float>(),
+                    j["TipDescColor"][1].get<float>(),
+                    j["TipDescColor"][2].get<float>(),
+                    j["TipDescColor"][3].get<float>()
+                );
+            }
+            if (j.contains("TipLineColor") && j["TipLineColor"].is_array() && j["TipLineColor"].size() >= 4)
+            {
+                m_defaultTransitionDesc.tipLineColor = DirectX::SimpleMath::Vector4(
+                    j["TipLineColor"][0].get<float>(),
+                    j["TipLineColor"][1].get<float>(),
+                    j["TipLineColor"][2].get<float>(),
+                    j["TipLineColor"][3].get<float>()
+                );
+            }
             if (j.contains("Tips") && j["Tips"].is_array())
             {
                 m_defaultTransitionDesc.tips.clear();
@@ -617,6 +668,30 @@ namespace HEIN
 
             j["ShowTips"] = m_defaultTransitionDesc.showTips;
             j["TipNormalizedPos"] = { m_defaultTransitionDesc.tipNormalizedPos.x, m_defaultTransitionDesc.tipNormalizedPos.y };
+            j["TipTitleOffset"] = { m_defaultTransitionDesc.tipTitleOffset.x, m_defaultTransitionDesc.tipTitleOffset.y };
+            j["TipDescOffset"] = { m_defaultTransitionDesc.tipDescOffset.x, m_defaultTransitionDesc.tipDescOffset.y };
+            j["ShowTipLine"] = m_defaultTransitionDesc.showTipLine;
+            j["TipLineOffset"] = { m_defaultTransitionDesc.tipLineOffset.x, m_defaultTransitionDesc.tipLineOffset.y };
+            j["TipLineLength"] = m_defaultTransitionDesc.tipLineLength;
+            j["TipLineThickness"] = m_defaultTransitionDesc.tipLineThickness;
+            j["TipTitleColor"] = {
+                m_defaultTransitionDesc.tipTitleColor.x,
+                m_defaultTransitionDesc.tipTitleColor.y,
+                m_defaultTransitionDesc.tipTitleColor.z,
+                m_defaultTransitionDesc.tipTitleColor.w
+            };
+            j["TipDescColor"] = {
+                m_defaultTransitionDesc.tipDescColor.x,
+                m_defaultTransitionDesc.tipDescColor.y,
+                m_defaultTransitionDesc.tipDescColor.z,
+                m_defaultTransitionDesc.tipDescColor.w
+            };
+            j["TipLineColor"] = {
+                m_defaultTransitionDesc.tipLineColor.x,
+                m_defaultTransitionDesc.tipLineColor.y,
+                m_defaultTransitionDesc.tipLineColor.z,
+                m_defaultTransitionDesc.tipLineColor.w
+            };
             nlohmann::json tipsArr = nlohmann::json::array();
             for (const auto& tip : m_defaultTransitionDesc.tips)
             {
@@ -1156,34 +1231,44 @@ namespace HEIN
         size_t idx = m_activeTipIndex % m_currentTransitionDesc.tips.size();
         const auto& tip = m_currentTransitionDesc.tips[idx];
 
-        float tipX = std::floor(m_currentTransitionDesc.tipNormalizedPos.x * vp.Width + 0.5f);
-        float tipY = std::floor(m_currentTransitionDesc.tipNormalizedPos.y * vp.Height + 0.5f);
-
-        DirectX::SimpleMath::Vector4 titleCol = DirectX::SimpleMath::Vector4(0.88f, 0.82f, 0.62f, alpha);
-        DirectX::SimpleMath::Vector4 descCol  = DirectX::SimpleMath::Vector4(0.72f, 0.70f, 0.62f, alpha * 0.90f);
+        float baseX = m_currentTransitionDesc.tipNormalizedPos.x * vp.Width;
+        float baseY = m_currentTransitionDesc.tipNormalizedPos.y * vp.Height;
 
         float titleScale = m_currentTransitionDesc.titleFontSize * m_currentTransitionDesc.fontSize * uiScale;
         float descScale = m_currentTransitionDesc.descFontSize * m_currentTransitionDesc.fontSize * uiScale;
 
-        // Title
-        m_spriteFont->DrawString(m_spriteBatch.get(), tip.title.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY), titleCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, titleScale);
+        // Render Tip Name (Title)
+        float titleX = std::floor(baseX + m_currentTransitionDesc.tipTitleOffset.x * uiScale + 0.5f);
+        float titleY = std::floor(baseY + m_currentTransitionDesc.tipTitleOffset.y * uiScale + 0.5f);
+        DirectX::SimpleMath::Vector4 titleCol = m_currentTransitionDesc.tipTitleColor;
+        titleCol.w *= alpha;
+        m_spriteFont->DrawString(m_spriteBatch.get(), tip.title.c_str(), DirectX::SimpleMath::Vector2(titleX, titleY), titleCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, titleScale);
 
-        // Subtle divider underline
-        if (m_whiteTextureSRV)
+        // Render Configurable Divider Line
+        if (m_currentTransitionDesc.showTipLine && m_whiteTextureSRV)
         {
+            float lineX = std::floor(baseX + m_currentTransitionDesc.tipLineOffset.x * uiScale + 0.5f);
+            float lineY = std::floor(baseY + m_currentTransitionDesc.tipLineOffset.y * uiScale + 0.5f);
+            float lineWidth = m_currentTransitionDesc.tipLineLength * uiScale;
+            float lineThick = std::max(1.0f, std::floor(m_currentTransitionDesc.tipLineThickness * uiScale + 0.5f));
+
             RECT lineRect;
-            lineRect.left = static_cast<LONG>(tipX);
-            lineRect.top = static_cast<LONG>(tipY + 22.0f * (titleScale / 0.85f));
-            lineRect.right = static_cast<LONG>(tipX + 220.0f * (titleScale / 0.85f));
-            lineRect.bottom = static_cast<LONG>(std::max(lineRect.top + 1L, static_cast<LONG>(tipY + 23.0f * (titleScale / 0.85f))));
-            DirectX::SimpleMath::Vector4 lineCol = titleCol;
-            lineCol.w *= 0.5f;
+            lineRect.left   = static_cast<LONG>(lineX);
+            lineRect.top    = static_cast<LONG>(lineY);
+            lineRect.right  = static_cast<LONG>(lineX + lineWidth);
+            lineRect.bottom = static_cast<LONG>(lineY + lineThick);
+
+            DirectX::SimpleMath::Vector4 lineCol = m_currentTransitionDesc.tipLineColor;
+            lineCol.w *= alpha;
             m_spriteBatch->Draw(m_whiteTextureSRV.Get(), lineRect, nullptr, lineCol);
         }
 
-        // Description
-        float descOffsetY = 30.0f * (titleScale / 0.85f);
-        m_spriteFont->DrawString(m_spriteBatch.get(), tip.description.c_str(), DirectX::SimpleMath::Vector2(tipX, tipY + descOffsetY), descCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, descScale);
+        // Render Tip Explain (Description)
+        float descX = std::floor(baseX + m_currentTransitionDesc.tipDescOffset.x * uiScale + 0.5f);
+        float descY = std::floor(baseY + m_currentTransitionDesc.tipDescOffset.y * uiScale + 0.5f);
+        DirectX::SimpleMath::Vector4 descCol = m_currentTransitionDesc.tipDescColor;
+        descCol.w *= alpha;
+        m_spriteFont->DrawString(m_spriteBatch.get(), tip.description.c_str(), DirectX::SimpleMath::Vector2(descX, descY), descCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, descScale);
     }
 
     void SceneManager::Render(GameContext& context)
@@ -1311,6 +1396,16 @@ namespace HEIN
             d3dContext->OMSetBlendState(context.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
             d3dContext->OMSetDepthStencilState(context.commonStates.DepthDefault(), 0);
             d3dContext->RSSetState(context.commonStates.CullCounterClockwise());
+        }
+    }
+    void SceneManager::SaveCurrentScene(GameContext& gameContext)
+    {
+        for (auto& active : m_activeScenes)
+        {
+            if (active.instance)
+            {
+                active.instance->SaveScene(gameContext);
+            }
         }
     }
 }

@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "Messenger.h"
 
+
+namespace HEIN
+{
 std::unique_ptr<HEIN::Messenger> HEIN::Messenger::s_messenger = nullptr;
 
 HEIN::Messenger::Messenger()
@@ -116,3 +119,6 @@ void HEIN::Messenger::Update(float elapsedTime)
     m_elapsedTime = elapsedTime;
     UpdateDelayedMessage(elapsedTime);
 }
+
+
+} // namespace HEIN

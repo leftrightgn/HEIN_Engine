@@ -3,6 +3,9 @@
 #include "CameraCollisionHelper.h"
 #include "Entities/ActorManager.h"
 
+
+namespace HEIN
+{
 HEIN::ThirdPersonMode::ThirdPersonMode(
 	HEIN::ActorManager* manager,
 	HEIN::ActorID targetID,
@@ -97,3 +100,6 @@ void HEIN::ThirdPersonMode::Update(CameraData& outData, float /*deltaTime*/, ICa
 
 	outData.fov = DirectX::XMConvertToRadians(TPS_CAM_FOV);
 }
+
+
+} // namespace HEIN

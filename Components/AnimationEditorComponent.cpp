@@ -10,7 +10,8 @@
 #include <algorithm>
 #include <fstream>
 
-using namespace HEIN;
+namespace HEIN
+{
 
 // ------------------------------------------------------------------------------
 // Smooth Easing Interpolation (Catmull-like ease in/out)
@@ -204,9 +205,13 @@ void AnimationEditorComponent::DrawGizmo(
     DirectX::SimpleMath::Matrix boneWorld = m_targetModel->GetBoneWorldMatrix(m_selectedBoneIndex, actorWorld);
 
     ImGuizmo::PushID(999);
-    ImGuizmo::Manipulate((float*)&view.m[0][0], (float*)&proj.m[0][0],
-        (ImGuizmo::OPERATION)operation, (ImGuizmo::MODE)mode,
-        (float*)&boneWorld.m[0][0]);
+    ImGuizmo::Manipulate(
+        (float*)&view.m[0][0], 
+        (float*)&proj.m[0][0],
+        (ImGuizmo::OPERATION)operation, 
+        (ImGuizmo::MODE)mode,
+        (float*)&boneWorld.m[0][0]
+    );
 
     // Handle interactive Gizmo manipulation
     if (ImGuizmo::IsUsing())
@@ -392,3 +397,4 @@ bool AnimationEditorComponent::ExportToSDKMeshAnim(const std::string& filepath)
         return false;
     }
 }
+} // namespace HEIN

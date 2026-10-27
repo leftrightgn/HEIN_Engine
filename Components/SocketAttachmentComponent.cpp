@@ -5,6 +5,9 @@
 #include "DebugingTools/DebugUIManager.h"
 #include "Entities/ActorManager.h"
 
+
+namespace HEIN
+{
 HEIN::SocketAttachmentComponent::SocketAttachmentComponent(Actor* owner, ActorManager* manager)
 	: IComponent(owner)
 	, m_actorManager(manager)
@@ -188,3 +191,6 @@ void HEIN::SocketAttachmentComponent::OnInspectorGUI(GameContext& /*gameContext*
 		}
 	}
 }
+
+
+} // namespace HEIN

@@ -8,12 +8,14 @@
 #include "Components/TransformComponent.h"
 #include "DebugingTools/DebugUIManager.h"
 #include "DebugingTools/EditorUtils.h"
+#include "Effect/ReadData.h"
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_stdlib.h"
 #include "ImGui/ImGuizmo.h"
 #include <algorithm>
+#include <d3dcompiler.h>
 #include <filesystem>
 
 // ============================================================================
@@ -50,10 +52,11 @@ namespace
 
     uint32_t Vec4ToABGR(const DirectX::SimpleMath::Vector4& c)
     {
-        uint8_t r = static_cast<uint8_t>(std::clamp(c.x, 0.0f, 1.0f) * 255.0f);
-        uint8_t g = static_cast<uint8_t>(std::clamp(c.y, 0.0f, 1.0f) * 255.0f);
-        uint8_t b = static_cast<uint8_t>(std::clamp(c.z, 0.0f, 1.0f) * 255.0f);
-        uint8_t a = static_cast<uint8_t>(std::clamp(c.w, 0.0f, 1.0f) * 255.0f);
+        constexpr float kMaxChannel = 255.0f;
+        uint8_t r = static_cast<uint8_t>(std::clamp(c.x, 0.0f, 1.0f) * kMaxChannel);
+        uint8_t g = static_cast<uint8_t>(std::clamp(c.y, 0.0f, 1.0f) * kMaxChannel);
+        uint8_t b = static_cast<uint8_t>(std::clamp(c.z, 0.0f, 1.0f) * kMaxChannel);
+        uint8_t a = static_cast<uint8_t>(std::clamp(c.w, 0.0f, 1.0f) * kMaxChannel);
         return (a << 24) | (b << 16) | (g << 8) | r;
     }
 
@@ -101,6 +104,9 @@ namespace
     }
 }
 
+namespace HEIN
+{
+
 // ============================================================================
 // Constructor
 // ============================================================================
@@ -140,6 +146,138 @@ void HEIN::GaugeComponent::EnsureWhiteTexture(ID3D11Device* device)
 }
 
 // ============================================================================
+// EnsureGaugeShader: Compile/load GaugeUI_PS.hlsl and create constant buffer + sampler
+// ============================================================================
+void HEIN::GaugeComponent::EnsureGaugeShader(ID3D11Device* device)
+{
+    if (!device) return;
+
+    if (!m_gaugePixelShader)
+    {
+        std::vector<uint8_t> psData;
+        bool loadedCso = false;
+        try
+        {
+            psData = DX::ReadData(L"Resources/Shaders/GaugeUI_PS.cso");
+            loadedCso = true;
+        }
+        catch (...)
+        {
+            try
+            {
+                psData = DX::ReadData(L"GaugeUI_PS.cso");
+                loadedCso = true;
+            }
+            catch (...)
+            {
+                loadedCso = false;
+            }
+        }
+
+        if (loadedCso && !psData.empty())
+        {
+            device->CreatePixelShader(psData.data(), psData.size(), nullptr, m_gaugePixelShader.ReleaseAndGetAddressOf());
+        }
+        else
+        {
+            Microsoft::WRL::ComPtr<ID3DBlob> psBlob;
+            Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+            HRESULT hr = D3DCompileFromFile(
+                L"../External/Engine/Shaders/GaugeUI_PS.hlsl",
+                nullptr,
+                D3D_COMPILE_STANDARD_FILE_INCLUDE,
+                "main",
+                "ps_5_0",
+                D3DCOMPILE_ENABLE_STRICTNESS,
+                0,
+                psBlob.GetAddressOf(),
+                errorBlob.GetAddressOf()
+            );
+            if (FAILED(hr))
+            {
+                hr = D3DCompileFromFile(
+                    L"External/Engine/Shaders/GaugeUI_PS.hlsl",
+                    nullptr,
+                    D3D_COMPILE_STANDARD_FILE_INCLUDE,
+                    "main",
+                    "ps_5_0",
+                    D3DCOMPILE_ENABLE_STRICTNESS,
+                    0,
+                    psBlob.GetAddressOf(),
+                    errorBlob.GetAddressOf()
+                );
+            }
+            if (SUCCEEDED(hr) && psBlob)
+            {
+                device->CreatePixelShader(
+                    psBlob->GetBufferPointer(),
+                    psBlob->GetBufferSize(),
+                    nullptr,
+                    m_gaugePixelShader.ReleaseAndGetAddressOf()
+                );
+            }
+            else if (errorBlob)
+            {
+                OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
+            }
+        }
+    }
+
+    if (!m_gaugeCB)
+    {
+        D3D11_BUFFER_DESC cbDesc = {};
+        cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+        cbDesc.ByteWidth = sizeof(CB_GaugeUI);
+        cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        device->CreateBuffer(&cbDesc, nullptr, m_gaugeCB.ReleaseAndGetAddressOf());
+    }
+
+    if (!m_gaugeSampler)
+    {
+        D3D11_SAMPLER_DESC sampDesc = {};
+        sampDesc.Filter = D3D11_FILTER_ANISOTROPIC;
+        sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.MaxAnisotropy = kDefaultMaxAnisotropy;
+        sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+        sampDesc.MinLOD = 0.0f;
+        sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+        device->CreateSamplerState(&sampDesc, m_gaugeSampler.ReleaseAndGetAddressOf());
+    }
+}
+
+void HEIN::GaugeComponent::UpdateBarValueTracking(const GaugeBarDef& bar)
+{
+    if (!bar.trailInitialized)
+    {
+        bar.prevValue = bar.currentValue;
+        bar.trailValue = bar.currentValue;
+        bar.trailInitialized = true;
+        return;
+    }
+
+    if (bar.currentValue < bar.prevValue - kValueChangeEpsilon)
+    {
+        float delta = bar.prevValue - bar.currentValue;
+        if (bar.trailValue <= bar.prevValue + kValueChangeEpsilon)
+        {
+            bar.trailHoldTimer = bar.trailHoldDelay;
+        }
+        bar.damageAccumulator += delta;
+        bar.damageDisplayTimer = bar.damageDisplayDuration;
+    }
+
+    if (bar.currentValue > bar.trailValue)
+    {
+        bar.trailValue = bar.currentValue;
+    }
+
+    bar.prevValue = bar.currentValue;
+}
+
+// ============================================================================
 // Initialize: Create SpriteBatch and load textures for all bars
 // ============================================================================
 void HEIN::GaugeComponent::Initialize(GameContext& gameContext)
@@ -153,6 +291,7 @@ void HEIN::GaugeComponent::Initialize(GameContext& gameContext)
     }
 
     EnsureWhiteTexture(device);
+    EnsureGaugeShader(device);
 
     for (auto& bar : m_bars)
     {
@@ -245,12 +384,14 @@ bool HEIN::GaugeComponent::WorldToScreenPoint(
     {
         vp = gameContext.deviceResources.GetScreenViewport();
     }
-    float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
+    float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (kRefWidth / kRefHeight);
     float fov = gameContext.mainCamera->GetFov();
-    if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
+    if (fov <= 0.0f) fov = DirectX::XM_PIDIV4;
 
+    constexpr float kDefaultNearClip = 0.1f;
+    constexpr float kDefaultFarClip = 5000.0f;
     DirectX::SimpleMath::Matrix proj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
-        fov, aspect, 0.1f, 5000.0f);
+        fov, aspect, kDefaultNearClip, kDefaultFarClip);
 
     // Transform world -> clip space
     DirectX::SimpleMath::Matrix viewProj = view * proj;
@@ -258,7 +399,8 @@ bool HEIN::GaugeComponent::WorldToScreenPoint(
         DirectX::SimpleMath::Vector4(worldPos.x, worldPos.y, worldPos.z, 1.0f), viewProj);
 
     // Behind camera check
-    if (clipPos.w <= 0.001f) return false;
+    constexpr float kMinClipW = 0.001f;
+    if (clipPos.w <= kMinClipW) return false;
 
     // NDC
     float ndcX = clipPos.x / clipPos.w;
@@ -326,10 +468,39 @@ void HEIN::GaugeComponent::Start()
 {
 }
 
-void HEIN::GaugeComponent::Update(float /*deltaTime*/)
+void HEIN::GaugeComponent::Update(float deltaTime)
 {
-    // Skip range check in editor mode — always show for editing
-    // (gameContext is not available in Update, range check happens in Draw)
+    for (auto& bar : m_bars)
+    {
+        UpdateBarValueTracking(bar);
+
+        if (bar.showDamageTrail)
+        {
+            if (bar.trailHoldTimer > 0.0f)
+            {
+                bar.trailHoldTimer = std::max(0.0f, bar.trailHoldTimer - deltaTime);
+            }
+            else if (bar.trailValue > bar.currentValue)
+            {
+                float diff = bar.trailValue - bar.currentValue;
+                float step = (diff * bar.trailDrainSpeed + bar.maxValue * kMinTrailLinearDrainRatio) * deltaTime;
+                bar.trailValue = std::max(bar.currentValue, bar.trailValue - step);
+            }
+        }
+        else
+        {
+            bar.trailValue = bar.currentValue;
+        }
+
+        if (bar.damageDisplayTimer > 0.0f)
+        {
+            bar.damageDisplayTimer = std::max(0.0f, bar.damageDisplayTimer - deltaTime);
+            if (bar.damageDisplayTimer <= 0.0f)
+            {
+                bar.damageAccumulator = 0.0f;
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -359,6 +530,8 @@ void HEIN::GaugeComponent::SyncBoundBars(GameContext& gameContext)
         {
             s_externalSyncHandler(target, bar.gaugeType, bar.currentValue, bar.maxValue);
         }
+
+        UpdateBarValueTracking(bar);
     }
 }
 
@@ -461,11 +634,18 @@ void HEIN::GaugeComponent::Draw(
 
     // Query current viewport for responsive scaling
     D3D11_VIEWPORT vp = {};
-    UINT numVp = 1;
-    gameContext.deviceResources.GetD3DDeviceContext()->RSGetViewports(&numVp, &vp);
-    if (vp.Width <= 0.0f || vp.Height <= 0.0f)
+    if (gameContext.gameViewport.Width > 0.0f && gameContext.gameViewport.Height > 0.0f)
     {
-        vp = gameContext.deviceResources.GetScreenViewport();
+        vp = gameContext.gameViewport;
+    }
+    else
+    {
+        UINT numVp = 1;
+        gameContext.deviceResources.GetD3DDeviceContext()->RSGetViewports(&numVp, &vp);
+        if (vp.Width <= 0.0f || vp.Height <= 0.0f)
+        {
+            vp = gameContext.deviceResources.GetScreenViewport();
+        }
     }
 
     m_lastScaleX = vp.Width / kRefWidth;
@@ -511,14 +691,17 @@ void HEIN::GaugeComponent::DrawBar(
     float anchorX, float anchorY,
     float scaleX, float scaleY)
 {
+    UpdateBarValueTracking(bar);
+
     // Compute screen-space rectangle
     float barX = (anchorX + bar.offset.x) * scaleX;
     float barY = (anchorY + bar.offset.y) * scaleY;
     float barW = bar.size.x * scaleX;
     float barH = bar.size.y * scaleY;
 
-    // Calculate fill ratio
+    // Calculate fill and delayed trail ratios
     float ratio = (bar.maxValue > 0.0f) ? std::clamp(bar.currentValue / bar.maxValue, 0.0f, 1.0f) : 0.0f;
+    float trailRatio = (bar.maxValue > 0.0f) ? std::clamp(bar.trailValue / bar.maxValue, ratio, 1.0f) : ratio;
 
     ID3D11DeviceContext* context = gameContext.deviceResources.GetD3DDeviceContext();
     ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
@@ -528,6 +711,7 @@ void HEIN::GaugeComponent::DrawBar(
         m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(context);
     }
     EnsureWhiteTexture(device);
+    EnsureGaugeShader(device);
 
     if (device && ((!bar.fillTex && !bar.fillTexPath.empty()) ||
                    (!bar.backgroundTex && !bar.backgroundTexPath.empty()) ||
@@ -540,98 +724,183 @@ void HEIN::GaugeComponent::DrawBar(
     // UI overlay uses DepthNone so it draws on top of 3D
     context->OMSetDepthStencilState(gameContext.commonStates.DepthNone(), 0);
 
+    DirectX::SimpleMath::Vector4 currentFillColor = bar.fillColor;
+    if (ratio < bar.lowThreshold)
+    {
+        currentFillColor = bar.lowColor;
+    }
+
+    float startRatio = std::clamp(bar.fillStartPoint, 0.0f, 1.0f);
+    float endRatio = std::clamp(bar.fillEndPoint, 0.0f, 1.0f);
+    if (endRatio < startRatio) std::swap(startRatio, endRatio);
+
     if (m_spriteBatch)
     {
-        m_spriteBatch->Begin(DirectX::SpriteSortMode_Deferred, gameContext.commonStates.NonPremultiplied());
-
-        // Background
+        if (bar.useEldenRingShader && m_gaugePixelShader && m_gaugeCB)
         {
-            RECT bgRect;
-            bgRect.left = static_cast<LONG>(barX);
-            bgRect.top = static_cast<LONG>(barY);
-            bgRect.right = static_cast<LONG>(barX + barW);
-            bgRect.bottom = static_cast<LONG>(barY + barH);
-
-            ID3D11ShaderResourceView* bgTex = bar.backgroundTex ? bar.backgroundTex.Get() : m_whiteTex.Get();
-            if (bgTex)
+            D3D11_MAPPED_SUBRESOURCE mapped = {};
+            if (SUCCEEDED(context->Map(m_gaugeCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
             {
-                m_spriteBatch->Draw(bgTex, bgRect, nullptr,
-                    DirectX::SimpleMath::Vector4(bar.bgColor.x, bar.bgColor.y, bar.bgColor.z, bar.bgColor.w));
+                CB_GaugeUI* cb = static_cast<CB_GaugeUI*>(mapped.pData);
+                cb->fillColor = currentFillColor;
+                cb->trailColor = bar.trailColor;
+                cb->bgColor = bar.bgColor;
+                cb->borderColor = bar.borderColor;
+                cb->fillRatio = ratio;
+                cb->trailRatio = bar.showDamageTrail ? trailRatio : ratio;
+                cb->fillStart = startRatio;
+                cb->fillEnd = endRatio;
+                cb->barSizePixels = { barW, barH };
+                cb->fillRightToLeft = bar.fillRightToLeft ? 1.0f : 0.0f;
+                cb->hasFillTexture = bar.fillTex ? 1.0f : 0.0f;
+                cb->hasBgTexture = bar.backgroundTex ? 1.0f : 0.0f;
+                cb->clipTexture = bar.clipTexture ? 1.0f : 0.0f;
+                cb->fillTexMatchesFrame = bar.fillTexMatchesFrame ? 1.0f : 0.0f;
+                cb->useProceduralFrame = (bar.useProceduralFrame && !bar.borderTex) ? 1.0f : 0.0f;
+                cb->bevelIntensity = bar.bevelIntensity;
+                cb->meniscusGlow = bar.meniscusGlow;
+                cb->padding0 = 0.0f;
+                cb->padding1 = 0.0f;
+                context->Unmap(m_gaugeCB.Get(), 0);
             }
+
+            ID3D11ShaderResourceView* bgSrv = bar.backgroundTex ? bar.backgroundTex.Get() : m_whiteTex.Get();
+            ID3D11ShaderResourceView* fTex = bar.fillTex ? bar.fillTex.Get() : m_whiteTex.Get();
+
+            m_spriteBatch->Begin(
+                DirectX::SpriteSortMode_Immediate,
+                gameContext.commonStates.NonPremultiplied(),
+                m_gaugeSampler.Get(),
+                gameContext.commonStates.DepthNone(),
+                nullptr,
+                [&]()
+                {
+                    context->PSSetShader(m_gaugePixelShader.Get(), nullptr, 0);
+                    context->PSSetConstantBuffers(0, 1, m_gaugeCB.GetAddressOf());
+                    context->PSSetShaderResources(1, 1, &bgSrv);
+                }
+            );
+
+            RECT fullRect;
+            fullRect.left = static_cast<LONG>(barX);
+            fullRect.top = static_cast<LONG>(barY);
+            fullRect.right = static_cast<LONG>(barX + barW);
+            fullRect.bottom = static_cast<LONG>(barY + barH);
+
+            if (fTex)
+            {
+                m_spriteBatch->Draw(fTex, fullRect, nullptr, DirectX::Colors::White);
+            }
+
+            m_spriteBatch->End();
+
+            ID3D11ShaderResourceView* nullSrv = nullptr;
+            context->PSSetShaderResources(1, 1, &nullSrv);
         }
 
-        // Fill
-        {
-            DirectX::SimpleMath::Vector4 currentFillColor = bar.fillColor;
-            if (ratio < bar.lowThreshold)
-            {
-                currentFillColor = bar.lowColor;
-            }
+        m_spriteBatch->Begin(DirectX::SpriteSortMode_Deferred, gameContext.commonStates.NonPremultiplied());
 
-            // Calculate active fill span from normalized start and end points
-            float startRatio = std::clamp(bar.fillStartPoint, 0.0f, 1.0f);
-            float endRatio = std::clamp(bar.fillEndPoint, 0.0f, 1.0f);
-            if (endRatio < startRatio) std::swap(startRatio, endRatio);
+        if (!bar.useEldenRingShader || !m_gaugePixelShader || !m_gaugeCB)
+        {
+            // Background
+            {
+                RECT bgRect;
+                bgRect.left = static_cast<LONG>(barX);
+                bgRect.top = static_cast<LONG>(barY);
+                bgRect.right = static_cast<LONG>(barX + barW);
+                bgRect.bottom = static_cast<LONG>(barY + barH);
+
+                ID3D11ShaderResourceView* bgTex = bar.backgroundTex ? bar.backgroundTex.Get() : m_whiteTex.Get();
+                if (bgTex)
+                {
+                    m_spriteBatch->Draw(bgTex, bgRect, nullptr,
+                        DirectX::SimpleMath::Vector4(bar.bgColor.x, bar.bgColor.y, bar.bgColor.z, bar.bgColor.w));
+                }
+            }
 
             float startX = barX + barW * startRatio;
             float endX = barX + barW * endRatio;
             float activeW = std::max(0.0f, endX - startX);
-            float fillW = activeW * ratio;
 
-            RECT fillRect;
-            fillRect.top = static_cast<LONG>(barY);
-            fillRect.bottom = static_cast<LONG>(barY + barH);
-
-            if (bar.fillRightToLeft)
+            // Delayed Damage Trail fallback when custom shader is disabled
+            if (bar.showDamageTrail && trailRatio > ratio && m_whiteTex)
             {
-                fillRect.left = static_cast<LONG>(endX - fillW);
-                fillRect.right = static_cast<LONG>(endX);
-            }
-            else
-            {
-                fillRect.left = static_cast<LONG>(startX);
-                fillRect.right = static_cast<LONG>(startX + fillW);
-            }
-
-            ID3D11ShaderResourceView* fTex = bar.fillTex ? bar.fillTex.Get() : m_whiteTex.Get();
-            if (fTex && fillW > 0.0f)
-            {
-                if (bar.clipTexture && bar.fillTex)
+                float trailW = activeW * trailRatio;
+                RECT trailRect;
+                trailRect.top = static_cast<LONG>(barY);
+                trailRect.bottom = static_cast<LONG>(barY + barH);
+                if (bar.fillRightToLeft)
                 {
-                    UINT texW = 0, texH = 0;
-                    GetTextureDimensions(bar.fillTex.Get(), texW, texH);
-                    if (texW > 0 && texH > 0)
+                    trailRect.left = static_cast<LONG>(endX - trailW);
+                    trailRect.right = static_cast<LONG>(endX);
+                }
+                else
+                {
+                    trailRect.left = static_cast<LONG>(startX);
+                    trailRect.right = static_cast<LONG>(startX + trailW);
+                }
+                m_spriteBatch->Draw(m_whiteTex.Get(), trailRect, nullptr, bar.trailColor);
+            }
+
+            // Fill
+            {
+                float fillW = activeW * ratio;
+
+                RECT fillRect;
+                fillRect.top = static_cast<LONG>(barY);
+                fillRect.bottom = static_cast<LONG>(barY + barH);
+
+                if (bar.fillRightToLeft)
+                {
+                    fillRect.left = static_cast<LONG>(endX - fillW);
+                    fillRect.right = static_cast<LONG>(endX);
+                }
+                else
+                {
+                    fillRect.left = static_cast<LONG>(startX);
+                    fillRect.right = static_cast<LONG>(startX + fillW);
+                }
+
+                ID3D11ShaderResourceView* fTex = bar.fillTex ? bar.fillTex.Get() : m_whiteTex.Get();
+                if (fTex && fillW > 0.0f)
+                {
+                    if (bar.clipTexture && bar.fillTex)
                     {
-                        float texStartX = bar.fillTexMatchesFrame ? (static_cast<float>(texW) * startRatio) : 0.0f;
-                        float texEndX = bar.fillTexMatchesFrame ? (static_cast<float>(texW) * endRatio) : static_cast<float>(texW);
-                        float texActiveW = std::max(0.0f, texEndX - texStartX);
-                        float texFillW = texActiveW * ratio;
-
-                        RECT srcRect;
-                        srcRect.top = 0;
-                        srcRect.bottom = static_cast<LONG>(texH);
-
-                        if (bar.fillRightToLeft)
+                        UINT texW = 0, texH = 0;
+                        GetTextureDimensions(bar.fillTex.Get(), texW, texH);
+                        if (texW > 0 && texH > 0)
                         {
-                            srcRect.left = static_cast<LONG>(texEndX - texFillW);
-                            srcRect.right = static_cast<LONG>(texEndX);
+                            float texStartX = bar.fillTexMatchesFrame ? (static_cast<float>(texW) * startRatio) : 0.0f;
+                            float texEndX = bar.fillTexMatchesFrame ? (static_cast<float>(texW) * endRatio) : static_cast<float>(texW);
+                            float texActiveW = std::max(0.0f, texEndX - texStartX);
+                            float texFillW = texActiveW * ratio;
+
+                            RECT srcRect;
+                            srcRect.top = 0;
+                            srcRect.bottom = static_cast<LONG>(texH);
+
+                            if (bar.fillRightToLeft)
+                            {
+                                srcRect.left = static_cast<LONG>(texEndX - texFillW);
+                                srcRect.right = static_cast<LONG>(texEndX);
+                            }
+                            else
+                            {
+                                srcRect.left = static_cast<LONG>(texStartX);
+                                srcRect.right = static_cast<LONG>(texStartX + texFillW);
+                            }
+
+                            m_spriteBatch->Draw(fTex, fillRect, &srcRect, currentFillColor);
                         }
                         else
                         {
-                            srcRect.left = static_cast<LONG>(texStartX);
-                            srcRect.right = static_cast<LONG>(texStartX + texFillW);
+                            m_spriteBatch->Draw(fTex, fillRect, nullptr, currentFillColor);
                         }
-
-                        m_spriteBatch->Draw(fTex, fillRect, &srcRect, currentFillColor);
                     }
                     else
                     {
                         m_spriteBatch->Draw(fTex, fillRect, nullptr, currentFillColor);
                     }
-                }
-                else
-                {
-                    m_spriteBatch->Draw(fTex, fillRect, nullptr, currentFillColor);
                 }
             }
         }
@@ -696,6 +965,31 @@ void HEIN::GaugeComponent::DrawBar(
                 bar.spriteFont->DrawString(m_spriteBatch.get(), valBuf,
                     valPos, textCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, fontScale);
             }
+
+            // Elden Ring Combo Damage Counter above right edge of bar
+            if (bar.showDamageNumbers && bar.gaugeType == GaugeType::HP &&
+                bar.damageDisplayTimer > 0.0f && bar.damageAccumulator >= 1.0f)
+            {
+                float dmgAlpha = std::clamp(bar.damageDisplayTimer / kDamageFadeOutWindow, 0.0f, 1.0f);
+                wchar_t dmgBuf[32];
+                swprintf_s(dmgBuf, L"%.0f", bar.damageAccumulator);
+                DirectX::SimpleMath::Vector2 dmgMetrics = bar.spriteFont->MeasureString(dmgBuf);
+                float dmgScale = fontScale * 0.9f;
+                float dmgWidth = dmgMetrics.x * dmgScale;
+
+                DirectX::SimpleMath::Vector2 dmgPos(
+                    barX + barW - dmgWidth - 4.0f * scaleX,
+                    barY - (20.0f * scaleY)
+                );
+                DirectX::SimpleMath::Vector4 dmgCol(0.96f, 0.92f, 0.80f, dmgAlpha);
+                DirectX::SimpleMath::Vector4 dmgShadow(0.0f, 0.0f, 0.0f, 0.85f * dmgAlpha);
+
+                bar.spriteFont->DrawString(m_spriteBatch.get(), dmgBuf,
+                    DirectX::SimpleMath::Vector2(dmgPos.x + 1.5f, dmgPos.y + 1.5f),
+                    dmgShadow, 0.0f, DirectX::SimpleMath::Vector2::Zero, dmgScale);
+                bar.spriteFont->DrawString(m_spriteBatch.get(), dmgBuf,
+                    dmgPos, dmgCol, 0.0f, DirectX::SimpleMath::Vector2::Zero, dmgScale);
+            }
         }
 
         m_spriteBatch->End();
@@ -714,10 +1008,10 @@ void HEIN::GaugeComponent::DrawBar(
         float fontSize = ImGui::GetFontSize() * bar.fontSize * uiScale;
 
         ImU32 labelCol = IM_COL32(
-            static_cast<int>(bar.labelColor.x * 255.0f),
-            static_cast<int>(bar.labelColor.y * 255.0f),
-            static_cast<int>(bar.labelColor.z * 255.0f),
-            static_cast<int>(bar.labelColor.w * 255.0f)
+            static_cast<int>(bar.labelColor.x * kMaxColorChannelValue),
+            static_cast<int>(bar.labelColor.y * kMaxColorChannelValue),
+            static_cast<int>(bar.labelColor.z * kMaxColorChannelValue),
+            static_cast<int>(bar.labelColor.w * kMaxColorChannelValue)
         );
 
         if (bar.showLabel)
@@ -756,14 +1050,35 @@ void HEIN::GaugeComponent::DrawBar(
             drawList->AddText(ImGui::GetFont(), fontSize, valPos, labelCol, valBuf);
         }
 
-        // If no border texture, draw a thin rectangle border via ImGui
-        if (!bar.borderTex.Get())
+        // Elden Ring Combo Damage Counter fallback via ImGui when no SpriteFont is bound
+        if (bar.showDamageNumbers && bar.gaugeType == GaugeType::HP &&
+            bar.damageDisplayTimer > 0.0f && bar.damageAccumulator >= 1.0f)
+        {
+            float dmgAlpha = std::clamp(bar.damageDisplayTimer / kDamageFadeOutWindow, 0.0f, 1.0f);
+            char dmgBuf[32];
+            sprintf_s(dmgBuf, "%.0f", bar.damageAccumulator);
+            ImVec2 baseDmgSize = ImGui::CalcTextSize(dmgBuf);
+            float scaledDmgWidth = baseDmgSize.x * (fontSize / ImGui::GetFontSize());
+
+            ImVec2 dmgPos(
+                m_lastVpX + barX + barW - scaledDmgWidth - 4.0f * scaleX,
+                m_lastVpY + barY - fontSize - 4.0f * scaleY
+            );
+            ImU32 dmgCol = IM_COL32(245, 235, 205, static_cast<int>(dmgAlpha * kMaxColorChannelValue));
+            ImU32 dmgShadow = IM_COL32(0, 0, 0, static_cast<int>(dmgAlpha * 200.0f));
+
+            drawList->AddText(ImGui::GetFont(), fontSize, ImVec2(dmgPos.x + 1.0f, dmgPos.y + 1.0f), dmgShadow, dmgBuf);
+            drawList->AddText(ImGui::GetFont(), fontSize, dmgPos, dmgCol, dmgBuf);
+        }
+
+        // If no border texture and procedural frame is disabled, draw a thin rectangle border via ImGui
+        if (!bar.borderTex.Get() && (!bar.useEldenRingShader || !bar.useProceduralFrame))
         {
             ImU32 bCol = IM_COL32(
-                static_cast<int>(bar.borderColor.x * 255.0f),
-                static_cast<int>(bar.borderColor.y * 255.0f),
-                static_cast<int>(bar.borderColor.z * 255.0f),
-                static_cast<int>(bar.borderColor.w * 255.0f)
+                static_cast<int>(bar.borderColor.x * kMaxColorChannelValue),
+                static_cast<int>(bar.borderColor.y * kMaxColorChannelValue),
+                static_cast<int>(bar.borderColor.z * kMaxColorChannelValue),
+                static_cast<int>(bar.borderColor.w * kMaxColorChannelValue)
             );
             drawList->AddRect(
                 ImVec2(m_lastVpX + barX, m_lastVpY + barY),
@@ -788,6 +1103,22 @@ void HEIN::GaugeComponent::RemoveBar(int index)
     if (index >= 0 && index < static_cast<int>(m_bars.size()))
     {
         m_bars.erase(m_bars.begin() + index);
+    }
+}
+
+void HEIN::GaugeComponent::RemoveBarTextures(int index, bool resetFillRange)
+{
+    if (index >= 0 && index < static_cast<int>(m_bars.size()))
+    {
+        m_bars[index].RemoveAllTextures(resetFillRange);
+    }
+}
+
+void HEIN::GaugeComponent::RemoveAllBarsTextures(bool resetFillRange)
+{
+    for (auto& bar : m_bars)
+    {
+        bar.RemoveAllTextures(resetFillRange);
     }
 }
 
@@ -817,6 +1148,7 @@ void HEIN::GaugeComponent::SetValue(GaugeType type, float current, float max)
         {
             bar.currentValue = current;
             if (max >= 0.0f) bar.maxValue = max;
+            UpdateBarValueTracking(bar);
             return;
         }
     }
@@ -829,6 +1161,7 @@ void HEIN::GaugeComponent::SetValue(const std::string& name, float current, floa
     {
         bar->currentValue = current;
         if (max >= 0.0f) bar->maxValue = max;
+        UpdateBarValueTracking(*bar);
     }
 }
 
@@ -889,6 +1222,20 @@ nlohmann::json HEIN::GaugeComponent::Serialize()
         b["LowColorG"] = bar.lowColor.y;
         b["LowColorB"] = bar.lowColor.z;
         b["LowColorA"] = bar.lowColor.w;
+
+        b["UseEldenRingShader"] = bar.useEldenRingShader;
+        b["ShowDamageTrail"] = bar.showDamageTrail;
+        b["TrailColorR"] = bar.trailColor.x;
+        b["TrailColorG"] = bar.trailColor.y;
+        b["TrailColorB"] = bar.trailColor.z;
+        b["TrailColorA"] = bar.trailColor.w;
+        b["TrailHoldDelay"] = bar.trailHoldDelay;
+        b["TrailDrainSpeed"] = bar.trailDrainSpeed;
+        b["BevelIntensity"] = bar.bevelIntensity;
+        b["MeniscusGlow"] = bar.meniscusGlow;
+        b["UseProceduralFrame"] = bar.useProceduralFrame;
+        b["ShowDamageNumbers"] = bar.showDamageNumbers;
+        b["DamageDisplayDuration"] = bar.damageDisplayDuration;
 
         b["BackgroundTexPath"] = std::string(bar.backgroundTexPath.begin(), bar.backgroundTexPath.end());
         b["FillTexPath"] = std::string(bar.fillTexPath.begin(), bar.fillTexPath.end());
@@ -995,6 +1342,23 @@ void HEIN::GaugeComponent::Deserialize(const nlohmann::json& data)
                 bar.lowColor.w = b.value("LowColorA", 1.0f);
             }
 
+            if (b.contains("UseEldenRingShader")) bar.useEldenRingShader = b["UseEldenRingShader"];
+            if (b.contains("ShowDamageTrail")) bar.showDamageTrail = b["ShowDamageTrail"];
+            if (b.contains("TrailColorR"))
+            {
+                bar.trailColor.x = b["TrailColorR"];
+                bar.trailColor.y = b["TrailColorG"];
+                bar.trailColor.z = b["TrailColorB"];
+                bar.trailColor.w = b.value("TrailColorA", 0.95f);
+            }
+            if (b.contains("TrailHoldDelay")) bar.trailHoldDelay = b["TrailHoldDelay"];
+            if (b.contains("TrailDrainSpeed")) bar.trailDrainSpeed = b["TrailDrainSpeed"];
+            if (b.contains("BevelIntensity")) bar.bevelIntensity = b["BevelIntensity"];
+            if (b.contains("MeniscusGlow")) bar.meniscusGlow = b["MeniscusGlow"];
+            if (b.contains("UseProceduralFrame")) bar.useProceduralFrame = b["UseProceduralFrame"];
+            if (b.contains("ShowDamageNumbers")) bar.showDamageNumbers = b["ShowDamageNumbers"];
+            if (b.contains("DamageDisplayDuration")) bar.damageDisplayDuration = b["DamageDisplayDuration"];
+
             if (b.contains("BackgroundTexPath"))
             {
                 std::string p = b["BackgroundTexPath"];
@@ -1097,7 +1461,7 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
             // Auto-clamp: deactivation should always be >= activation to provide hysteresis
             if (m_deactivationRange < m_activationRange)
             {
-                m_deactivationRange = m_activationRange + 5.0f;
+                m_deactivationRange = m_activationRange + kHysteresisMargin;
             }
 
             ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
@@ -1271,9 +1635,36 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                 ImGui::SliderFloat("Low HP Threshold", &bar.lowThreshold, 0.0f, 1.0f, "%.2f");
                 ImGui::ColorEdit4("Low HP Color", &bar.lowColor.x);
 
+                // Elden Ring Gauge Shader & Delayed Damage Trail
+                ImGui::Separator();
+                ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.30f, 1.0f), "Elden Ring Shader & Damage Trail:");
+                ImGui::Checkbox("Use Elden Ring Shader", &bar.useEldenRingShader);
+                ImGui::SameLine();
+                ImGui::Checkbox("Procedural Gilded Frame", &bar.useProceduralFrame);
+                ImGui::SliderFloat("Bevel Intensity", &bar.bevelIntensity, 0.0f, 1.5f, "%.2f");
+                ImGui::SliderFloat("Leading-Edge Meniscus Glow", &bar.meniscusGlow, 0.0f, 2.0f, "%.2f");
+
+                ImGui::Checkbox("Show Delayed Damage Trail", &bar.showDamageTrail);
+                if (bar.showDamageTrail)
+                {
+                    ImGui::ColorEdit4("Trail Color", &bar.trailColor.x);
+                    ImGui::SliderFloat("Trail Hold Delay (s)", &bar.trailHoldDelay, 0.0f, 2.0f, "%.2f s");
+                    ImGui::SliderFloat("Trail Drain Speed", &bar.trailDrainSpeed, 0.5f, 15.0f, "%.1f");
+                }
+                ImGui::Checkbox("Show Combo Damage Counter", &bar.showDamageNumbers);
+                if (bar.showDamageNumbers)
+                {
+                    ImGui::SliderFloat("Damage Counter Duration (s)", &bar.damageDisplayDuration, 0.3f, 5.0f, "%.2f s");
+                }
+
                 // Textures
                 ImGui::Separator();
                 ImGui::Text("Textures (Optional):");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Remove All Textures (Procedural Shader)##ClearAllTex"))
+                {
+                    bar.RemoveAllTextures(true);
+                }
 
                 // Background Texture
                 {
@@ -1281,6 +1672,10 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                     if (ImGui::InputText("Background Texture", &pathStr))
                     {
                         bar.backgroundTexPath = std::wstring(pathStr.begin(), pathStr.end());
+                        if (bar.backgroundTexPath.empty())
+                        {
+                            bar.backgroundTex.Reset();
+                        }
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("Browse##BgTex"))
@@ -1293,6 +1688,14 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                             LoadBarTextures(gameContext.deviceResources.GetD3DDevice(), bar);
                         }
                     }
+                    if (!bar.backgroundTexPath.empty() || bar.backgroundTex)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove##ClearBgTex"))
+                        {
+                            bar.RemoveBackgroundTexture();
+                        }
+                    }
                 }
 
                 // Fill Texture
@@ -1301,6 +1704,10 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                     if (ImGui::InputText("Fill Texture", &pathStr))
                     {
                         bar.fillTexPath = std::wstring(pathStr.begin(), pathStr.end());
+                        if (bar.fillTexPath.empty())
+                        {
+                            bar.fillTex.Reset();
+                        }
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("Browse##FillTex"))
@@ -1311,6 +1718,14 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                         {
                             bar.fillTexPath = HEIN::EditorUtils::MakeRelativePath(file);
                             LoadBarTextures(gameContext.deviceResources.GetD3DDevice(), bar);
+                        }
+                    }
+                    if (!bar.fillTexPath.empty() || bar.fillTex)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove##ClearFillTex"))
+                        {
+                            bar.RemoveFillTexture();
                         }
                     }
 
@@ -1369,6 +1784,10 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                     if (ImGui::InputText("Border/Frame Texture", &pathStr))
                     {
                         bar.borderTexPath = std::wstring(pathStr.begin(), pathStr.end());
+                        if (bar.borderTexPath.empty())
+                        {
+                            bar.borderTex.Reset();
+                        }
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("Browse##BorderTex"))
@@ -1379,6 +1798,14 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                         {
                             bar.borderTexPath = HEIN::EditorUtils::MakeRelativePath(file);
                             LoadBarTextures(gameContext.deviceResources.GetD3DDevice(), bar);
+                        }
+                    }
+                    if (!bar.borderTexPath.empty() || bar.borderTex)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove##ClearBorderTex"))
+                        {
+                            bar.RemoveBorderTexture();
                         }
                     }
                 }
@@ -1422,6 +1849,14 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                         {
                             bar.spriteFontPath = HEIN::EditorUtils::MakeRelativePath(file);
                             LoadBarFont(gameContext.deviceResources.GetD3DDevice(), bar);
+                        }
+                    }
+                    if (!bar.spriteFontPath.empty() || bar.spriteFont)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove##ClearSpriteFont"))
+                        {
+                            bar.RemoveSpriteFont();
                         }
                     }
 
@@ -1471,6 +1906,11 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
                 if (ImGui::Button("Reload Textures"))
                 {
                     LoadBarTextures(gameContext.deviceResources.GetD3DDevice(), bar);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove All Textures"))
+                {
+                    bar.RemoveAllTextures(true);
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Remove This Bar"))
@@ -1535,8 +1975,8 @@ void HEIN::GaugeComponent::DrawGizmo(
     {
         minX = vpX + m_screenPosition.x * scaleX;
         minY = vpY + m_screenPosition.y * scaleY;
-        maxX = minX + 200.0f * scaleX;
-        maxY = minY + 20.0f * scaleY;
+        maxX = minX + GaugeBarDef::DEFAULT_BAR_WIDTH * scaleX;
+        maxY = minY + GaugeBarDef::DEFAULT_BAR_HEIGHT * scaleY;
     }
 
     float groupW = maxX - minX;
@@ -1583,3 +2023,5 @@ void HEIN::GaugeComponent::DrawGizmo(
     drawList->AddText(ImVec2(bMin.x + 4.0f, bMin.y + 1.0f), borderColor, badgeBuf);
 }
 
+
+} // namespace HEIN

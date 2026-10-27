@@ -2,6 +2,7 @@
 #include "Entities/Actor.h"
 #include "Framework/GameContext.h"
 #include "DebugUIManager.h"
+#include "Common/OffscreenRenderTarget.h"
 #include <Entities/ActorManager.h>
 
 namespace HEIN
@@ -33,6 +34,9 @@ namespace HEIN
 		HEIN::ActorID m_debugCameraID = HEIN::INVALID_ACTOR_ID;
 
 		HEIN::EditorAction m_currentAction = HEIN::EditorAction::None;
+
+		OffscreenRenderTarget m_sceneRenderTarget;
+		OffscreenRenderTarget m_gameRenderTarget;
 	public:
 
 		DebugDisplayController();
@@ -65,6 +69,8 @@ namespace HEIN
 		);
 
 		EditorAction GetUIAction() const { return m_currentAction; }
+		bool IsGameViewCaptured() const { return m_debugUI.IsGameViewCaptured(); }
+		void SetGameViewCaptured(bool captured) { m_debugUI.SetGameViewCaptured(captured); }
 		DebugUIManager& GetDebugUI() { return m_debugUI; }
 		const DebugUIManager& GetDebugUI() const { return m_debugUI; }
 
@@ -76,6 +82,11 @@ namespace HEIN
 
 		EditorViewportLayout GetViewportLayout() const { return m_debugUI.GetViewportLayout(); }
 		void SetViewportLayout(EditorViewportLayout layout) { m_debugUI.SetViewportLayout(layout); }
+
+		OffscreenRenderTarget& GetSceneRenderTarget() noexcept { return m_sceneRenderTarget; }
+		OffscreenRenderTarget& GetGameRenderTarget() noexcept { return m_gameRenderTarget; }
+		ID3D11ShaderResourceView* GetSceneSRV() const noexcept { return m_sceneRenderTarget.GetShaderResourceView(); }
+		ID3D11ShaderResourceView* GetGameSRV() const noexcept { return m_gameRenderTarget.GetShaderResourceView(); }
 	};
 }
 

@@ -5,6 +5,9 @@
 #include "ImGui/imgui.h"
 #include <DirectXColors.h>
 
+
+namespace HEIN
+{
 HEIN::SphereColliderComponent::SphereColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::Sphere)
 	, m_radius(1.0f)
@@ -103,3 +106,6 @@ bool HEIN::SphereColliderComponent::IntersectsFrustum(const DirectX::BoundingFru
     sphere.Radius *= 1.3f;
     return frustum.Intersects(sphere);
 }
+
+
+} // namespace HEIN

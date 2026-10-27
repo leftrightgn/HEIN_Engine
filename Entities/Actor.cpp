@@ -10,6 +10,9 @@
 #include "Framework/GameContext.h"
 #include "ImGui/imgui.h"
 
+
+namespace HEIN
+{
 HEIN::Actor::Actor(ActorID id, const std::wstring& tag)
 	: m_id(id)
 	, m_tag(tag)
@@ -442,3 +445,6 @@ HEIN::SkinnedModelComponent* HEIN::Actor::GetComponent<HEIN::SkinnedModelCompone
 {
 	return GetActiveSkinnedModel();
 }
+
+
+} // namespace HEIN

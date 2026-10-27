@@ -5,6 +5,9 @@
 #include "ImGui/imgui.h"
 #include <DirectXColors.h>
 
+
+namespace HEIN
+{
 HEIN::AABBColliderComponent::AABBColliderComponent(Actor* owner)
 	: ColliderComponent(owner, ColliderShape::AABB)
 	, m_extents(DirectX::SimpleMath::Vector3(1.0f, 1.0f, 1.0f))
@@ -128,3 +131,6 @@ bool HEIN::AABBColliderComponent::IntersectsFrustum(const DirectX::BoundingFrust
     box.Extents.z *= 1.3f;
     return frustum.Intersects(box);
 }
+
+
+} // namespace HEIN

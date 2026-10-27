@@ -48,19 +48,30 @@ namespace HEIN
      */
     struct GaugeBarDef
     {
+        static constexpr float DEFAULT_MAX_VALUE = 100.0f;
+        static constexpr float DEFAULT_BAR_WIDTH = 200.0f;
+        static constexpr float DEFAULT_BAR_HEIGHT = 20.0f;
+        static constexpr float DEFAULT_LOW_THRESHOLD = 0.25f;
+        static constexpr float DEFAULT_FONT_SIZE = 0.8f;
+        static constexpr float DEFAULT_TRAIL_HOLD_DELAY = 0.45f;
+        static constexpr float DEFAULT_TRAIL_DRAIN_SPEED = 4.0f;
+        static constexpr float DEFAULT_BEVEL_INTENSITY = 0.85f;
+        static constexpr float DEFAULT_MENISCUS_GLOW = 0.65f;
+        static constexpr float DEFAULT_DAMAGE_DISPLAY_DURATION = 1.8f;
+
         // Identity
         std::string name = "HP";
         GaugeType gaugeType = GaugeType::HP;
 
         // Values (runtime-driven)
-        float currentValue = 100.0f;
-        float maxValue = 100.0f;
+        float currentValue = DEFAULT_MAX_VALUE;
+        float maxValue = DEFAULT_MAX_VALUE;
 
         // Layout: position offset relative to the component anchor
         // In ScreenSpace mode: absolute screen coordinates on 1280x720 reference canvas
         // In WorldToScreen mode: pixel offset from the projected 3D position
         DirectX::SimpleMath::Vector2 offset = { 0.0f, 0.0f };
-        DirectX::SimpleMath::Vector2 size = { 200.0f, 20.0f };
+        DirectX::SimpleMath::Vector2 size = { DEFAULT_BAR_WIDTH, DEFAULT_BAR_HEIGHT };
 
         // Fill direction: false = left-to-right, true = right-to-left
         bool fillRightToLeft = false;
@@ -86,13 +97,33 @@ namespace HEIN
         bool autoBind = true;
 
         // Colors
-        DirectX::SimpleMath::Vector4 fillColor = { 0.2f, 0.8f, 0.2f, 1.0f };    // Green fill
-        DirectX::SimpleMath::Vector4 bgColor = { 0.15f, 0.15f, 0.15f, 0.8f };    // Dark background
-        DirectX::SimpleMath::Vector4 borderColor = { 0.9f, 0.9f, 0.9f, 1.0f };   // White border
+        DirectX::SimpleMath::Vector4 fillColor = { 0.72f, 0.14f, 0.14f, 1.0f };    // Crimson fill
+        DirectX::SimpleMath::Vector4 bgColor = { 0.10f, 0.09f, 0.09f, 0.85f };     // Dark recessed trough
+        DirectX::SimpleMath::Vector4 borderColor = { 0.76f, 0.64f, 0.38f, 1.0f };  // Gilded bronze/gold border
 
         // Low-health color threshold (fills with this color when ratio < threshold)
-        float lowThreshold = 0.25f;
-        DirectX::SimpleMath::Vector4 lowColor = { 0.9f, 0.1f, 0.1f, 1.0f };      // Red for low
+        float lowThreshold = DEFAULT_LOW_THRESHOLD;
+        DirectX::SimpleMath::Vector4 lowColor = { 0.9f, 0.1f, 0.1f, 1.0f };        // Red for low
+
+        // Elden Ring Shader & Delayed Damage Trail settings
+        bool useEldenRingShader = true;
+        bool showDamageTrail = true;
+        DirectX::SimpleMath::Vector4 trailColor = { 0.95f, 0.76f, 0.26f, 0.95f };  // Warm Elden Ring gold/amber trail
+        float trailHoldDelay = DEFAULT_TRAIL_HOLD_DELAY;
+        float trailDrainSpeed = DEFAULT_TRAIL_DRAIN_SPEED;
+        float bevelIntensity = DEFAULT_BEVEL_INTENSITY;
+        float meniscusGlow = DEFAULT_MENISCUS_GLOW;
+        bool useProceduralFrame = true;
+        bool showDamageNumbers = true;
+        float damageDisplayDuration = DEFAULT_DAMAGE_DISPLAY_DURATION;
+
+        // Runtime-only trail & combo damage tracking state
+        mutable bool trailInitialized = false;
+        mutable float prevValue = DEFAULT_MAX_VALUE;
+        mutable float trailValue = DEFAULT_MAX_VALUE;
+        mutable float trailHoldTimer = 0.0f;
+        mutable float damageAccumulator = 0.0f;
+        mutable float damageDisplayTimer = 0.0f;
 
         // Textures (optional, override solid color rendering with textured sprites)
         std::wstring backgroundTexPath;     // Background bar texture
@@ -106,13 +137,49 @@ namespace HEIN
         // Label
         bool showLabel = true;
         bool showValue = true;
-        float fontSize = 0.8f;
-        DirectX::SimpleMath::Vector4 labelColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float fontSize = DEFAULT_FONT_SIZE;
+        DirectX::SimpleMath::Vector4 labelColor = { 0.92f, 0.88f, 0.78f, 1.0f };
         DirectX::SimpleMath::Vector2 textOffset = { 0.0f, 0.0f };
 
         // SpriteFont typography
         std::wstring spriteFontPath;
         std::shared_ptr<DirectX::SpriteFont> spriteFont = nullptr;
+
+        void RemoveBackgroundTexture()
+        {
+            backgroundTexPath.clear();
+            backgroundTex.Reset();
+        }
+
+        void RemoveFillTexture()
+        {
+            fillTexPath.clear();
+            fillTex.Reset();
+        }
+
+        void RemoveBorderTexture()
+        {
+            borderTexPath.clear();
+            borderTex.Reset();
+        }
+
+        void RemoveSpriteFont()
+        {
+            spriteFontPath.clear();
+            spriteFont.reset();
+        }
+
+        void RemoveAllTextures(bool resetFillRange = true)
+        {
+            RemoveBackgroundTexture();
+            RemoveFillTexture();
+            RemoveBorderTexture();
+            if (resetFillRange)
+            {
+                fillStartPoint = 0.0f;
+                fillEndPoint = 1.0f;
+            }
+        }
     };
 
     /**
@@ -135,17 +202,57 @@ namespace HEIN
     class GaugeComponent : public IComponent, public IGizmoEditable
     {
     private:
+        struct CB_GaugeUI
+        {
+            DirectX::SimpleMath::Vector4 fillColor;
+            DirectX::SimpleMath::Vector4 trailColor;
+            DirectX::SimpleMath::Vector4 bgColor;
+            DirectX::SimpleMath::Vector4 borderColor;
+            float fillRatio;
+            float trailRatio;
+            float fillStart;
+            float fillEnd;
+            DirectX::SimpleMath::Vector2 barSizePixels;
+            float fillRightToLeft;
+            float hasFillTexture;
+            float hasBgTexture;
+            float clipTexture;
+            float fillTexMatchesFrame;
+            float useProceduralFrame;
+            float bevelIntensity;
+            float meniscusGlow;
+            float padding0;
+            float padding1;
+        };
+
+        static constexpr float kRefWidth = 1280.0f;
+        static constexpr float kRefHeight = 720.0f;
+        static constexpr float kDefaultScreenPosX = 50.0f;
+        static constexpr float kDefaultScreenPosY = 600.0f;
+        static constexpr float kDefaultWorldOffsetY = 2.5f;
+        static constexpr float kDefaultActivationRange = 20.0f;
+        static constexpr float kDefaultDeactivationRange = 25.0f;
+        static constexpr float kHysteresisMargin = 5.0f;
+        static constexpr float kValueChangeEpsilon = 0.01f;
+        static constexpr float kMinTrailLinearDrainRatio = 0.15f;
+        static constexpr float kDamageFadeOutWindow = 0.35f;
+        static constexpr float kMaxColorChannelValue = 255.0f;
+        static constexpr UINT  kDefaultMaxAnisotropy = 16;
+
         std::unique_ptr<DirectX::SpriteBatch> m_spriteBatch;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> m_gaugePixelShader;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_gaugeCB;
+        Microsoft::WRL::ComPtr<ID3D11SamplerState> m_gaugeSampler;
 
         // Anchor settings
         GaugeAnchorMode m_anchorMode = GaugeAnchorMode::ScreenSpace;
 
         // For ScreenSpace mode: base position on the 1280x720 reference canvas
-        DirectX::SimpleMath::Vector2 m_screenPosition = { 50.0f, 600.0f };
+        DirectX::SimpleMath::Vector2 m_screenPosition = { kDefaultScreenPosX, kDefaultScreenPosY };
 
         // For WorldToScreen mode: 3D offset from the parent enemy actor's world position
         // e.g., (0, 2.5, 0) to place above the head
-        DirectX::SimpleMath::Vector3 m_worldOffset = { 0.0f, 2.5f, 0.0f };
+        DirectX::SimpleMath::Vector3 m_worldOffset = { 0.0f, kDefaultWorldOffsetY, 0.0f };
 
         // Array of gauge bar definitions
         std::vector<GaugeBarDef> m_bars;
@@ -157,16 +264,12 @@ namespace HEIN
         // When the gauge is a child actor of an enemy, it should only appear
         // when the player is within activationRange of the parent enemy.
         bool m_useRangeActivation = true;     // Enable/disable range check
-        float m_activationRange = 20.0f;      // Distance in world units
-        float m_deactivationRange = 25.0f;    // Slightly larger to prevent flickering (hysteresis)
+        float m_activationRange = kDefaultActivationRange;      // Distance in world units
+        float m_deactivationRange = kDefaultDeactivationRange;  // Slightly larger to prevent flickering (hysteresis)
         bool m_isInRange = false;             // Runtime state: currently within range?
 
         void LoadBarFont(ID3D11Device* device, GaugeBarDef& bar);
         static std::shared_ptr<DirectX::SpriteFont> GetOrCreateFont(ID3D11Device* device, const std::wstring& path);
-
-        // Reference canvas (matches UIButtonComponent for consistent scaling)
-        static constexpr float kRefWidth = 1280.0f;
-        static constexpr float kRefHeight = 720.0f;
 
         // Cached scale factors for responsive rendering
         float m_lastScaleX = 1.0f;
@@ -177,6 +280,8 @@ namespace HEIN
         // Internal helpers
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_whiteTex;
         void EnsureWhiteTexture(ID3D11Device* device);
+        void EnsureGaugeShader(ID3D11Device* device);
+        static void UpdateBarValueTracking(const GaugeBarDef& bar);
 
         void DrawBar(GameContext& gameContext, const GaugeBarDef& bar, 
                      float anchorX, float anchorY, float scaleX, float scaleY);
@@ -240,6 +345,12 @@ namespace HEIN
         /** @brief Removes a bar by index. */
         void RemoveBar(int index);
 
+        /** @brief Removes all textures (background, fill, border) from a bar by index. */
+        void RemoveBarTextures(int index, bool resetFillRange = true);
+
+        /** @brief Removes all textures from every bar in this component. */
+        void RemoveAllBarsTextures(bool resetFillRange = true);
+
         /** @brief Gets a bar by index for modification. */
         GaugeBarDef* GetBar(int index);
 
@@ -290,4 +401,3 @@ namespace HEIN
         bool IsInRange() const { return m_isInRange; }
     };
 }
-

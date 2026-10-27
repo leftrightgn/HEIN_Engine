@@ -3,6 +3,9 @@
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 
+
+namespace HEIN
+{
 HEIN::FirstPersonMode::FirstPersonMode(
 	HEIN::ActorManager* manager,
 	HEIN::ActorID targetID, 
@@ -96,3 +99,5 @@ void HEIN::FirstPersonMode::Update(CameraData& outData, float /*deltaTime*/, ICa
 
 	outData.fov = DirectX::XMConvertToRadians(FPS_CAM_FOV);
 }
+
+} // namespace HEIN

@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "DebugCameraMode.h"
 
+
+namespace HEIN
+{
 HEIN::DebugCameraMode::DebugCameraMode(
     float startDistance, 
 	DirectX::SimpleMath::Vector3 target
@@ -127,3 +130,5 @@ void HEIN::DebugCameraMode::Update(CameraData& outData, float deltaTime, ICamera
     outData.fov = DirectX::XMConvertToRadians(DEBUG_CAM_FOV);
 
 }
+
+} // namespace HEIN

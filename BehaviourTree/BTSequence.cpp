@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "BTSequence.h"
 
+
+namespace HEIN
+{
 void HEIN::BTSequence::AddChild(std::unique_ptr<HEIN::BTNode> child)
 {
 	m_children.push_back(std::move(child));
@@ -37,3 +40,6 @@ HEIN::BTNodeState HEIN::BTSequence::Tick(
 	m_currentState = BTNodeState::Success;
 	return m_currentState;
 }
+
+
+} // namespace HEIN

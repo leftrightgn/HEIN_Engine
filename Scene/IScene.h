@@ -13,5 +13,6 @@ namespace HEIN
         virtual void OnExit(GameContext& /*gameContext*/) {}
         virtual void Update(GameContext& gameContext) = 0;
         virtual void Render(GameContext& gameContext) = 0;
+        virtual void SaveScene(GameContext& /*gameContext*/) {}
     };
 }

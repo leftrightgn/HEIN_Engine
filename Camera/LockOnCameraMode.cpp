@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <cmath>
 
+
+namespace HEIN
+{
 HEIN::LockOnCameraMode::LockOnCameraMode(
 	HEIN::ActorManager* manager,
 	HEIN::ActorID playerID,
@@ -582,3 +585,6 @@ void HEIN::LockOnCameraMode::SetTargetID(HEIN::ActorID target)
 		}
 	}
 }
+
+
+} // namespace HEIN

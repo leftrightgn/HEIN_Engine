@@ -5,6 +5,9 @@
 #include "ImGui/imgui.h"
 #include "Message/Messenger.h"
 
+
+namespace HEIN
+{
 HEIN::DamageDealerComponent::DamageDealerComponent(Actor* owner)
 	: IComponent(owner)
 	, m_damageAmount(0.0f)
@@ -146,3 +149,6 @@ void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& /*gameContext*/)
         }
     }
 }
+
+
+} // namespace HEIN

@@ -1,4 +1,4 @@
-﻿//
+//
 // Game.cpp
 //
 
@@ -9,6 +9,7 @@
 #include "ImGui/imgui_impl_dx11.h"
 #include "ImGui/imgui_impl_win32.h"
 #include "Message/Messenger.h"
+#include "Components/UIButtonComponent.h"
 
 extern void ExitGame() noexcept;
 
@@ -125,6 +126,8 @@ void Game::Update(DX::StepTimer const& timer)
 
     m_gameContext->mouseState = mouse ;
     m_gameContext->keyboardState = keyboard;
+    m_gameContext->gameViewport = m_deviceResources->GetScreenViewport();
+    HEIN::UIButtonComponent::SetActiveUIViewport(m_gameContext->gameViewport);
     HEIN::Messenger::GetInstance()->Update(elapsedTime);
     m_inputManager.Update(*m_gameContext);
     if (keyboard.Escape)

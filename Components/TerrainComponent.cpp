@@ -16,6 +16,9 @@
 #include <cstdio>
 #include <d3dcompiler.h>
 
+
+namespace HEIN
+{
 static FILE* OpenFileWithFallback(const wchar_t* filename, const wchar_t* mode, std::wstring* outResolvedPath = nullptr)
 {
 	if (!filename || filename[0] == L'\0') return nullptr;
@@ -64,7 +67,7 @@ HEIN::TerrainComponent::TerrainComponent(Actor* owner)
 	: IComponent(owner)
 	, m_terrainWidth(0)
 	, m_terrainHeight(0)
-	, m_heightScale(10.0f)
+	, m_heightScale(DEFAULT_HEIGHT_SCALE)
 	, m_vertexCount(0)
 {
 }
@@ -327,10 +330,14 @@ bool HEIN::TerrainComponent::Initialize(
 
 	// Creat Sampler State
 	D3D11_SAMPLER_DESC samplerDesc = {};
-	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.Filter = D3D11_FILTER_ANISOTROPIC;
 	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	samplerDesc.MaxAnisotropy = DEFAULT_MAX_ANISOTROPY;
+	samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	samplerDesc.MinLOD = DEFAULT_MIN_LOD;
+	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
 	device->CreateSamplerState(&samplerDesc, m_sampleState.ReleaseAndGetAddressOf());
 
 	m_needsReload = false;
@@ -435,8 +442,8 @@ void HEIN::TerrainComponent::Draw(
 		else
 		{
 			// Default fog settings if no FogComponent is attached (disabled)
-			dataPtr->fogStart = 100000.0f;
-			dataPtr->fogEnd = 200000.0f;
+			dataPtr->fogStart = DISABLED_FOG_START;
+			dataPtr->fogEnd = DISABLED_FOG_END;
 			dataPtr->fogColor = DirectX::SimpleMath::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
 		}
 		dataPtr->padding1 = 0.0f;
@@ -485,15 +492,15 @@ void HEIN::TerrainComponent::Draw(
 			cullingView = gameContext.mainCamera->GetView();
 
 			D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
-			float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (1280.0f / 720.0f);
+			float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : (DEFAULT_VIEWPORT_WIDTH / DEFAULT_VIEWPORT_HEIGHT);
 			float fov = gameContext.mainCamera->GetFov();
-			if (fov <= 0.0f) fov = DirectX::XM_PI / 4.0f;
+			if (fov <= 0.0f) fov = DEFAULT_CAMERA_FOV;
 
 			cullingProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
 				fov,
 				aspect,
-				0.1f,
-				5000.0f
+				CULLING_NEAR_PLANE,
+				CULLING_FAR_PLANE
 			);
 		}
 
@@ -501,7 +508,7 @@ void HEIN::TerrainComponent::Draw(
 		DirectX::BoundingFrustum localFrustum(cullingProj, true);
 
 		DirectX::SimpleMath::Matrix camWorld;
-		if (std::abs(cullingView.Determinant()) < 1e-6f)
+		if (std::abs(cullingView.Determinant()) < MATRIX_DETERMINANT_EPSILON)
 		{
 			camWorld = DirectX::SimpleMath::Matrix::Identity;
 		}
@@ -619,7 +626,7 @@ void HEIN::TerrainComponent::DrawShadow(
 
 	// Extract 6 clipping planes from world * lightViewProj for light frustum culling
 	DirectX::SimpleMath::Matrix M = world * lightViewProj;
-	DirectX::SimpleMath::Vector4 planes[6] = {
+	DirectX::SimpleMath::Vector4 planes[FRUSTUM_PLANE_COUNT] = {
 		DirectX::SimpleMath::Vector4(M._14 + M._11, M._24 + M._21, M._34 + M._31, M._44 + M._41), // Left
 		DirectX::SimpleMath::Vector4(M._14 - M._11, M._24 - M._21, M._34 - M._31, M._44 - M._41), // Right
 		DirectX::SimpleMath::Vector4(M._14 + M._12, M._24 + M._22, M._34 + M._32, M._44 + M._42), // Bottom
@@ -628,10 +635,10 @@ void HEIN::TerrainComponent::DrawShadow(
 		DirectX::SimpleMath::Vector4(M._14 - M._13, M._24 - M._23, M._34 - M._33, M._44 - M._43)  // Far
 	};
 
-	for (int i = 0; i < 6; ++i)
+	for (int i = 0; i < FRUSTUM_PLANE_COUNT; ++i)
 	{
 		float len = std::sqrt(planes[i].x * planes[i].x + planes[i].y * planes[i].y + planes[i].z * planes[i].z);
-		if (len > 1e-6f)
+		if (len > MATRIX_DETERMINANT_EPSILON)
 		{
 			planes[i] /= len;
 		}
@@ -642,19 +649,19 @@ void HEIN::TerrainComponent::DrawShadow(
 		if (m_enableFrustumCulling)
 		{
 			DirectX::BoundingBox box = cell->GetBoundingBox();
-			DirectX::SimpleMath::Vector3 corners[8];
+			DirectX::SimpleMath::Vector3 corners[BOX_CORNER_COUNT];
 			box.GetCorners(corners);
 
 			bool culled = false;
-			for (int p = 0; p < 6; ++p)
+			for (int p = 0; p < FRUSTUM_PLANE_COUNT; ++p)
 			{
 				int outsideCount = 0;
-				for (int c = 0; c < 8; ++c)
+				for (int c = 0; c < BOX_CORNER_COUNT; ++c)
 				{
 					float dist = planes[p].x * corners[c].x + planes[p].y * corners[c].y + planes[p].z * corners[c].z + planes[p].w;
 					if (dist < 0.0f) outsideCount++;
 				}
-				if (outsideCount == 8)
+				if (outsideCount == BOX_CORNER_COUNT)
 				{
 					culled = true;
 					break;
@@ -805,7 +812,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 		ImGui::Checkbox("Freeze Culling Frustum", &m_freezeFrustum);
 		
 		int maxCellIndex = (int)m_cells.size() - 1;
-		if (ImGui::SliderInt("Isolate Single Cell", &m_debugSingleCell, -1, maxCellIndex, m_debugSingleCell < 0 ? "All Cells (-1)" : "Cell %d"))
+		if (ImGui::SliderInt("Isolate Single Cell", &m_debugSingleCell, ISOLATE_ALL_CELLS, maxCellIndex, m_debugSingleCell < 0 ? "All Cells (-1)" : "Cell %d"))
 		{
 			// Live isolate
 		}
@@ -816,13 +823,13 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 		}
 
 		ImGui::Separator();
-		if (ImGui::DragFloat("HeightScale", &m_heightScale, 0.5f, 1.0f, 100.0f))
+		if (ImGui::DragFloat("HeightScale", &m_heightScale, DRAG_SPEED_SCALE, MIN_HEIGHT_SCALE, MAX_HEIGHT_SCALE))
 		{
 			CalculateNormals();
 			// Recreate the buffer with the new scale immediately
 			InitializeBuffer(gameContext.deviceResources.GetD3DDevice());
 		}
-		if (ImGui::DragFloat("Texture Tiling", &m_texutreTiling, 0.5f, 1.0f, 128.0f))
+		if (ImGui::DragFloat("Texture Tiling", &m_texutreTiling, DRAG_SPEED_SCALE, MIN_TEXTURE_TILING, MAX_TEXTURE_TILING))
 		{
 			// Recreate the buffer to apply the new UV coordinates
 			InitializeBuffer(gameContext.deviceResources.GetD3DDevice());
@@ -830,7 +837,7 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 
 		ImGui::Separator();
 		ImGui::Text("Lighting");
-		ImGui::DragFloat3("Light Direction", &m_lightDirection.x, 0.05f, -1.0f, 1.0f);
+		ImGui::DragFloat3("Light Direction", &m_lightDirection.x, DRAG_SPEED_LIGHT_DIR, -1.0f, 1.0f);
 		ImGui::ColorEdit3("Diffuse Color", &m_diffuseColor.x);
 		
 		ImGui::Separator();
@@ -1036,11 +1043,11 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 	m_terrainHeight = bitmapInfoHeader.biHeight;
 	
 	// Support different BMP formats (8-bit, 24-bit, 32-bit)
-	int bytesPerPixel = bitmapInfoHeader.biBitCount / 8;
-	if (bytesPerPixel == 0) bytesPerPixel = 3; // Fallback just in case
+	int bytesPerPixel = bitmapInfoHeader.biBitCount / BITS_PER_BYTE;
+	if (bytesPerPixel == 0) bytesPerPixel = DEFAULT_BMP_BYTES_PER_PIXEL; // Fallback just in case
 
 	// BMP rows are padded to a multiple of 4 bytes
-	int rowPitch = (m_terrainWidth * bytesPerPixel + 3) & ~3;
+	int rowPitch = (m_terrainWidth * bytesPerPixel + (BMP_ROW_ALIGNMENT - 1)) & ~(BMP_ROW_ALIGNMENT - 1);
 	imageSize = rowPitch * m_terrainHeight;
 
 	bitmapImage = new unsigned char[imageSize];
@@ -1063,7 +1070,7 @@ bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 			height = bitmapImage[pixelOffset];
 			
 			index = j * m_terrainWidth + i;
-			m_heightMap[index].y = (float)height / 255.0f; // Normalize 0 to 1
+			m_heightMap[index].y = static_cast<float>(height) / MAX_UINT8_HEIGHT; // Normalize 0 to 1
 		}
 	}
 
@@ -1086,12 +1093,18 @@ bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 	rewind(filePtr);
 
 	// 16bit rawfile uses exactly 2 bytes per pixel
-	int numPixels = fileSize / 2;
+	if (fileSize <= 0)
+	{
+		fclose(filePtr);
+		return false;
+	}
+
+	int numPixels = fileSize / RAW16_BYTES_PER_PIXEL;
 	m_terrainWidth = static_cast<int>(sqrt(numPixels));
 	m_terrainHeight = m_terrainWidth;
 
 	// Safety Check to ensure the file is a perfect square
-	if (m_terrainWidth * m_terrainHeight != numPixels)
+	if (numPixels <= 0 || m_terrainWidth * m_terrainHeight != numPixels)
 	{
 		OutputDebugStringA("Raw File is not a perfect square!");
 		fclose(filePtr);
@@ -1099,23 +1112,28 @@ bool HEIN::TerrainComponent::LoadRawHeightMap(const wchar_t* filename)
 	}
 
 	// Read the 16-bit data
-	unsigned short* rawImage = new unsigned short[numPixels];
-	fread(rawImage, sizeof(unsigned short), numPixels, filePtr);
+	std::vector<unsigned short> rawImage(static_cast<size_t>(numPixels));
+	size_t elementsRead = fread(rawImage.data(), sizeof(unsigned short), static_cast<size_t>(numPixels), filePtr);
 	fclose(filePtr);
+	if (elementsRead != static_cast<size_t>(numPixels))
+	{
+		return false;
+	}
 
-	m_heightMap.resize(numPixels);
+	m_heightMap.resize(static_cast<size_t>(numPixels));
 
 	for (int j = 0; j < m_terrainHeight; j++)
 	{
 		for (int i = 0; i < m_terrainWidth; i++)
 		{
-			int rawIndex = (j * m_terrainWidth) + i;
-			int index = j * m_terrainWidth + i;
-			// Normalize by dividing by 65535 instead of 255.
-			m_heightMap[index].y = (float)rawImage[rawIndex] / 65535.0f;
+			size_t index = static_cast<size_t>(j) * static_cast<size_t>(m_terrainWidth) + static_cast<size_t>(i);
+			if (index < rawImage.size())
+			{
+				// Normalize by dividing by 65535 instead of 255.
+				m_heightMap[index].y = static_cast<float>(rawImage[index]) / MAX_UINT16_HEIGHT;
+			}
 		}
 	}
-	delete[] rawImage;
 	return true;
 }
 
@@ -1146,8 +1164,8 @@ bool HEIN::TerrainComponent::CalculateNormals()
 
 			float dx = (float)(rightX - leftX);
 			float dz = (float)(upY - downY);
-			if (dx <= 0.0001f) dx = 1.0f;
-			if (dz <= 0.0001f) dz = 1.0f;
+			if (dx <= NORMAL_DELTA_EPSILON) dx = 1.0f;
+			if (dz <= NORMAL_DELTA_EPSILON) dz = 1.0f;
 
 			float dHdX = (hR - hL) / dx;
 			float dHdZ = (hU - hD) / dz;
@@ -1174,7 +1192,7 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 		return false;
 	}
 
-	const int quadsPerCell = 32;
+	const int quadsPerCell = QUADS_PER_CELL;
 
 	int cellRowCount = (m_terrainWidth - 1 + quadsPerCell - 1) / quadsPerCell;
 	int cellColumnCount = (m_terrainHeight - 1 + quadsPerCell - 1) / quadsPerCell;
@@ -1197,7 +1215,7 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 			int cellVertsY = cellQuadsY + 1;
 
 			std::vector<TerrainVertexType> vertices(cellVertsX * cellVertsY);
-			std::vector<uint32_t> indices(cellQuadsX * cellQuadsY * 6);
+			std::vector<uint32_t> indices(cellQuadsX * cellQuadsY * INDICES_PER_QUAD);
 
 			int vertexIndex = 0;
 
@@ -1228,8 +1246,8 @@ bool HEIN::TerrainComponent::InitializeBuffer(ID3D11Device* device)
 					float hD = m_heightMap[downY * m_terrainWidth + globalX].y * m_heightScale;
 					float hU = m_heightMap[upY * m_terrainWidth + globalX].y * m_heightScale;
 
-					float dx = (float)(rightX - leftX); if (dx <= 0.0001f) dx = 1.0f;
-					float dz = (float)(upY - downY); if (dz <= 0.0001f) dz = 1.0f;
+					float dx = (float)(rightX - leftX); if (dx <= NORMAL_DELTA_EPSILON) dx = 1.0f;
+					float dz = (float)(upY - downY); if (dz <= NORMAL_DELTA_EPSILON) dz = 1.0f;
 
 					float dHdX = (hR - hL) / dx;
 					float dHdZ = (hU - hD) / dz;
@@ -1326,10 +1344,10 @@ bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
 		return false;
 	}
 
-	int bytesPerPixel = bitmapInfoHeader.biBitCount / 8;
-	if (bytesPerPixel < 3) bytesPerPixel = 3;
+	int bytesPerPixel = bitmapInfoHeader.biBitCount / BITS_PER_BYTE;
+	if (bytesPerPixel < DEFAULT_BMP_BYTES_PER_PIXEL) bytesPerPixel = DEFAULT_BMP_BYTES_PER_PIXEL;
 
-	int rowPitch = (m_terrainWidth * bytesPerPixel + 3) & ~3;
+	int rowPitch = (m_terrainWidth * bytesPerPixel + (BMP_ROW_ALIGNMENT - 1)) & ~(BMP_ROW_ALIGNMENT - 1);
 	imageSize = rowPitch * m_terrainHeight;
 
 	bitmapImage = new unsigned char[imageSize];
@@ -1348,12 +1366,15 @@ bool HEIN::TerrainComponent::LoadColorMap(const wchar_t* filename)
 			index = j * m_terrainWidth + i;
 
 			// Windows BMP files store pixels in BGR format.
-			m_colorMap[index].z = (float)bitmapImage[pixelOffset] / 255.0f;     // B
-			m_colorMap[index].y = (float)bitmapImage[pixelOffset + 1] / 255.0f; // G
-			m_colorMap[index].x = (float)bitmapImage[pixelOffset + 2] / 255.0f; // R
+			m_colorMap[index].z = static_cast<float>(bitmapImage[pixelOffset]) / MAX_UINT8_HEIGHT;     // B
+			m_colorMap[index].y = static_cast<float>(bitmapImage[pixelOffset + 1]) / MAX_UINT8_HEIGHT; // G
+			m_colorMap[index].x = static_cast<float>(bitmapImage[pixelOffset + 2]) / MAX_UINT8_HEIGHT; // R
 		}
 	}
 
 	delete[] bitmapImage;
 	return true;
 }
+
+
+} // namespace HEIN

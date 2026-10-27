@@ -107,10 +107,13 @@ namespace
         s_cachedWhiteTexture = CreateSolidTexture(device, 0xFFFFFFFF);
         return s_cachedWhiteTexture;
     }
+
+    std::unordered_map<std::wstring, std::shared_ptr<DirectX::SpriteFont>> s_uiButtonFontCache;
+    std::vector<std::wstring> s_discoveredFontPaths;
 }
 
-static std::unordered_map<std::wstring, std::shared_ptr<DirectX::SpriteFont>> s_uiButtonFontCache;
-static std::vector<std::wstring> s_discoveredFontPaths;
+namespace HEIN
+{
 
 bool HEIN::UIButtonComponent::DoesFontExist(const std::wstring& path)
 {
@@ -295,6 +298,18 @@ void HEIN::UIButtonComponent::SetSpriteFontPath(const std::wstring& path, ID3D11
     }
 }
 
+D3D11_VIEWPORT HEIN::UIButtonComponent::s_activeUIViewport = {};
+
+void HEIN::UIButtonComponent::SetActiveUIViewport(const D3D11_VIEWPORT& vp)
+{
+    s_activeUIViewport = vp;
+}
+
+D3D11_VIEWPORT HEIN::UIButtonComponent::GetActiveUIViewport()
+{
+    return s_activeUIViewport;
+}
+
 HEIN::UIButtonComponent::UIButtonComponent(Actor* owner)
     : IComponent(owner)
 {
@@ -374,7 +389,7 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
     }
 
     // Ignore clicks when ImGuizmo is actively using gizmo controls
-    bool isUICapturingMouse = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+    bool isUICapturingMouse = ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
     if (isUICapturingMouse)
     {
         m_wasMouseDown = false;
@@ -415,14 +430,16 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
         mouseY = static_cast<float>(mouseState.y);
     }
 
-    float scaleX = (m_lastScaleX > 0.0001f) ? m_lastScaleX : (ImGui::GetIO().DisplaySize.x > 0.0f ? ImGui::GetIO().DisplaySize.x / kRefWidth : 1.0f);
-    float scaleY = (m_lastScaleY > 0.0001f) ? m_lastScaleY : (ImGui::GetIO().DisplaySize.y > 0.0f ? ImGui::GetIO().DisplaySize.y / kRefHeight : 1.0f);
+    float vpX = (m_lastScaleX > 0.0001f) ? m_lastVpX : s_activeUIViewport.TopLeftX;
+    float vpY = (m_lastScaleY > 0.0001f) ? m_lastVpY : s_activeUIViewport.TopLeftY;
+    float scaleX = (m_lastScaleX > 0.0001f) ? m_lastScaleX : (s_activeUIViewport.Width > 0.0f ? s_activeUIViewport.Width / kRefWidth : (ImGui::GetIO().DisplaySize.x > 0.0f ? ImGui::GetIO().DisplaySize.x / kRefWidth : 1.0f));
+    float scaleY = (m_lastScaleY > 0.0001f) ? m_lastScaleY : (s_activeUIViewport.Height > 0.0f ? s_activeUIViewport.Height / kRefHeight : (ImGui::GetIO().DisplaySize.y > 0.0f ? ImGui::GetIO().DisplaySize.y / kRefHeight : 1.0f));
     if (scaleX <= 0.0001f) scaleX = 1.0f;
     if (scaleY <= 0.0001f) scaleY = 1.0f;
 
     // Transform mouse coordinates from window space into virtual reference canvas (1280x720) space
-    float canvasMouseX = (mouseX - m_lastVpX) / scaleX;
-    float canvasMouseY = (mouseY - m_lastVpY) / scaleY;
+    float canvasMouseX = (mouseX - vpX) / scaleX;
+    float canvasMouseY = (mouseY - vpY) / scaleY;
 
     // 2D AABB Collision Math against 1280x720 canvas
     bool isHovering = (canvasMouseX >= m_position.x && canvasMouseX <= m_position.x + m_size.x &&
@@ -480,17 +497,25 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
 
     // Query current active viewport to support responsive scaling in full view, windowed mode, and sub-viewports
     D3D11_VIEWPORT vp = {};
-    UINT numVp = 1;
-    gameContext.deviceResources.GetD3DDeviceContext()->RSGetViewports(&numVp, &vp);
-    if (vp.Width <= 0.0f || vp.Height <= 0.0f)
+    if (gameContext.gameViewport.Width > 0.0f && gameContext.gameViewport.Height > 0.0f)
     {
-        vp = gameContext.deviceResources.GetScreenViewport();
+        vp = gameContext.gameViewport;
+    }
+    else
+    {
+        UINT numVp = 1;
+        gameContext.deviceResources.GetD3DDeviceContext()->RSGetViewports(&numVp, &vp);
+        if (vp.Width <= 0.0f || vp.Height <= 0.0f)
+        {
+            vp = gameContext.deviceResources.GetScreenViewport();
+        }
     }
 
     m_lastScaleX = vp.Width / kRefWidth;
     m_lastScaleY = vp.Height / kRefHeight;
     m_lastVpX = vp.TopLeftX;
     m_lastVpY = vp.TopLeftY;
+    s_activeUIViewport = vp;
 
     float renderPosX = m_position.x * m_lastScaleX;
     float renderPosY = m_position.y * m_lastScaleY;
@@ -1279,3 +1304,5 @@ void HEIN::UIButtonComponent::DrawGizmo(
     drawList->AddRectFilled(bMin, bMax, IM_COL32(10, 20, 35, 220), 4.0f);
     drawList->AddText(ImVec2(bMin.x + 4.0f, bMin.y + 1.0f), borderColor, badgeBuf);
 }
+
+} // namespace HEIN

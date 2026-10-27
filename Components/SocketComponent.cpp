@@ -6,6 +6,9 @@
 #include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
 
+
+namespace HEIN
+{
 HEIN::SocketComponent::SocketComponent(Actor* owner)
     : IComponent(owner)
     , m_model(nullptr)
@@ -299,3 +302,6 @@ void HEIN::SocketComponent::Deserialize(const nlohmann::json& data)
         }
     }
 }
+
+
+} // namespace HEIN

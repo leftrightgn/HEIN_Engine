@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "EventManager.h"
 
+
+namespace HEIN
+{
 void HEIN::EventManager::AddTriggerListener(HEIN::TriggerEventCallback callback)
 {
 	m_triggerListeners.push_back(callback);
@@ -18,3 +21,6 @@ void HEIN::EventManager::ClearTriggerListeners()
 {
 	m_triggerListeners.clear();
 }
+
+
+} // namespace HEIN

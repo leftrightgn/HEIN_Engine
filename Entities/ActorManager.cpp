@@ -5,6 +5,9 @@
 #include "Components/TransformComponent.h"
 #include "Framework/GameContext.h"
 
+
+namespace HEIN
+{
 // LifeCycle
 HEIN::Actor* HEIN::ActorManager::CreateActor(const std::wstring& tag)
 {
@@ -495,3 +498,6 @@ void HEIN::ActorManager::CascadeTransforms(ActorID parentID)
         }
     }
 }
+
+
+} // namespace HEIN

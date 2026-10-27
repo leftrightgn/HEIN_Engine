@@ -16,6 +16,7 @@
 #include <Components/AnimationEditorComponent.h>
 #include <Windows.h>
 #include <commdlg.h>
+#include <shellapi.h>
 #include <filesystem>
 #include <vector>
 #include <Components/TransformComponent.h>
@@ -168,9 +169,11 @@ namespace HEIN
 		HEIN::CameraController* debugCameraController
 	)
 	{
-		if (gameContext.keyboardTracker.pressed.F1)
+		float dt = static_cast<float>(gameContext.timer.GetElapsedSeconds());
+		if (m_exportStatusTimer > 0.0f)
 		{
-			m_isVisible = !m_isVisible;
+			m_exportStatusTimer -= dt;
+			if (m_exportStatusTimer <= 0.0f) m_exportStatusMessage.clear();
 		}
 
 		if (gameContext.keyboardTracker.pressed.F2)
@@ -192,8 +195,42 @@ namespace HEIN
 			SetViewportLayout(nextLayout);
 		}
 
+		// ESC or F2 key releases Game View mouse capture back to editor mode
+		if (m_isGameViewCaptured)
+		{
+			if (gameContext.keyboardTracker.pressed.Escape || gameContext.keyboardTracker.pressed.F2)
+			{
+				m_isGameViewCaptured = false;
+				DirectX::Mouse::Get().SetMode(DirectX::Mouse::MODE_ABSOLUTE);
+				while (ShowCursor(TRUE) < 0);
+				ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+				::SetCursor(::LoadCursor(nullptr, IDC_ARROW));
+			}
+		}
+
 		D3D11_VIEWPORT sceneVp = GetSceneViewport(gameContext);
+		D3D11_VIEWPORT gameVp = GetGameViewport(gameContext);
 		SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+
+		// Click inside Game View engages mouse capture for gameplay controls
+		if (m_viewportLayout != EditorViewportLayout::SceneViewOnly && !m_isGameViewCaptured)
+		{
+			if (gameContext.mouseButtonTracker.leftButton == DirectX::Mouse::ButtonStateTracker::PRESSED && !ImGui::GetIO().WantCaptureMouse)
+			{
+				float mouseX = static_cast<float>(gameContext.mouseState.x);
+				float mouseY = static_cast<float>(gameContext.mouseState.y);
+
+				if (mouseX >= gameVp.TopLeftX && mouseX <= (gameVp.TopLeftX + gameVp.Width) &&
+					mouseY >= gameVp.TopLeftY && mouseY <= (gameVp.TopLeftY + gameVp.Height))
+				{
+					m_isGameViewCaptured = true;
+					DirectX::Mouse::Get().SetMode(DirectX::Mouse::MODE_RELATIVE);
+					while (ShowCursor(FALSE) >= 0);
+					ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+					::SetCursor(nullptr);
+				}
+			}
+		}
 
 		if (!m_isVisible) return;
 
@@ -651,10 +688,30 @@ namespace HEIN
 		};
 
 		ImGui::Begin("ToolBar", nullptr, toolbarFlags);
-		if (ImGui::Button("PLAY (Exit Editor)")) currentAction = HEIN::EditorAction::PlayPressed;
-		SameLineWrap(105.0f);
-		if (ImGui::Button("STOP (Pause)")) currentAction = HEIN::EditorAction::StopPressed;
-		SameLineWrap(105.0f);
+		if (ImGui::Button("[ > PLAY ]"))
+		{
+			currentAction = HEIN::EditorAction::PlayPressed;
+			if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
+			{
+				SetViewportLayout(EditorViewportLayout::GameViewOnly);
+			}
+			m_isGameViewCaptured = true;
+			DirectX::Mouse::Get().SetMode(DirectX::Mouse::MODE_RELATIVE);
+			while (ShowCursor(FALSE) >= 0);
+			ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+			::SetCursor(nullptr);
+		}
+		SameLineWrap(85.0f);
+		if (ImGui::Button("[ || PAUSE ]"))
+		{
+			currentAction = HEIN::EditorAction::StopPressed;
+			m_isGameViewCaptured = false;
+			DirectX::Mouse::Get().SetMode(DirectX::Mouse::MODE_ABSOLUTE);
+			while (ShowCursor(TRUE) < 0);
+			ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+			::SetCursor(::LoadCursor(nullptr, IDC_ARROW));
+		}
+		SameLineWrap(85.0f);
 
 		// Unity-style Scene View vs Game View layout selector tabs (F2)
 		bool isSceneOnly = (m_viewportLayout == EditorViewportLayout::SceneViewOnly);
@@ -705,6 +762,21 @@ namespace HEIN
 			{
 				SetViewportLayout(EditorViewportLayout::SplitSideBySide);
 			}
+		}
+
+		SameLineWrap(140.0f);
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.60f, 0.42f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.72f, 0.50f, 1.0f));
+		if (ImGui::Button("EXPORT STANDALONE"))
+		{
+			ExportStandaloneGame(gameContext);
+		}
+		ImGui::PopStyleColor(2);
+
+		if (!m_exportStatusMessage.empty() && m_exportStatusTimer > 0.0f)
+		{
+			SameLineWrap(220.0f);
+			ImGui::TextColored(ImVec4(0.25f, 1.0f, 0.55f, 1.0f), "%s", m_exportStatusMessage.c_str());
 		}
 
 		SameLineWrap(120.0f);
@@ -906,11 +978,19 @@ namespace HEIN
 		D3D11_VIEWPORT gameVp  = GetGameViewport(gameContext);
 		SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
 
-		// Draw subtle Unity-style border around the 16:9 fitted Scene / Game Viewport(s)
+		// Draw off-screen render texture and subtle Unity-style border around fitted Scene / Game Viewport(s)
 		if (ImDrawList* bgList = ImGui::GetBackgroundDrawList())
 		{
 			if (m_viewportLayout != EditorViewportLayout::GameViewOnly)
 			{
+				if (m_sceneSRV != nullptr)
+				{
+					bgList->AddImage(
+						reinterpret_cast<ImTextureID>(m_sceneSRV),
+						ImVec2(sceneVp.TopLeftX, sceneVp.TopLeftY),
+						ImVec2(sceneVp.TopLeftX + sceneVp.Width, sceneVp.TopLeftY + sceneVp.Height)
+					);
+				}
 				bgList->AddRect(
 					ImVec2(sceneVp.TopLeftX, sceneVp.TopLeftY),
 					ImVec2(sceneVp.TopLeftX + sceneVp.Width, sceneVp.TopLeftY + sceneVp.Height),
@@ -919,11 +999,28 @@ namespace HEIN
 			}
 			if (m_viewportLayout != EditorViewportLayout::SceneViewOnly)
 			{
+				if (m_gameSRV != nullptr)
+				{
+					bgList->AddImage(
+						reinterpret_cast<ImTextureID>(m_gameSRV),
+						ImVec2(gameVp.TopLeftX, gameVp.TopLeftY),
+						ImVec2(gameVp.TopLeftX + gameVp.Width, gameVp.TopLeftY + gameVp.Height)
+					);
+				}
 				bgList->AddRect(
 					ImVec2(gameVp.TopLeftX, gameVp.TopLeftY),
 					ImVec2(gameVp.TopLeftX + gameVp.Width, gameVp.TopLeftY + gameVp.Height),
 					IM_COL32(60, 175, 95, 180), 0.0f, 0, 1.5f
 				);
+
+			if (!m_isGameViewCaptured)
+			{
+				bgList->AddText(
+					ImVec2(gameVp.TopLeftX + 16.0f, gameVp.TopLeftY + 12.0f),
+					IM_COL32(100, 220, 130, 240),
+					"[ Click Game View to Capture Mouse | ESC to Release ]"
+				);
+			}
 			}
 		}
 
@@ -1115,12 +1212,20 @@ namespace HEIN
 				// 2D UI targets draw in Game View when GameViewOnly or SplitSideBySide is active
 				D3D11_VIEWPORT uiVp = (m_viewportLayout == EditorViewportLayout::SceneViewOnly) ? sceneVp : gameVp;
 				SetActiveViewportRect(uiVp.TopLeftX, uiVp.TopLeftY, uiVp.Width, uiVp.Height);
+				ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+				ImGuizmo::SetRect(uiVp.TopLeftX, uiVp.TopLeftY, uiVp.Width, uiVp.Height);
+				ImGuizmo::SetOrthographic(true);
+				ImGuizmo::SetGizmoSizeClipSpace(0.12f);
 				g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
 				SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
 			}
 			else if (m_viewportLayout != EditorViewportLayout::GameViewOnly)
 			{
 				SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+				ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+				ImGuizmo::SetRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+				ImGuizmo::SetOrthographic(false);
+				ImGuizmo::SetGizmoSizeClipSpace(0.2f);
 				g_ActiveGizmoTarget->DrawGizmo(view, proj, m_currentGinzmoOperation, m_currentGinzmo);
 			}
 		}
@@ -1149,8 +1254,12 @@ namespace HEIN
 				// Compute Tip UI Text Box in screen space inside gameVp
 				float tipScreenX = gameVp.TopLeftX + m_editorTransitionDesc.tipNormalizedPos.x * gameVp.Width;
 				float tipScreenY = gameVp.TopLeftY + m_editorTransitionDesc.tipNormalizedPos.y * gameVp.Height;
-				ImVec2 tipMin(tipScreenX - 6.0f, tipScreenY - 6.0f);
-				ImVec2 tipMax(tipScreenX + 380.0f * uiScale, tipScreenY + 62.0f * uiScale);
+				float minOffX = std::min(m_editorTransitionDesc.tipTitleOffset.x, m_editorTransitionDesc.tipDescOffset.x) * uiScale;
+				float minOffY = std::min(m_editorTransitionDesc.tipTitleOffset.y, m_editorTransitionDesc.tipDescOffset.y) * uiScale;
+				float maxOffX = std::max(m_editorTransitionDesc.tipTitleOffset.x, m_editorTransitionDesc.tipDescOffset.x) * uiScale;
+				float maxOffY = std::max(m_editorTransitionDesc.tipTitleOffset.y, m_editorTransitionDesc.tipDescOffset.y) * uiScale;
+				ImVec2 tipMin(tipScreenX + minOffX - 6.0f, tipScreenY + minOffY - 6.0f);
+				ImVec2 tipMax(tipScreenX + maxOffX + 420.0f * uiScale, tipScreenY + maxOffY + 54.0f * uiScale);
 
 				// Compute Loading Bar Box in screen space inside gameVp
 				float barScreenX = gameVp.TopLeftX + m_editorTransitionDesc.barNormalizedPos.x * gameVp.Width;
@@ -1525,6 +1634,7 @@ namespace HEIN
 		// Live Scrubbers & Quick UI Text Placement Sliders while Transition is Active/Paused
 		if (gameContext.sceneManager->IsTransitioning())
 		{
+			ImGui::PushID("LiveTransitionPlacement");
 			ImGui::Spacing();
 			ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "Live UI Text & Bar Placement (Drag in Game View or Slide):");
 
@@ -1542,7 +1652,9 @@ namespace HEIN
 				gameContext.sceneManager->SetLoadingProgress(progress);
 			}
 
-			ImGui::SliderFloat2("UI Tip Text Pos (X,Y)", &m_editorTransitionDesc.tipNormalizedPos.x, 0.0f, 1.0f, "%.3f");
+			ImGui::SliderFloat2("UI Tip Anchor Pos (X,Y)", &m_editorTransitionDesc.tipNormalizedPos.x, 0.0f, 1.0f, "%.3f");
+			ImGui::DragFloat2("Tip Name Offset (X,Y)##LiveTipTitleOffset", &m_editorTransitionDesc.tipTitleOffset.x, 1.0f, -600.0f, 600.0f, "%.0f px");
+			ImGui::DragFloat2("Tip Explain Offset (X,Y)##LiveTipDescOffset", &m_editorTransitionDesc.tipDescOffset.x, 1.0f, -600.0f, 600.0f, "%.0f px");
 			ImGui::SliderFloat2("Loading Bar Pos (X,Y)", &m_editorTransitionDesc.barNormalizedPos.x, 0.0f, 1.0f, "%.3f");
 
 			if (!m_editorTransitionDesc.tips.empty())
@@ -1562,6 +1674,7 @@ namespace HEIN
 				ImGui::SameLine();
 				ImGui::TextDisabled("Tip #%d: %s", static_cast<int>(tipIdx + 1), m_editorTransitionDesc.tips[tipIdx].title.c_str());
 			}
+			ImGui::PopID();
 		}
 
 		ImGui::Separator();
@@ -1835,6 +1948,20 @@ namespace HEIN
 			if (m_editorTransitionDesc.showTips)
 			{
 				ImGui::SliderFloat2("Tips Anchor (0..1)", &m_editorTransitionDesc.tipNormalizedPos.x, 0.0f, 1.0f, "%.3f");
+				ImGui::DragFloat2("Tip Name Offset (X,Y)##ConfigTipTitleOffset", &m_editorTransitionDesc.tipTitleOffset.x, 1.0f, -600.0f, 600.0f, "%.0f px");
+				ImGui::DragFloat2("Tip Explain Offset (X,Y)##ConfigTipDescOffset", &m_editorTransitionDesc.tipDescOffset.x, 1.0f, -600.0f, 600.0f, "%.0f px");
+				ImGui::ColorEdit4("Tip Name Color", &m_editorTransitionDesc.tipTitleColor.x);
+				ImGui::ColorEdit4("Tip Explain Color", &m_editorTransitionDesc.tipDescColor.x);
+
+				ImGui::Checkbox("Show Divider Line", &m_editorTransitionDesc.showTipLine);
+				if (m_editorTransitionDesc.showTipLine)
+				{
+					ImGui::DragFloat2("Line Offset (X,Y)", &m_editorTransitionDesc.tipLineOffset.x, 1.0f, -600.0f, 600.0f, "%.0f px");
+					ImGui::DragFloat("Line Length", &m_editorTransitionDesc.tipLineLength, 1.0f, 10.0f, 1200.0f, "%.0f px");
+					ImGui::DragFloat("Line Thickness", &m_editorTransitionDesc.tipLineThickness, 0.5f, 0.5f, 20.0f, "%.1f px");
+					ImGui::ColorEdit4("Line Color", &m_editorTransitionDesc.tipLineColor.x);
+				}
+
 				ImGui::DragFloat("Global Font Scale", &m_editorTransitionDesc.fontSize, 0.05f, 0.2f, 3.0f, "%.2fx");
 				ImGui::DragFloat("Tip Title Font Size", &m_editorTransitionDesc.titleFontSize, 0.05f, 0.2f, 3.0f, "%.2fx");
 				ImGui::DragFloat("Tip Desc Font Size", &m_editorTransitionDesc.descFontSize, 0.05f, 0.2f, 3.0f, "%.2fx");
@@ -2089,6 +2216,94 @@ namespace HEIN
 		if (gameContext.sceneManager->IsTransitioning())
 		{
 			gameContext.sceneManager->UpdateActiveTransitionDesc(m_editorTransitionDesc);
+		}
+	}
+
+	void DebugUIManager::ExportStandaloneGame(GameContext& gameContext)
+	{
+		try
+		{
+			// Auto-save active scene and scene transition configuration before exporting so JSON data is accurate
+			if (gameContext.sceneManager != nullptr)
+			{
+				gameContext.sceneManager->SaveCurrentScene(gameContext);
+				gameContext.sceneManager->SaveTransitionConfig();
+			}
+
+			// Locate root workspace directory
+			std::filesystem::path currentPath = std::filesystem::current_path();
+			std::filesystem::path rootDir = currentPath;
+
+			if (std::filesystem::exists(rootDir / "../x64"))
+			{
+				rootDir = std::filesystem::canonical(rootDir / "..");
+			}
+			else if (std::filesystem::exists(rootDir / "../../x64"))
+			{
+				rootDir = std::filesystem::canonical(rootDir / "../..");
+			}
+
+			std::filesystem::path buildDir = rootDir / "Build/Standalone";
+			std::filesystem::create_directories(buildDir);
+
+			// Locate Dual.exe (Release preferred, fallback to Debug)
+			std::vector<std::filesystem::path> exeCandidates = {
+				rootDir / "x64/Release/Dual.exe",
+				rootDir / "x64/Debug/Dual.exe",
+				rootDir / "Dual.exe"
+			};
+
+			std::filesystem::path sourceExe = "";
+			for (const auto& candidate : exeCandidates)
+			{
+				if (std::filesystem::exists(candidate))
+				{
+					sourceExe = candidate;
+					break;
+				}
+			}
+
+			if (!sourceExe.empty())
+			{
+				std::filesystem::copy_file(sourceExe, buildDir / "Dual.exe", std::filesystem::copy_options::overwrite_existing);
+			}
+
+			// Locate Resources directory and copy assets
+			std::vector<std::filesystem::path> resCandidates = {
+				rootDir / "Dual/Resources",
+				rootDir / "Resources",
+				currentPath / "Resources",
+				currentPath / "Dual/Resources"
+			};
+
+			std::filesystem::path sourceRes = "";
+			for (const auto& candidate : resCandidates)
+			{
+				if (std::filesystem::exists(candidate) && std::filesystem::is_directory(candidate))
+				{
+					sourceRes = candidate;
+					break;
+				}
+			}
+
+			if (!sourceRes.empty())
+			{
+				std::filesystem::create_directories(buildDir / "Resources");
+				std::filesystem::copy(sourceRes, buildDir / "Resources",
+					std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
+			}
+
+			// Open File Explorer to the exported standalone distribution folder
+			std::wstring absPath = std::filesystem::absolute(buildDir).wstring();
+			ShellExecuteW(nullptr, L"open", absPath.c_str(), nullptr, nullptr, SW_SHOWDEFAULT);
+
+			m_exportStatusMessage = "Saved Scene JSON & Exported Standalone to: " + std::filesystem::absolute(buildDir).string();
+			m_exportStatusTimer = 6.0f;
+		}
+		catch (const std::exception& e)
+		{
+			m_exportStatusMessage = std::string("Export error: ") + e.what();
+			m_exportStatusTimer = 6.0f;
 		}
 	}
 }

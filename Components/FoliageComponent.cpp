@@ -119,7 +119,7 @@ namespace HEIN
 
 		// Divide by the identical quad chunk size used in TerrainComponent (32)
 		// This guarantees that foliage cells perfectly overlap terrain cells.
-		const float quadsPerCell = 32.0f;
+		const float quadsPerCell = static_cast<float>(TerrainComponent::QUADS_PER_CELL);
 
 		int32_t cellX = static_cast<int32_t>(std::floor(gridX / quadsPerCell));
 		int32_t cellY = static_cast<int32_t>(std::floor(gridZ / quadsPerCell));

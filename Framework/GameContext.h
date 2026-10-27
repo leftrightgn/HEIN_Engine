@@ -78,7 +78,12 @@ struct GameContext
 	HEIN::ActorManager* actorManager = nullptr;
 	HEIN::ShadowSystem* shadowSystem = nullptr;
 
+	/// @brief Active game viewport (screen-space rect of the gameplay view)
+	D3D11_VIEWPORT gameViewport = {};
+
+	bool isEditorApplication = false;
 	bool isEditorMode = false;
+	bool isGameMouseCaptured = false;
 	bool showColliders = false;
 	bool showUI = true;
 	bool isSceneViewPass = false;

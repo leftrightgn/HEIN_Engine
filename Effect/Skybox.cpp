@@ -3,6 +3,9 @@
 #include "Components/StaticModelComponent.h"
 #include <Windows.h>
 
+
+namespace HEIN
+{
 const std::vector<D3D11_INPUT_ELEMENT_DESC> HEIN::Skybox::INPUT_LAYOUT =
 {
     // SemanticName, SemanticIndex, Format, InputSlot, AlignedByteOffset, ...
@@ -62,3 +65,6 @@ void HEIN::Skybox::Draw(GameContext& gameContext, const DirectX::SimpleMath::Mat
     // Restore normal depth state for the rest of the game
     context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
 }
+
+
+} // namespace HEIN

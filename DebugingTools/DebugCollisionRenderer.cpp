@@ -3,6 +3,9 @@
 #include "DirectXTK_Utilities/DebugDraw.h"
 
 
+
+namespace HEIN
+{
 HEIN::DebugCollisionRenderer::DebugCollisionRenderer(
 	bool modelActive,
 	bool lineActive,
@@ -374,3 +377,5 @@ void HEIN::DebugCollisionRenderer::DrawWireFrames(
 		}
 	}
 }
+
+} // namespace HEIN

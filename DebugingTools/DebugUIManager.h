@@ -68,6 +68,8 @@ namespace HEIN
 		bool m_isViewportVisibleInUI = false;
 		float m_inspectorWidth = 0.0f;
 		float m_toolbarHeight = 88.0f;
+		ID3D11ShaderResourceView* m_sceneSRV = nullptr;
+		ID3D11ShaderResourceView* m_gameSRV = nullptr;
 
 		// Right Panel Mode (Inspector vs Scene Transition)
 		RightPanelMode m_rightPanelMode = RightPanelMode::Inspector;
@@ -78,10 +80,14 @@ namespace HEIN
 		int m_selectedTargetSceneIndex = 0;
 		int m_transitionStyleIndex = 0;
 		int m_draggingTransitionElement = 0; // 0 = None, 1 = Tip Text, 2 = Loading Bar
+		std::string m_exportStatusMessage;
+		float m_exportStatusTimer = 0.0f;
+		bool m_isGameViewCaptured = false;
 
 	public:
 		DebugUIManager() = default;
 		~DebugUIManager();
+		void ExportStandaloneGame(GameContext& gameContext);
 
 		RightPanelMode GetRightPanelMode() const { return m_rightPanelMode; }
 		void SetRightPanelMode(RightPanelMode mode) { m_rightPanelMode = mode; }
@@ -102,6 +108,8 @@ namespace HEIN
 		}
 
 		bool IsUIVisible() const { return m_isVisible; }
+		bool IsGameViewCaptured() const { return m_isGameViewCaptured; }
+		void SetGameViewCaptured(bool captured) { m_isGameViewCaptured = captured; }
 
 		bool IsViewportPreviewEnabled() const { return m_showViewportPreview; }
 		void SetViewportPreviewEnabled(bool enabled) { m_showViewportPreview = enabled; }
@@ -143,6 +151,14 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& proj,
 			HEIN::CameraController* debugCameraController = nullptr
 		);
+
+		void SetViewportSRVs(ID3D11ShaderResourceView* sceneSRV, ID3D11ShaderResourceView* gameSRV) noexcept
+		{
+			m_sceneSRV = sceneSRV;
+			m_gameSRV = gameSRV;
+		}
+		ID3D11ShaderResourceView* GetSceneSRV() const noexcept { return m_sceneSRV; }
+		ID3D11ShaderResourceView* GetGameSRV() const noexcept { return m_gameSRV; }
 
 		EditorAction Draw(
 			GameContext& gameContext,

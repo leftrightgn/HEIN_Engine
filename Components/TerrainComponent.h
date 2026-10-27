@@ -34,6 +34,42 @@ namespace HEIN
 		};
 
 	public:
+		static constexpr int QUADS_PER_CELL = 32;
+		static constexpr int INDICES_PER_QUAD = 6;
+		static constexpr int ISOLATE_ALL_CELLS = -1;
+
+		static constexpr float MAX_UINT8_HEIGHT = 255.0f;
+		static constexpr float MAX_UINT16_HEIGHT = 65535.0f;
+		static constexpr int BITS_PER_BYTE = 8;
+		static constexpr int DEFAULT_BMP_BYTES_PER_PIXEL = 3;
+		static constexpr int BMP_ROW_ALIGNMENT = 4;
+		static constexpr int RAW16_BYTES_PER_PIXEL = 2;
+
+		static constexpr float DEFAULT_HEIGHT_SCALE = 10.0f;
+		static constexpr float MIN_HEIGHT_SCALE = 1.0f;
+		static constexpr float MAX_HEIGHT_SCALE = 100.0f;
+		static constexpr float DEFAULT_TEXTURE_TILING = 1.0f;
+		static constexpr float MIN_TEXTURE_TILING = 1.0f;
+		static constexpr float MAX_TEXTURE_TILING = 128.0f;
+		static constexpr float DRAG_SPEED_SCALE = 0.5f;
+		static constexpr float DRAG_SPEED_LIGHT_DIR = 0.05f;
+
+		static constexpr UINT DEFAULT_MAX_ANISOTROPY = 16;
+		static constexpr float DEFAULT_MIN_LOD = 0.0f;
+
+		static constexpr float DISABLED_FOG_START = 100000.0f;
+		static constexpr float DISABLED_FOG_END = 200000.0f;
+
+		static constexpr float DEFAULT_VIEWPORT_WIDTH = 1280.0f;
+		static constexpr float DEFAULT_VIEWPORT_HEIGHT = 720.0f;
+		static constexpr float DEFAULT_CAMERA_FOV = DirectX::XM_PIDIV4;
+		static constexpr float CULLING_NEAR_PLANE = 0.1f;
+		static constexpr float CULLING_FAR_PLANE = 5000.0f;
+		static constexpr float MATRIX_DETERMINANT_EPSILON = 1e-6f;
+		static constexpr float NORMAL_DELTA_EPSILON = 0.0001f;
+		static constexpr int FRUSTUM_PLANE_COUNT = 6;
+		static constexpr int BOX_CORNER_COUNT = 8;
+
 		// Data - Streamlined for collision (16 bytes vs original 60 bytes)
 		struct HeightMapType
 		{
@@ -82,7 +118,7 @@ namespace HEIN
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_texture2;
 
 
-		float m_texutreTiling = 1.0f;
+		float m_texutreTiling = DEFAULT_TEXTURE_TILING;
 
 		// Light Controls
 		DirectX::SimpleMath::Vector3 m_lightDirection = DirectX::SimpleMath::Vector3(-0.5f, -1.0f, 0.5f);
@@ -100,7 +136,7 @@ namespace HEIN
 		bool m_enableFrustumCulling = true;
 		bool m_freezeFrustum = false;
 		DirectX::BoundingFrustum m_frozenFrustum;
-		int  m_debugSingleCell = -1; // -1 = All cells, >= 0 = isolate a specific cell
+		int  m_debugSingleCell = ISOLATE_ALL_CELLS; // -1 = All cells, >= 0 = isolate a specific cell
 		bool m_debugCellColors = false;
 		int  m_renderedCellCount = 0;
 
@@ -116,8 +152,8 @@ namespace HEIN
 			const wchar_t* alphaMapFilename = L"",
 			const wchar_t* colorMapFilename = L"",
 			const wchar_t* normalMapFilename = L"",
-			float heightScale = 10.0f,
-			float textureTiling = 1.0f
+			float heightScale = DEFAULT_HEIGHT_SCALE,
+			float textureTiling = DEFAULT_TEXTURE_TILING
 		);
 
 		void Update(float /*deltaTime*/) override {}

@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "ManualCameraMode.h"
 
+
+namespace HEIN
+{
 HEIN::ManualCameraMode::ManualCameraMode()
 {
 }
@@ -11,3 +14,6 @@ void HEIN::ManualCameraMode::Update(CameraData& outData, float, ICameraControlle
 	camWorld.Translation(outData.position);
 	outData.viewMatrix = camWorld.Invert();
 }
+
+
+} // namespace HEIN

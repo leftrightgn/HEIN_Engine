@@ -8,10 +8,14 @@
 #include "Entities/ActorManager.h"
 #include "Message/Messenger.h"
 
+
+namespace HEIN
+{
 // Validates and applies combat damage from Trigger Hitboxes.
 // This is intentionally decoupled from Solid Pushbox collision resolution.
 // Damage validation checks for active invincibility frames (i-frames) 
 // and block states before applying HP reductions.
+
 void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoad, HEIN::ActorManager& actorManager)
 {
 	HEIN::Actor* actorA = payLoad.triggerA->GetOwner();
@@ -85,3 +89,8 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 	ProcessHit(actorA, actorA->GetComponent<HEIN::DamageDealerComponent>(), actorB, actorB->GetComponent<HEIN::HealthComponent>());
 	ProcessHit(actorB, actorB->GetComponent<HEIN::DamageDealerComponent>(), actorA, actorA->GetComponent<HEIN::HealthComponent>());
 }
+
+
+
+
+} // namespace HEIN
