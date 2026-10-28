@@ -83,11 +83,12 @@ struct GameContext
 
 	bool isEditorApplication = false;
 	bool isEditorMode = false;
-	bool isGameMouseCaptured = false;
 	bool showColliders = false;
 	bool showUI = true;
 	bool isSceneViewPass = false;
 	EditorViewportLayout viewportLayout = EditorViewportLayout::SceneViewOnly;
 	bool enableFrustumCulling = true;
+	/// @brief Whether Game View has captured input focus in editor play mode
+	bool isGameViewFocused = false;
 };
 

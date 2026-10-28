@@ -69,8 +69,6 @@ namespace HEIN
 		);
 
 		EditorAction GetUIAction() const { return m_currentAction; }
-		bool IsGameViewCaptured() const { return m_debugUI.IsGameViewCaptured(); }
-		void SetGameViewCaptured(bool captured) { m_debugUI.SetGameViewCaptured(captured); }
 		DebugUIManager& GetDebugUI() { return m_debugUI; }
 		const DebugUIManager& GetDebugUI() const { return m_debugUI; }
 

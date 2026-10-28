@@ -149,6 +149,17 @@ namespace HEIN
 
 	void InputManager::Update(const GameContext& gameContext)
 	{
+		// Sanitize delta when switching between relative raw input and absolute window coordinates
+		if (gameContext.mouseState.positionMode != m_lastPositionMode)
+		{
+			m_deltaX = 0;
+			m_deltaY = 0;
+			m_lastMouseX = gameContext.mouseState.x;
+			m_lastMouseY = gameContext.mouseState.y;
+			m_lastPositionMode = gameContext.mouseState.positionMode;
+			return;
+		}
+
 		if (gameContext.mouseState.positionMode == DirectX::Mouse::MODE_RELATIVE)
 		{
 			m_deltaX = gameContext.mouseState.x;
@@ -162,6 +173,12 @@ namespace HEIN
 		
 		m_lastMouseX = gameContext.mouseState.x;
 		m_lastMouseY = gameContext.mouseState.y;
+	}
+
+	void InputManager::ResetMouseDelta()
+	{
+		m_deltaX = 0;
+		m_deltaY = 0;
 	}
 
 	std::pair<int, int> InputManager::GetMouseDelta()
@@ -271,12 +288,11 @@ namespace HEIN
 			messenger->Notify(playerID, Message::PLAYER_ACTION_DODGE);
 		}
 
-		bool canBlock = !gameContext.isEditorApplication || gameContext.isGameMouseCaptured;
-		if (canBlock && WasActionPressed(gameContext, InputAction::Block))
+		if (WasActionPressed(gameContext, InputAction::Block))
 		{
 			messenger->Notify(playerID, Message::PLAYER_ACTION_BLOCK);
 		}
-		else if (canBlock && WasActionReleased(gameContext, InputAction::Block))
+		else if (WasActionReleased(gameContext, InputAction::Block))
 		{
 			messenger->Notify(playerID, Message::PLAYER_STOP_BLOCK);
 		}

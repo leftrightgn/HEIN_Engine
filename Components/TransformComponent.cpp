@@ -142,22 +142,13 @@ void HEIN::TransformComponent::DrawGizmo(
 
     DirectX::SimpleMath::Matrix worldMat = GetWorldMatrix();
 
-
-
     // Use the operation/mode passed in from the UI manager
-
     ImGuizmo::Manipulate(
-
         (float*)&view.m[0][0],
-
         (float*)&proj.m[0][0],
-
         (ImGuizmo::OPERATION)operation,
-
         (ImGuizmo::MODE)mode,
-
         (float*)&worldMat.m[0][0]
-
     );
 
 

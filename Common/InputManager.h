@@ -72,6 +72,8 @@ namespace HEIN
 		inline static int m_deltaX = 0;
 		inline static int m_deltaY = 0;
 
+		inline static DirectX::Mouse::Mode m_lastPositionMode = DirectX::Mouse::MODE_ABSOLUTE;
+
 		inline static std::unordered_map<InputAction, std::vector<InputBinding>> s_actionBindings;
 		inline static bool s_bindingsInitialized = false;
 
@@ -91,6 +93,7 @@ namespace HEIN
 		static void Update(const GameContext& gameContext);
 
 		static std::pair<int, int> GetMouseDelta();
+		static void ResetMouseDelta();
 
 		static bool IsDebugDrugHeld(const GameContext& gameContext);
 

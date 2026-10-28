@@ -80,14 +80,10 @@ namespace HEIN
 		int m_selectedTargetSceneIndex = 0;
 		int m_transitionStyleIndex = 0;
 		int m_draggingTransitionElement = 0; // 0 = None, 1 = Tip Text, 2 = Loading Bar
-		std::string m_exportStatusMessage;
-		float m_exportStatusTimer = 0.0f;
-		bool m_isGameViewCaptured = false;
 
 	public:
 		DebugUIManager() = default;
 		~DebugUIManager();
-		void ExportStandaloneGame(GameContext& gameContext);
 
 		RightPanelMode GetRightPanelMode() const { return m_rightPanelMode; }
 		void SetRightPanelMode(RightPanelMode mode) { m_rightPanelMode = mode; }
@@ -108,8 +104,6 @@ namespace HEIN
 		}
 
 		bool IsUIVisible() const { return m_isVisible; }
-		bool IsGameViewCaptured() const { return m_isGameViewCaptured; }
-		void SetGameViewCaptured(bool captured) { m_isGameViewCaptured = captured; }
 
 		bool IsViewportPreviewEnabled() const { return m_showViewportPreview; }
 		void SetViewportPreviewEnabled(bool enabled) { m_showViewportPreview = enabled; }
@@ -163,8 +157,10 @@ namespace HEIN
 		EditorAction Draw(
 			GameContext& gameContext,
 			HEIN::ActorManager& manager,
-			const DirectX::SimpleMath::Matrix& view,
-			const DirectX::SimpleMath::Matrix& proj
+			const DirectX::SimpleMath::Matrix& sceneView,
+			const DirectX::SimpleMath::Matrix& sceneProj,
+			const DirectX::SimpleMath::Matrix& gameView,
+			const DirectX::SimpleMath::Matrix& gameProj
 		);
 	};
 }

@@ -71,32 +71,6 @@ namespace HEIN
             cameraComp = cameraActor->GetComponent<HEIN::CameraController>();
         }
 
-        D3D11_VIEWPORT sceneVp = m_debugUI.GetSceneViewport(gameContext);
-        DebugUIManager::SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
-
-        if (cameraComp != nullptr)
-        {
-            float aspectRatio = (sceneVp.Height > 0.0f) ? (sceneVp.Width / sceneVp.Height) : 1.777f;
-            DirectX::Mouse::Get().SetMode(DirectX::Mouse::MODE_ABSOLUTE);
-
-            m_projMatrix = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
-                cameraComp->GetFov(),
-                aspectRatio,
-                0.1f,
-                5000.0f
-            );
-        }
-
-        m_debugUI.Update(gameContext, mainActorManager, GetViewMatrix(), m_projMatrix, cameraComp);
-        m_isMagnified = (m_debugUI.GetViewportLayout() != EditorViewportLayout::GameViewOnly);
-        D3D11_VIEWPORT gameVp = m_debugUI.GetGameViewport(gameContext);
-        const_cast<GameContext&>(gameContext).gameViewport = gameVp;
-        UIButtonComponent::SetActiveUIViewport(gameVp);
-        const_cast<GameContext&>(gameContext).viewportLayout = m_debugUI.GetViewportLayout();
-        const_cast<GameContext&>(gameContext).showUI = m_debugUI.IsShowUIEnabled();
-        const_cast<GameContext&>(gameContext).showColliders = m_isMagnified && m_debugUI.IsShowCollidersEnabled();
-        const_cast<GameContext&>(gameContext).isGameMouseCaptured = m_debugUI.IsGameViewCaptured();
-
         const float deltaTime = static_cast<float>(gameContext.timer.GetElapsedSeconds());
 
         if (m_isMagnified && cameraComp != nullptr)
@@ -147,6 +121,34 @@ namespace HEIN
         }
 
         m_actorManager.UpdateAll(deltaTime);
+
+        D3D11_VIEWPORT sceneVp = m_debugUI.GetSceneViewport(gameContext);
+        DebugUIManager::SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+
+        if (cameraComp != nullptr)
+        {
+            float aspectRatio = (sceneVp.Height > 0.0f) ? (sceneVp.Width / sceneVp.Height) : 1.777f;
+            if (!gameContext.isGameViewFocused)
+            {
+                DirectX::Mouse::Get().SetMode(DirectX::Mouse::MODE_ABSOLUTE);
+            }
+
+            m_projMatrix = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
+                cameraComp->GetFov(),
+                aspectRatio,
+                0.1f,
+                5000.0f
+            );
+        }
+
+        m_debugUI.Update(gameContext, mainActorManager, GetViewMatrix(), m_projMatrix, cameraComp);
+        m_isMagnified = (m_debugUI.GetViewportLayout() != EditorViewportLayout::GameViewOnly);
+        D3D11_VIEWPORT gameVp = m_debugUI.GetGameViewport(gameContext);
+        const_cast<GameContext&>(gameContext).gameViewport = gameVp;
+        UIButtonComponent::SetActiveUIViewport(gameVp);
+        const_cast<GameContext&>(gameContext).viewportLayout = m_debugUI.GetViewportLayout();
+        const_cast<GameContext&>(gameContext).showUI = m_debugUI.IsShowUIEnabled();
+        const_cast<GameContext&>(gameContext).showColliders = m_isMagnified && m_debugUI.IsShowCollidersEnabled();
     }
 
     void DebugDisplayController::Render(
@@ -254,6 +256,8 @@ namespace HEIN
             m_sceneRenderTarget.End(context);
         };
 
+        DirectX::SimpleMath::Matrix gameProj = DirectX::SimpleMath::Matrix::Identity;
+
         // Helper: Render Game View pass (Main Camera + Game HUD + Scene Transitions, NO Colliders/Gizmos)
         auto RenderGameViewPass = [&](const D3D11_VIEWPORT& vp)
         {
@@ -266,7 +270,7 @@ namespace HEIN
 
             float aspectRatio = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : 1.777f;
             float fov = (gameContext.mainCamera != nullptr) ? gameContext.mainCamera->GetFov() : (DirectX::XM_PI / 4.0f);
-            DirectX::SimpleMath::Matrix gameProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(fov, aspectRatio, 0.1f, 5000.0f);
+            gameProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(fov, aspectRatio, 0.1f, 5000.0f);
 
             bool isTransitioning = (gameContext.sceneManager && gameContext.sceneManager->IsTransitioning() && gameContext.sceneManager->GetTransitionAlpha() > 0.05f);
             bool isTransitionPaused = (gameContext.sceneManager && gameContext.sceneManager->IsTransitionPaused());
@@ -374,16 +378,24 @@ namespace HEIN
         ID3D11SamplerState* nullSampler = nullptr;
         context->PSSetSamplers(1, 1, &nullSampler);
 
+        if (gameProj == DirectX::SimpleMath::Matrix::Identity)
+        {
+            D3D11_VIEWPORT gameVp = m_debugUI.GetGameViewport(gameContext);
+            float aspectRatio = (gameVp.Height > 0.0f) ? (gameVp.Width / gameVp.Height) : 1.777f;
+            float fov = (gameContext.mainCamera != nullptr) ? gameContext.mainCamera->GetFov() : (DirectX::XM_PI / 4.0f);
+            gameProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(fov, aspectRatio, 0.1f, 5000.0f);
+        }
+
         // Draw Editor UI
         ImGuizmo::BeginFrame();
-        if (layout == EditorViewportLayout::GameViewOnly)
-        {
-            m_currentAction = m_debugUI.Draw(gameContext, actorManager, mainView, mainProj);
-        }
-        else
-        {
-            m_currentAction = m_debugUI.Draw(gameContext, actorManager, debugView, m_projMatrix);
-        }
+        m_currentAction = m_debugUI.Draw(
+            gameContext,
+            actorManager,
+            debugView,
+            m_projMatrix,
+            mainView,
+            gameProj
+        );
         m_isMagnified = (m_debugUI.GetViewportLayout() != EditorViewportLayout::GameViewOnly);
     }
 

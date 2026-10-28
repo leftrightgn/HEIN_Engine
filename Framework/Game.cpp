@@ -130,7 +130,8 @@ void Game::Update(DX::StepTimer const& timer)
     HEIN::UIButtonComponent::SetActiveUIViewport(m_gameContext->gameViewport);
     HEIN::Messenger::GetInstance()->Update(elapsedTime);
     m_inputManager.Update(*m_gameContext);
-    if (keyboard.Escape)
+    // Escape lifecycle is handled contextually by active Scene and UI systems
+    if (!m_gameContext->isEditorApplication && keyboard.Escape && m_gameContext->sceneManager == nullptr)
     {
         ExitGame();
     }
