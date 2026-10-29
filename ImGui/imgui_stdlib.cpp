@@ -1,3 +1,8 @@
+#include "pch.h"
+#ifndef HEIN_WITH_EDITOR
+#define HEIN_WITH_EDITOR 1
+#endif
+#if HEIN_WITH_EDITOR
 // dear imgui: wrappers for C++ standard library (STL) types (std::string, etc.)
 
 // This is also an example of how you may wrap your own similar types.
@@ -98,3 +103,5 @@ bool ImGui::InputTextWithHint(const char* label, const char* hint, std::string* 
 #endif
 
 #endif // #ifndef IMGUI_DISABLE
+
+#endif // HEIN_WITH_EDITOR

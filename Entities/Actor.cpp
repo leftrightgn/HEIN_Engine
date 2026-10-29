@@ -8,7 +8,9 @@
 #include "Components/TransformComponent.h"
 #include "Factory/ComponentFactory.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 
 
 namespace HEIN
@@ -167,6 +169,7 @@ void HEIN::Actor::Start()
 	}
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::Actor::DrawInspector(GameContext& gameContext)
 {
 	HEIN::IComponent* compToRemove = nullptr;
@@ -211,6 +214,7 @@ void HEIN::Actor::DrawInspector(GameContext& gameContext)
 		RemoveComponent(compToRemove);
 	}
 }
+#endif
 
 nlohmann::json HEIN::Actor::Serialize(ActorManager* manager)
 {

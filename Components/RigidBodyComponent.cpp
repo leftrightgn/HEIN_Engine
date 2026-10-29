@@ -80,6 +80,7 @@ void HEIN::RigidBodyComponent::Deserialize(const nlohmann::json& data)
 	if (data.contains("AllowDistanceCulling")) m_allowDistanceCulling = data["AllowDistanceCulling"];
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	if (ImGui::CollapsingHeader("RigidBodyComponent", ImGuiTreeNodeFlags_DefaultOpen))
@@ -97,6 +98,9 @@ void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 		}
 	}
 }
+#else
+void HEIN::RigidBodyComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 
 } // namespace HEIN

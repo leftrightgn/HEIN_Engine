@@ -1,5 +1,7 @@
 #pragma once
 #include "BehaviourTree/BTNode.h"
+#include <vector>
+#include <memory>
 
 
 namespace HEIN
@@ -36,5 +38,43 @@ namespace HEIN
 			HEIN::ActorID targetID,
 			float deltaTime
 		) override;
+
+		/**
+		 * @brief Propagates abort to the actively running child, triggers OnExit, and resets child index.
+		 */
+		void Abort(
+			HEIN::Actor* self,
+			HEIN::ActorManager* manager,
+			HEIN::ActorID targetID
+		) override;
+
+		/**
+		 * @brief Recursively resets all children and resets child index to zero.
+		 */
+		void Reset() override;
+
+		/**
+		 * @brief Resets current child index on entry.
+		 */
+		void OnEnter(
+			HEIN::Actor* self,
+			HEIN::ActorManager* manager,
+			HEIN::ActorID targetID
+		) override;
+
+		/**
+		 * @brief Resets current child index on exit.
+		 */
+		void OnExit(
+			HEIN::Actor* self,
+			HEIN::ActorManager* manager,
+			HEIN::ActorID targetID
+		) override;
+
+		std::string GetNodeName() const override { return "Sequence"; }
+		std::string GetNodeDetails() const override { return "Sequential (AND): All Must Succeed"; }
+		size_t GetChildCount() const override { return m_children.size(); }
+		const BTNode* GetChild(size_t index) const override { return (index < m_children.size()) ? m_children[index].get() : nullptr; }
+		size_t GetCurrentChildIndex() const { return m_currentChildIndex; }
 	};
 }

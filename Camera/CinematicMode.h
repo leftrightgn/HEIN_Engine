@@ -74,6 +74,7 @@ namespace HEIN
 		void Update(CameraData& outData, float deltaTime, ICameraController& controller) override;
 
 		CameraType GetType() const override { return CameraType::Cinematic; }
+		bool RequiresRelativeMouse() const override { return true; }
 
 		// Track Management API
 		size_t GetTrackCount() const { return m_tracks.size(); }

@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "FogComponent.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 
 
 namespace HEIN
@@ -37,6 +39,7 @@ namespace HEIN
 			);
 		}
 	}
+#if HEIN_WITH_EDITOR
 
 	void FogComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 	{
@@ -47,4 +50,7 @@ namespace HEIN
 			ImGui::ColorEdit4("Fog Color", &m_fogColor.x);
 		}
 	}
+#else
+void FogComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 }

@@ -1,4 +1,6 @@
 #include "pch.h"
+#if HEIN_WITH_EDITOR
+#include "pch.h"
 #include "Framework/GameContext.h"
 #include "Common/InputManager.h"
 #include "System/ShadowSystem.h"
@@ -73,57 +75,118 @@ namespace HEIN
 
         const float deltaTime = static_cast<float>(gameContext.timer.GetElapsedSeconds());
 
-        if (m_isMagnified && cameraComp != nullptr)
+        bool hasSceneView = (m_debugUI.GetSceneContentSize().x > 10.0f && m_debugUI.GetSceneContentSize().y > 10.0f) ||
+                            (m_debugUI.GetViewportLayout() != EditorViewportLayout::GameViewOnly);
+
+        if (hasSceneView && cameraComp != nullptr)
         {
             CameraInputState debugInput;
 
-            std::pair<int, int> mouseDelta = gameContext.inputManager->GetMouseDelta();
-            bool isHeld = gameContext.inputManager->IsDebugDrugHeld(gameContext) || 
-                          gameContext.mouseState.rightButton || 
-                          gameContext.mouseState.middleButton;
+            ImGuiIO& io = ImGui::GetIO();
+            const ImVec2& scenePos = m_debugUI.GetSceneContentPos();
+            const ImVec2& sceneSize = m_debugUI.GetSceneContentSize();
 
-            bool isUICapturingMouse = ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
-            if (isUICapturingMouse)
+            bool isMouseInScene = (sceneSize.x > 10.0f && sceneSize.y > 10.0f &&
+                                   io.MousePos.x >= scenePos.x && io.MousePos.x <= scenePos.x + sceneSize.x &&
+                                   io.MousePos.y >= scenePos.y && io.MousePos.y <= scenePos.y + sceneSize.y);
+            bool isSceneHovered = isMouseInScene || m_debugUI.IsSceneViewHovered();
+            bool isGizmoActive = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+
+            bool isRightDown  = gameContext.mouseState.rightButton || io.MouseDown[ImGuiMouseButton_Right];
+            bool isMiddleDown = gameContext.mouseState.middleButton || io.MouseDown[ImGuiMouseButton_Middle];
+            bool isCameraNavDown = isRightDown || isMiddleDown;
+
+            // Track drag lifecycle: initiates when pressing inside Scene View and not on a gizmo
+            if (isGizmoActive)
             {
-                isHeld = false;
-                mouseDelta = { 0, 0 };
+                m_isSceneCameraDragging = false;
             }
-            // -------------------------------
-
-            if (isHeld)
+            else if (isCameraNavDown)
             {
-                m_virtualMouseX += static_cast<float>(mouseDelta.first);
-                m_virtualMouseY += static_cast<float>(mouseDelta.second);
+                if (!m_isSceneCameraDragging && isSceneHovered)
+                {
+                    m_isSceneCameraDragging = true;
+                }
+            }
+            else
+            {
+                m_isSceneCameraDragging = false;
+            }
+
+            // Sub-pixel smooth mouse delta from ImGui (valid across all viewports/monitors)
+            float deltaX = io.MouseDelta.x;
+            float deltaY = io.MouseDelta.y;
+
+            if (m_isSceneCameraDragging)
+            {
+                m_virtualMouseX += deltaX;
+                m_virtualMouseY += deltaY;
             }
 
             debugInput.mouseX = m_virtualMouseX;
             debugInput.mouseY = m_virtualMouseY;
-            bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift;
+            debugInput.isLeftMouseDown = false;
+            debugInput.isRightMouseDown = m_isSceneCameraDragging && isRightDown;
+            debugInput.isMiddleMouseDown = m_isSceneCameraDragging && isMiddleDown;
 
-            if (ImGui::GetIO().WantCaptureKeyboard)
+            // Scroll wheel handling:
+            debugInput.scrollWheelDelta = static_cast<float>(gameContext.mouseState.scrollWheelValue);
+            if (io.MouseWheel != 0.0f && (isSceneHovered || m_isSceneCameraDragging))
             {
-                debugInput.movementIntent = DirectX::SimpleMath::Vector3(0.0f, 0.0f, 0.0f);
+                m_lastVirtualScroll += io.MouseWheel * 120.0f;
+                debugInput.scrollWheelDelta = m_lastVirtualScroll;
+            }
+            debugInput.ignoreScroll = !(isSceneHovered || m_isSceneCameraDragging) || isGizmoActive;
+
+            // Keyboard navigation (WASD, QE, Arrows):
+            bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift || io.KeyShift;
+            bool isTypingText = io.WantTextInput;
+            bool isSceneActive = m_isSceneCameraDragging || m_debugUI.IsSceneViewFocused() || isSceneHovered;
+
+            if (isSceneActive && !isTypingText)
+            {
+                DirectX::SimpleMath::Vector3 intent = gameContext.inputManager->GetDebugMoveIntent(gameContext);
+                if (intent == DirectX::SimpleMath::Vector3::Zero)
+                {
+                    if (ImGui::IsKeyDown(ImGuiKey_W)) intent.z -= 1.0f;
+                    if (ImGui::IsKeyDown(ImGuiKey_S)) intent.z += 1.0f;
+                    if (ImGui::IsKeyDown(ImGuiKey_A)) intent.x -= 1.0f;
+                    if (ImGui::IsKeyDown(ImGuiKey_D)) intent.x += 1.0f;
+                    if (ImGui::IsKeyDown(ImGuiKey_E) || ImGui::IsKeyDown(ImGuiKey_UpArrow)) intent.y += 1.0f;
+                    if (ImGui::IsKeyDown(ImGuiKey_Q) || ImGui::IsKeyDown(ImGuiKey_DownArrow)) intent.y -= 1.0f;
+                }
+
+                if (isShiftHeld)
+                {
+                    intent *= 2.5f; // Fast fly speed with Shift held
+                }
+                debugInput.movementIntent = intent;
+                debugInput.ignoreMovement = false;
             }
             else
             {
-                debugInput.movementIntent = gameContext.inputManager->GetDebugMoveIntent(gameContext);
-                if (isShiftHeld)
-                {
-                    debugInput.movementIntent *= 2.5f; // Fast move with shift held
-                }
+                debugInput.movementIntent = DirectX::SimpleMath::Vector3::Zero;
+                debugInput.ignoreMovement = true;
             }
-            debugInput.isLeftMouseDown = isHeld;
-            debugInput.scrollWheelDelta = static_cast<float>(gameContext.mouseState.scrollWheelValue);
-            debugInput.ignoreScroll = isUICapturingMouse;
-            debugInput.ignoreMovement = ImGui::GetIO().WantCaptureKeyboard;
 
             cameraComp->ProcessInput(debugInput);
         }
 
         m_actorManager.UpdateAll(deltaTime);
 
+        ImGuiViewport* mainVp = ImGui::GetMainViewport();
+        ImVec2 mainPos = mainVp ? mainVp->Pos : ImVec2(0.0f, 0.0f);
         D3D11_VIEWPORT sceneVp = m_debugUI.GetSceneViewport(gameContext);
-        DebugUIManager::SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+        const ImVec2& sceneContentSize = m_debugUI.GetSceneContentSize();
+        if (sceneContentSize.x > 10.0f && sceneContentSize.y > 10.0f)
+        {
+            const ImVec2& sceneContentPos = m_debugUI.GetSceneContentPos();
+            DebugUIManager::SetActiveViewportRect(sceneContentPos.x, sceneContentPos.y, sceneContentSize.x, sceneContentSize.y);
+        }
+        else
+        {
+            DebugUIManager::SetActiveViewportRect(mainPos.x + sceneVp.TopLeftX, mainPos.y + sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+        }
 
         if (cameraComp != nullptr)
         {
@@ -148,7 +211,7 @@ namespace HEIN
         UIButtonComponent::SetActiveUIViewport(gameVp);
         const_cast<GameContext&>(gameContext).viewportLayout = m_debugUI.GetViewportLayout();
         const_cast<GameContext&>(gameContext).showUI = m_debugUI.IsShowUIEnabled();
-        const_cast<GameContext&>(gameContext).showColliders = m_isMagnified && m_debugUI.IsShowCollidersEnabled();
+        const_cast<GameContext&>(gameContext).showColliders = m_debugUI.IsShowCollidersEnabled();
     }
 
     void DebugDisplayController::Render(
@@ -196,7 +259,9 @@ namespace HEIN
         // Helper: Render Scene View pass (Debug Camera + Colliders + Frustums, NO Game HUD)
         auto RenderSceneViewPass = [&](const D3D11_VIEWPORT& vp)
         {
-            DebugUIManager::SetActiveViewportRect(vp.TopLeftX, vp.TopLeftY, vp.Width, vp.Height);
+            ImGuiViewport* mainVp = ImGui::GetMainViewport();
+            ImVec2 mainPos = mainVp ? mainVp->Pos : ImVec2(0.0f, 0.0f);
+            // Viewport rect is tracked and managed exclusively by DebugUIManager during Scene View rendering
             ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
             int targetW = std::max(1, static_cast<int>(vp.Width));
             int targetH = std::max(1, static_cast<int>(vp.Height));
@@ -331,39 +396,21 @@ namespace HEIN
             m_gameRenderTarget.End(context);
         };
 
-        // Execute Viewport Layout Passes
-        if (layout == EditorViewportLayout::SceneViewOnly)
+        // Execute Viewport Layout Passes (Dockable Multi-Viewport Graph)
+        D3D11_VIEWPORT sceneVp = m_debugUI.GetSceneViewport(gameContext);
+        D3D11_VIEWPORT gameVp  = m_debugUI.GetGameViewport(gameContext);
+
+        bool shouldRenderScene = (layout != EditorViewportLayout::GameViewOnly) ||
+                                 (m_debugUI.GetSceneContentSize().x > 10.0f && m_debugUI.GetSceneContentSize().y > 10.0f);
+        bool shouldRenderGame  = (layout != EditorViewportLayout::SceneViewOnly) ||
+                                 (m_debugUI.GetGameContentSize().x > 10.0f && m_debugUI.GetGameContentSize().y > 10.0f);
+
+        if (shouldRenderScene)
         {
-            D3D11_VIEWPORT sceneVp = m_debugUI.GetSceneViewport(gameContext);
             RenderSceneViewPass(sceneVp);
-
-            // Optional PiP Preview (disabled by default)
-            if (m_debugUI.IsViewportPreviewEnabled() && m_debugUI.IsViewportVisibleInUI())
-            {
-                D3D11_VIEWPORT camPreviewViewport;
-                camPreviewViewport.TopLeftX = m_debugUI.GetViewportPos().x;
-                camPreviewViewport.TopLeftY = m_debugUI.GetViewportPos().y;
-                camPreviewViewport.Width = m_debugUI.GetViewportSize().x;
-                camPreviewViewport.Height = m_debugUI.GetViewportSize().y;
-                camPreviewViewport.MinDepth = 0.0f;
-                camPreviewViewport.MaxDepth = 1.0f;
-                RenderGameViewPass(camPreviewViewport);
-            }
         }
-        else if (layout == EditorViewportLayout::GameViewOnly)
+        if (shouldRenderGame)
         {
-            D3D11_VIEWPORT gameVp = m_debugUI.GetGameViewport(gameContext);
-            RenderGameViewPass(gameVp);
-        }
-        else if (layout == EditorViewportLayout::SplitSideBySide)
-        {
-            D3D11_VIEWPORT sceneVp = m_debugUI.GetSceneViewport(gameContext);
-            D3D11_VIEWPORT gameVp = m_debugUI.GetGameViewport(gameContext);
-
-            // Left half: Scene View
-            RenderSceneViewPass(sceneVp);
-
-            // Right half: Game View
             RenderGameViewPass(gameVp);
         }
 
@@ -380,7 +427,7 @@ namespace HEIN
 
         if (gameProj == DirectX::SimpleMath::Matrix::Identity)
         {
-            D3D11_VIEWPORT gameVp = m_debugUI.GetGameViewport(gameContext);
+            gameVp = m_debugUI.GetGameViewport(gameContext);
             float aspectRatio = (gameVp.Height > 0.0f) ? (gameVp.Width / gameVp.Height) : 1.777f;
             float fov = (gameContext.mainCamera != nullptr) ? gameContext.mainCamera->GetFov() : (DirectX::XM_PI / 4.0f);
             gameProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(fov, aspectRatio, 0.1f, 5000.0f);
@@ -429,3 +476,5 @@ namespace HEIN
 
 
 }
+
+#endif

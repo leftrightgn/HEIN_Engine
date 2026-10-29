@@ -2,7 +2,9 @@
 #include "MeshColliderComponent.h"
 #include "DebugingTools/EditorUtils.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include <fstream>
 #include <sstream>
 
@@ -297,6 +299,7 @@ void HEIN::MeshColliderComponent::Deserialize(const nlohmann::json& data)
         }
     }
 }
+#if HEIN_WITH_EDITOR
 
 void HEIN::MeshColliderComponent::OnInspectorGUI(GameContext& gameContext)
 {
@@ -342,6 +345,9 @@ void HEIN::MeshColliderComponent::OnInspectorGUI(GameContext& gameContext)
         }
     }
 }
+#else
+void HEIN::MeshColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 bool HEIN::MeshColliderComponent::IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const
 {

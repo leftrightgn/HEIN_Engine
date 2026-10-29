@@ -2,8 +2,10 @@
 #include "Framework/GameContext.h"
 #include "Entities/Actor.h"
 #include "Scene/SceneManager.h"
+#if HEIN_WITH_EDITOR
 #include <ImGui/imgui.h>
 #include <ImGui/ImGuizmo.h>
+#endif
 
 namespace HEIN
 {
@@ -45,6 +47,7 @@ namespace HEIN
 	 * to author, inspect, and modify the game world in real-time before saving the state 
 	 * out to the JSON serialization pipeline.
 	 */
+	#if HEIN_WITH_EDITOR
 	class DebugUIManager
 	{
 	private:
@@ -66,10 +69,25 @@ namespace HEIN
 		DirectX::SimpleMath::Vector2 m_viewportPos = DirectX::SimpleMath::Vector2(0.0f, 0.0f);
 		DirectX::SimpleMath::Vector2 m_viewportSize = DirectX::SimpleMath::Vector2(400.0f, 225.0f);
 		bool m_isViewportVisibleInUI = false;
+		float m_hierarchyWidth = 0.0f;
 		float m_inspectorWidth = 0.0f;
 		float m_toolbarHeight = 88.0f;
+		bool m_isHierarchyFloating = false;
+		bool m_isInspectorFloating = false;
+		bool m_isToolBarFloating = false;
+		bool m_resetLayoutRequested = false;
 		ID3D11ShaderResourceView* m_sceneSRV = nullptr;
 		ID3D11ShaderResourceView* m_gameSRV = nullptr;
+		HEIN::CameraController* m_debugCameraController = nullptr;
+
+		ImVec2 m_sceneContentSize = ImVec2(1280.0f, 720.0f);
+		ImVec2 m_sceneContentPos = ImVec2(0.0f, 0.0f);
+		ImVec2 m_gameContentSize = ImVec2(1280.0f, 720.0f);
+		ImVec2 m_gameContentPos = ImVec2(0.0f, 0.0f);
+		bool m_isSceneViewHovered = false;
+		bool m_isGameViewHovered = false;
+		bool m_isSceneViewFocused = false;
+		bool m_isGameViewFocused = false;
 
 		// Right Panel Mode (Inspector vs Scene Transition)
 		RightPanelMode m_rightPanelMode = RightPanelMode::Inspector;
@@ -118,6 +136,17 @@ namespace HEIN
 		bool IsShowCollidersEnabled() const { return m_showColliders; }
 		void SetShowCollidersEnabled(bool enabled) { m_showColliders = enabled; }
 
+		void RequestResetLayout() { m_resetLayoutRequested = true; }
+
+		ImVec2 GetSceneContentSize() const { return m_sceneContentSize; }
+		ImVec2 GetSceneContentPos() const { return m_sceneContentPos; }
+		ImVec2 GetGameContentSize() const { return m_gameContentSize; }
+		ImVec2 GetGameContentPos() const { return m_gameContentPos; }
+		bool IsSceneViewHovered() const { return m_isSceneViewHovered; }
+		bool IsGameViewHovered() const { return m_isGameViewHovered; }
+		bool IsSceneViewFocused() const { return m_isSceneViewFocused; }
+		bool IsGameViewFocused() const { return m_isGameViewFocused; }
+
 		bool IsShowUIEnabled() const { return m_showUI; }
 		void SetShowUIEnabled(bool enabled) { m_showUI = enabled; }
 
@@ -128,6 +157,7 @@ namespace HEIN
 		void SetSelectedActor(HEIN::Actor* actor) { SelectActor(actor); }
 		HEIN::Actor* GetSelectedActor() const { return m_selectedActor; }
 
+		void FocusOnActor(HEIN::Actor* actor);
 		void SelectActor(HEIN::Actor* actor);
 		void DrawActorTreeNode(
 			HEIN::Actor* actor,
@@ -163,4 +193,35 @@ namespace HEIN
 			const DirectX::SimpleMath::Matrix& gameProj
 		);
 	};
+#else
+	inline IGizmoEditable* g_ActiveGizmoTarget = nullptr;
+
+	class DebugUIManager
+	{
+	public:
+		DebugUIManager() = default;
+		~DebugUIManager() = default;
+		static void GetActiveViewportRect(float& outX, float& outY, float& outW, float& outH) noexcept
+		{
+			outX = 0.0f; outY = 0.0f; outW = 0.0f; outH = 0.0f;
+		}
+		static void SetActiveViewportRect(float, float, float, float) noexcept {}
+
+		D3D11_VIEWPORT GetGameViewport(GameContext& gc) const { return gc.deviceResources.GetScreenViewport(); }
+		D3D11_VIEWPORT GetSceneViewport(GameContext& gc) const { return gc.deviceResources.GetScreenViewport(); }
+		bool IsShowUIEnabled() const { return true; }
+		void SetShowUIEnabled(bool) {}
+		EditorViewportLayout GetViewportLayout() const { return EditorViewportLayout::GameViewOnly; }
+		void SetViewportLayout(EditorViewportLayout) {}
+		void SetSelectedActor(HEIN::Actor*) {}
+		HEIN::Actor* GetSelectedActor() const { return nullptr; }
+		bool IsGameViewHovered() const { return true; }
+		bool IsSceneViewHovered() const { return false; }
+		DirectX::SimpleMath::Vector2 GetViewportPos() const { return DirectX::SimpleMath::Vector2::Zero; }
+		DirectX::SimpleMath::Vector2 GetViewportSize() const { return DirectX::SimpleMath::Vector2::Zero; }
+		bool IsViewportVisibleInUI() const { return false; }
+		RightPanelMode GetRightPanelMode() const { return RightPanelMode::Inspector; }
+		void SetRightPanelMode(RightPanelMode) {}
+	};
+#endif
 }

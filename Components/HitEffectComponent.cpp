@@ -3,7 +3,9 @@
 #include "Components/TransformComponent.h"
 #include "Effect/ReadData.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include <algorithm>
 #include <cmath>
 #include <d3dcompiler.h>
@@ -723,6 +725,7 @@ namespace HEIN
 		context->OMSetDepthStencilState(gameContext.commonStates.DepthDefault(), 0);
 		context->OMSetBlendState(gameContext.commonStates.Opaque(), nullptr, 0xFFFFFFFF);
 	}
+#if HEIN_WITH_EDITOR
 
 	void HitEffectComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 	{
@@ -810,6 +813,9 @@ namespace HEIN
 			}
 		}
 	}
+#else
+void HitEffectComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 	nlohmann::json HitEffectComponent::Serialize()
 	{

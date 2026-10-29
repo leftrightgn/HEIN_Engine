@@ -1,3 +1,8 @@
+#include "pch.h"
+#ifndef HEIN_WITH_EDITOR
+#define HEIN_WITH_EDITOR 1
+#endif
+#if HEIN_WITH_EDITOR
 // https://github.com/CedricGuillemet/ImGuizmo
 // v1.92.5 WIP
 //
@@ -2758,7 +2763,7 @@ namespace IMGUIZMO_NAMESPACE
       // behind camera
       vec_t camSpacePosition;
       camSpacePosition.TransformPoint(makeVect(0.f, 0.f, 0.f), gContext.mMVP);
-      if (!gContext.mIsOrthographic && (camSpacePosition.w <= 0.001f || camSpacePosition.z < 0.001f) && !gContext.mbUsing)
+      if (!gContext.mIsOrthographic && camSpacePosition.w <= 0.1f && !gContext.mbUsing)
       {
          gContext.mDrawList->PopClipRect();
          return false;
@@ -3434,3 +3439,5 @@ namespace IMGUIZMO_NAMESPACE
       ComputeContext(svgView.m16, svgProjection.m16, gContext.mModelSource.m16, gContext.mMode);
    }
 };
+
+#endif // HEIN_WITH_EDITOR

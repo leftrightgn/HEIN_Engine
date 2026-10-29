@@ -165,6 +165,7 @@ void HEIN::BoneLinkComponent::Deserialize(const nlohmann::json& data)
     }
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	if (m_targetModel == nullptr && m_targetStaticModel == nullptr)
@@ -209,6 +210,9 @@ void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 		}
 	}
 }
+#else
+void HEIN::BoneLinkComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 
 

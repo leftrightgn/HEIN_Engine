@@ -12,7 +12,9 @@
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include "Message/Messenger.h"
 #include <algorithm>
 #include <cmath>
@@ -827,6 +829,7 @@ namespace HEIN
 		if (data.contains("EnablePhase2Boost"))    m_enablePhase2Boost = data["EnablePhase2Boost"];
 		if (data.contains("ShowDebugBladeLine"))   m_showDebugBladeLine = data["ShowDebugBladeLine"];
 	}
+#if HEIN_WITH_EDITOR
 
 	void WeaponTrailComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 	{
@@ -924,4 +927,7 @@ namespace HEIN
 			ImGui::Checkbox("Boss Phase 2 Ember Boost (<= 50% HP)", &m_enablePhase2Boost);
 		}
 	}
+#else
+void WeaponTrailComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 }

@@ -4,9 +4,13 @@
 #include "Components/TransformComponent.h"
 #include "DebugingTools/DebugUIManager.h"
 #include "Entities/Actor.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_stdlib.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/ImGuizmo.h"
+#endif
+#endif
 #include <algorithm>
 #include <fstream>
 
@@ -121,11 +125,16 @@ void AnimationEditorComponent::ApplyEditorPoseToModel()
 // ------------------------------------------------------------------------------
 // ImGui Interface
 // ------------------------------------------------------------------------------
+#if HEIN_WITH_EDITOR
 void AnimationEditorComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     ImGui::TextDisabled("Use the ANIMATOR window in the toolbar to edit animations.");
 }
+#else
+void AnimationEditorComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
+#if HEIN_WITH_EDITOR
 void AnimationEditorComponent::DrawAnimatorWindow(GameContext& /*gameContext*/)
 {
     ImGui::Checkbox("Enable Animation Editing Mode", &m_isEditorActive);
@@ -204,6 +213,20 @@ void AnimationEditorComponent::DrawGizmo(
     // Query bone world-space transformation matrix
     DirectX::SimpleMath::Matrix boneWorld = m_targetModel->GetBoneWorldMatrix(m_selectedBoneIndex, actorWorld);
 
+    bool isPerspective = (std::abs(proj.m[3][3]) < 1e-4f);
+    if (isPerspective)
+    {
+        DirectX::SimpleMath::Vector3 boneWorldPos = boneWorld.Translation();
+        DirectX::SimpleMath::Vector4 clipPos = DirectX::SimpleMath::Vector4::Transform(
+            DirectX::SimpleMath::Vector4(boneWorldPos.x, boneWorldPos.y, boneWorldPos.z, 1.0f),
+            view * proj
+        );
+        if (clipPos.w <= 0.1f && !ImGuizmo::IsUsing())
+        {
+            return;
+        }
+    }
+
     ImGuizmo::PushID(999);
     ImGuizmo::Manipulate(
         (float*)&view.m[0][0], 
@@ -248,6 +271,10 @@ void AnimationEditorComponent::DrawGizmo(
     }
     ImGuizmo::PopID();
 }
+#else
+void AnimationEditorComponent::DrawAnimatorWindow(GameContext& /*gameContext*/) {}
+void AnimationEditorComponent::DrawGizmo(const DirectX::SimpleMath::Matrix&, const DirectX::SimpleMath::Matrix&, int, int) {}
+#endif
 
 // ------------------------------------------------------------------------------
 // Keyframe Recording Logic

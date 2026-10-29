@@ -32,6 +32,7 @@ HEIN::TransformComponent::TransformComponent(Actor* owner)
 
 
 
+#if HEIN_WITH_EDITOR
 void HEIN::TransformComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 
 {
@@ -109,9 +110,11 @@ void HEIN::TransformComponent::OnInspectorGUI(GameContext& /*gameContext*/)
     }
 
 }
+#else
+void HEIN::TransformComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
-
-
+#if HEIN_WITH_EDITOR
 void HEIN::TransformComponent::DrawGizmo(
 
     const DirectX::SimpleMath::Matrix& view, 
@@ -141,6 +144,20 @@ void HEIN::TransformComponent::DrawGizmo(
 
 
     DirectX::SimpleMath::Matrix worldMat = GetWorldMatrix();
+
+    bool isPerspective = (std::abs(proj.m[3][3]) < 1e-4f);
+    if (isPerspective)
+    {
+        DirectX::SimpleMath::Vector3 worldPos = worldMat.Translation();
+        DirectX::SimpleMath::Vector4 clipPos = DirectX::SimpleMath::Vector4::Transform(
+            DirectX::SimpleMath::Vector4(worldPos.x, worldPos.y, worldPos.z, 1.0f),
+            view * proj
+        );
+        if (clipPos.w <= 0.1f && !ImGuizmo::IsUsing())
+        {
+            return;
+        }
+    }
 
     // Use the operation/mode passed in from the UI manager
     ImGuizmo::Manipulate(
@@ -200,6 +217,9 @@ void HEIN::TransformComponent::DrawGizmo(
     }
 
 }
+#else
+void HEIN::TransformComponent::DrawGizmo(const DirectX::SimpleMath::Matrix&, const DirectX::SimpleMath::Matrix&, int, int) {}
+#endif
 
 
 

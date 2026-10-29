@@ -87,7 +87,11 @@ namespace HEIN
 
 		void Start();
 
+		#if HEIN_WITH_EDITOR
 		void DrawInspector(GameContext& gameContext);
+#else
+		inline void DrawInspector(GameContext&) noexcept {}
+#endif
 
 		nlohmann::json Serialize(ActorManager* manager = nullptr);
 		void Deserialize(const nlohmann::json& actorData, ActorManager* manager = nullptr);

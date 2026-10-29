@@ -14,8 +14,10 @@
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_stdlib.h"
+#endif
 #include <d3dcompiler.h>
 #include <filesystem>
 #include <string>
@@ -1131,6 +1133,7 @@ DirectX::BoundingSphere HEIN::StaticModelComponent::GetBoundingSphere() const
     return totalSphere;
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::StaticModelComponent::OnInspectorGUI(GameContext& gameContext)
 {
     if (ImGui::CollapsingHeader("Static Model Component", ImGuiTreeNodeFlags_DefaultOpen))
@@ -1193,6 +1196,9 @@ void HEIN::StaticModelComponent::OnInspectorGUI(GameContext& gameContext)
         Initialize(gameContext, m_modelPath.c_str(), m_textureDir.empty() ? nullptr : m_textureDir.c_str());
     }
 }
+#else
+void HEIN::StaticModelComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 nlohmann::json HEIN::StaticModelComponent::Serialize()
 {

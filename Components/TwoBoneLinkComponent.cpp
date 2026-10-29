@@ -183,6 +183,7 @@ void HEIN::TwoBoneLinkComponent::Deserialize(const nlohmann::json& data)
     }
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::TwoBoneLinkComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	if (m_targetModel == nullptr && m_targetStaticModel == nullptr)
@@ -238,6 +239,9 @@ void HEIN::TwoBoneLinkComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 		}
 	}
 }
+#else
+void HEIN::TwoBoneLinkComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 
 

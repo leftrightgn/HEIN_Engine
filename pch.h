@@ -4,6 +4,10 @@
 //
 
 #pragma once
+
+#ifndef HEIN_WITH_EDITOR
+#define HEIN_WITH_EDITOR 1
+#endif
 #pragma warning(disable : 4244)
 
 #include <winsdkver.h>

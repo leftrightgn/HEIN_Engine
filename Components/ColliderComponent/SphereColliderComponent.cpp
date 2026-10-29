@@ -2,7 +2,9 @@
 #include "SphereColliderComponent.h"
 #include "Components/StaticModelComponent.h"
 #include "Entities/Actor.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include <DirectXColors.h>
 
 
@@ -77,6 +79,7 @@ void HEIN::SphereColliderComponent::Draw(GameContext& gameContext, const DirectX
 
     gameContext.debugCollisionRenderer->QueueSphere(m_worldSphere, debugColor);
 }
+#if HEIN_WITH_EDITOR
 
 void HEIN::SphereColliderComponent::OnInspectorGUI(GameContext& gameContext)
 {
@@ -86,6 +89,9 @@ void HEIN::SphereColliderComponent::OnInspectorGUI(GameContext& gameContext)
         ImGui::DragFloat("Radius", &m_radius, 0.05f, 0.01f, 100.0f);
     }
 }
+#else
+void HEIN::SphereColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 nlohmann::json HEIN::SphereColliderComponent::Serialize()
 {

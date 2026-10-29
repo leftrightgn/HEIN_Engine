@@ -10,7 +10,9 @@
 #include "Components/TransformComponent.h"
 #include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include <algorithm>
 #include <cmath>
 
@@ -71,6 +73,7 @@ namespace HEIN
             }
         }
     }
+#if HEIN_WITH_EDITOR
 
     void ProceduralAnimationComponent::OnInspectorGUI(GameContext& /*gameContext*/)
     {
@@ -126,6 +129,9 @@ namespace HEIN
                 ImGui::TextColored(ImVec4(1, 0, 0, 1), "Terrain/Mesh Not Linked");
         }
     }
+#else
+void ProceduralAnimationComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
     void ProceduralAnimationComponent::Start()
     {

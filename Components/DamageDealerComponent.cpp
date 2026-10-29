@@ -2,7 +2,9 @@
 #include "DamageDealerComponent.h"
 #include "Components/SocketAttachmentComponent.h"
 #include "Entities/Actor.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include "Message/Messenger.h"
 
 
@@ -128,6 +130,7 @@ void HEIN::DamageDealerComponent::Deserialize(const nlohmann::json& data)
         m_hitstopFrames = m_causesStun ? 8 : 5;
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     if (ImGui::CollapsingHeader("DamageDealerComponent", ImGuiTreeNodeFlags_DefaultOpen))
@@ -149,6 +152,9 @@ void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& /*gameContext*/)
         }
     }
 }
+#else
+void HEIN::DamageDealerComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 
 } // namespace HEIN

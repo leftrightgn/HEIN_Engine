@@ -23,6 +23,8 @@ namespace HEIN
 		float mouseY{};
 		float scrollWheelDelta{};
 		bool isLeftMouseDown = false;
+		bool isRightMouseDown = false;
+		bool isMiddleMouseDown = false;
 		DirectX::SimpleMath::Vector3 movementIntent;
 		bool ignoreScroll = false;
 		bool ignoreMovement = false;

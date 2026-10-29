@@ -3,7 +3,9 @@
 #include "Components/TransformComponent.h"
 #include "Entities/Actor.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 
 namespace HEIN
 {
@@ -39,6 +41,7 @@ namespace HEIN
         if (data.contains("SpotAngle")) m_spotAngle = data["SpotAngle"];
         if (data.contains("CastShadows")) m_castShadows = data["CastShadows"];
     }
+#if HEIN_WITH_EDITOR
 
     void LightComponent::OnInspectorGUI(GameContext& /*gameContext*/)
     {
@@ -69,6 +72,9 @@ namespace HEIN
             ImGui::Checkbox("Cast Shadows", &m_castShadows);
         }
     }
+#else
+void LightComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
     void LightComponent::Draw(GameContext& gameContext, const DirectX::SimpleMath::Matrix& /*world*/, const DirectX::SimpleMath::Matrix& view, const DirectX::SimpleMath::Matrix& proj)
     {

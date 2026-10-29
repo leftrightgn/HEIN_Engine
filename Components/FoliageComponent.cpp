@@ -13,7 +13,9 @@
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include <algorithm>
 #include <cmath>
 #include <d3dcompiler.h>
@@ -1335,33 +1337,38 @@ namespace HEIN
 		}
 	}
 
-	void FoliageComponent::HandleEditorPainting(GameContext& gameContext, TerrainComponent* terrain, const DirectX::SimpleMath::Vector3& hitPos)
-	{
-		if (!m_brushActive || terrain == nullptr) return;
-
-		bool isMouseDown = gameContext.mouseState.leftButton || ImGui::IsMouseDown(ImGuiMouseButton_Left);
-		bool isMouseCaptured = ImGui::GetIO().WantCaptureMouse;
-
-		if (isMouseDown && !isMouseCaptured)
-		{
-			if (m_paintCooldown <= 0.0f)
-			{
-				if (m_brushMode == BrushMode::Paint)
-				{
-					PaintInstances(terrain, hitPos);
-				}
-				else
-				{
-					EraseInstances(hitPos);
-				}
-				m_paintCooldown = 0.035f;
-			}
-		}
-	}
+#if HEIN_WITH_EDITOR
+	void FoliageComponent::HandleEditorPainting(GameContext& gameContext, TerrainComponent* terrain, const DirectX::SimpleMath::Vector3& hitPos)
+	{
+		if (!m_brushActive || terrain == nullptr) return;
+
+		bool isMouseDown = gameContext.mouseState.leftButton || ImGui::IsMouseDown(ImGuiMouseButton_Left);
+		bool isMouseCaptured = ImGui::GetIO().WantCaptureMouse;
+
+		if (isMouseDown && !isMouseCaptured)
+		{
+			if (m_paintCooldown <= 0.0f)
+			{
+				if (m_brushMode == BrushMode::Paint)
+				{
+					PaintInstances(terrain, hitPos);
+				}
+				else
+				{
+					EraseInstances(hitPos);
+				}
+				m_paintCooldown = 0.035f;
+			}
+		}
+	}
+#else
+	void FoliageComponent::HandleEditorPainting(GameContext&, TerrainComponent*, const DirectX::SimpleMath::Vector3&) {}
+#endif
 
 	// ==================================================================================
 	// INSPECTOR AND SERIALIZATION
 	// ==================================================================================
+#if HEIN_WITH_EDITOR
 
 	void FoliageComponent::OnInspectorGUI(GameContext& gameContext)
 	{
@@ -1640,6 +1647,9 @@ namespace HEIN
 			}
 		}
 	}
+#else
+void FoliageComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 	nlohmann::json FoliageComponent::Serialize()
 	{

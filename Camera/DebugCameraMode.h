@@ -36,6 +36,9 @@ namespace HEIN
         float m_lastMouseX;
         float m_lastMouseY;
         bool m_isDragging;
+        bool m_isPanning = false;
+        float m_lastPanMouseX = -1.0f;
+        float m_lastPanMouseY = -1.0f;
 
         float m_lastScrollValue;
         bool m_needsScrollSync;
@@ -56,6 +59,14 @@ namespace HEIN
         void Update(CameraData& outData, float deltaTime, ICameraController& controller) override;
 
         CameraType GetType() const override { return CameraType::Debug; }
-        void SetTarget(const DirectX::SimpleMath::Vector3& target) override { m_desiredTarget = target; m_isFlying = true; }
+        void SetTarget(const DirectX::SimpleMath::Vector3& target) override
+        {
+            m_desiredTarget = target;
+            m_isFlying = true;
+            if (m_distance > 35.0f || m_distance < 5.0f)
+            {
+                m_distance = 18.0f;
+            }
+        }
     };
 }

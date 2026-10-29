@@ -94,14 +94,7 @@ public:
      * @brief Configures whether the engine is running in dedicated Editor suite mode or standalone game mode.
      * @param isEditor True for dedicated editor application, false for standalone game.
      */
-    void SetEditorApplication(bool isEditor) noexcept
-    {
-        if (m_gameContext)
-        {
-            m_gameContext->isEditorApplication = isEditor;
-            m_gameContext->isEditorMode = isEditor;
-        }
-    }
+    void SetEditorApplication(bool isEditor) noexcept;
 
     /**
      * @brief Queries whether the engine is running in dedicated Editor suite mode.

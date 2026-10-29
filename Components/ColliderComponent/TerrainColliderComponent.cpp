@@ -2,7 +2,9 @@
 #include "TerrainColliderComponent.h"
 #include "Components/TransformComponent.h"
 #include "Entities/Actor.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include <cmath>
 
 namespace HEIN
@@ -21,6 +23,7 @@ namespace HEIN
 	{
 		ColliderComponent::Deserialize(data);
 	}
+#if HEIN_WITH_EDITOR
 
 	void TerrainColliderComponent::OnInspectorGUI(GameContext& gameContext)
 	{
@@ -40,6 +43,9 @@ namespace HEIN
 			}
 		}
 	}
+#else
+void TerrainColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 	void TerrainColliderComponent::Start()
 	{

@@ -63,6 +63,7 @@ DirectX::SimpleMath::Matrix HEIN::ColliderComponent::CalculateWorldMatrix()
 	return finalMatrix;
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::ColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     ImGui::PushID((void*)this);
@@ -190,7 +191,11 @@ void HEIN::ColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 
     ImGui::PopID();
 }
+#else
+void HEIN::ColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
+#if HEIN_WITH_EDITOR
 void HEIN::ColliderComponent::DrawGizmo(
     const DirectX::SimpleMath::Matrix& view, 
     const DirectX::SimpleMath::Matrix& proj,
@@ -199,13 +204,27 @@ void HEIN::ColliderComponent::DrawGizmo(
 )
 {
     ImGuizmo::SetOrthographic(false);
-    ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+    // Drawlist is configured by DebugUIManager for the active Scene View / Game View window
     float vpX = 0.0f, vpY = 0.0f, vpW = 1280.0f, vpH = 720.0f;
     HEIN::DebugUIManager::GetActiveViewportRect(vpX, vpY, vpW, vpH);
     ImGuizmo::SetRect(vpX, vpY, vpW, vpH);
     ImGuizmo::SetGizmoSizeClipSpace(0.2f);
 
     DirectX::SimpleMath::Matrix worldMat = GetCalculateWorldMatrix();
+
+    bool isPerspective = (std::abs(proj.m[3][3]) < 1e-4f);
+    if (isPerspective)
+    {
+        DirectX::SimpleMath::Vector3 worldPos = worldMat.Translation();
+        DirectX::SimpleMath::Vector4 clipPos = DirectX::SimpleMath::Vector4::Transform(
+            DirectX::SimpleMath::Vector4(worldPos.x, worldPos.y, worldPos.z, 1.0f),
+            view * proj
+        );
+        if (clipPos.w <= 0.1f && !ImGuizmo::IsUsing())
+        {
+            return;
+        }
+    }
 
     // Use the operation/mode passed in from the UI manager
     ImGuizmo::Manipulate(
@@ -258,6 +277,9 @@ void HEIN::ColliderComponent::DrawGizmo(
         }
     }
 }
+#else
+void HEIN::ColliderComponent::DrawGizmo(const DirectX::SimpleMath::Matrix&, const DirectX::SimpleMath::Matrix&, int, int) {}
+#endif
 
 nlohmann::json HEIN::ColliderComponent::Serialize()
 {

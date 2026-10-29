@@ -9,6 +9,7 @@ namespace HEIN
 {
 	class Skybox;
 
+	#if HEIN_WITH_EDITOR
 	class DebugDisplayController
 	{
 	private:
@@ -22,6 +23,8 @@ namespace HEIN
 
 		float m_virtualMouseX = 0.0f;
 		float m_virtualMouseY = 0.0f;
+		bool m_isSceneCameraDragging = false;
+		float m_lastVirtualScroll = 0.0f;
 
 		HEIN::ActorManager m_actorManager;
 
@@ -86,5 +89,30 @@ namespace HEIN
 		ID3D11ShaderResourceView* GetSceneSRV() const noexcept { return m_sceneRenderTarget.GetShaderResourceView(); }
 		ID3D11ShaderResourceView* GetGameSRV() const noexcept { return m_gameRenderTarget.GetShaderResourceView(); }
 	};
+#else
+	class DebugDisplayController
+	{
+	public:
+		DebugDisplayController() = default;
+		~DebugDisplayController() = default;
+		void Initialize() {}
+		void Update(const GameContext&, HEIN::ActorManager&) {}
+		void Render(GameContext&, HEIN::ActorManager&, Skybox*, DirectX::SimpleMath::Matrix, DirectX::SimpleMath::Matrix) {}
+		bool isMagnified() { return false; }
+		bool isVisible() { return false; }
+		const DirectX::SimpleMath::Matrix GetViewMatrix() const { return DirectX::SimpleMath::Matrix::Identity; }
+		const DirectX::SimpleMath::Matrix GetProjMatrix() const { return DirectX::SimpleMath::Matrix::Identity; }
+		void SetDebugTargets(HEIN::ActorID = HEIN::INVALID_ACTOR_ID, HEIN::ActorID = HEIN::INVALID_ACTOR_ID, HEIN::ActorID = HEIN::INVALID_ACTOR_ID, HEIN::ActorID = HEIN::INVALID_ACTOR_ID, HEIN::ActorID = HEIN::INVALID_ACTOR_ID) {}
+		EditorAction GetUIAction() const { return EditorAction::None; }
+		DebugUIManager& GetDebugUI() { static DebugUIManager dummy; return dummy; }
+		const DebugUIManager& GetDebugUI() const { static DebugUIManager dummy; return dummy; }
+		bool IsShowUIEnabled() const { return true; }
+		void SetShowUIEnabled(bool) {}
+		RightPanelMode GetRightPanelMode() const { return RightPanelMode::Inspector; }
+		void SetRightPanelMode(RightPanelMode) {}
+		EditorViewportLayout GetViewportLayout() const { return EditorViewportLayout::GameViewOnly; }
+		void SetViewportLayout(EditorViewportLayout) {}
+	};
+#endif
 }
 

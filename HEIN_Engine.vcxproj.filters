@@ -73,6 +73,9 @@
     <ClCompile Include="System\ShadowSystem.cpp">
       <Filter>System</Filter>
     </ClCompile>
+    <ClCompile Include="ImGui\imnodes.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -162,6 +165,12 @@
     </ClInclude>
     <ClInclude Include="System\ShadowSystem.h">
       <Filter>System</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imnodes.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imnodes_internal.h">
+      <Filter>ImGui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -420,6 +429,12 @@
     <ClInclude Include="DebugingTools\DebugUIManager.h">
       <Filter>DebugingTools</Filter>
     </ClInclude>
+    <ClInclude Include="DebugingTools\GenericNodeGraph.h">
+      <Filter>DebugingTools</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugingTools\GenericNodeGraphView.h">
+      <Filter>DebugingTools</Filter>
+    </ClInclude>
     <ClInclude Include="DebugingTools\IGizmoEditable.h">
       <Filter>DebugingTools</Filter>
     </ClInclude>
@@ -591,6 +606,9 @@
       <Filter>DebugingTools</Filter>
     </ClCompile>
     <ClCompile Include="DebugingTools\DebugUIManager.cpp">
+      <Filter>DebugingTools</Filter>
+    </ClCompile>
+    <ClCompile Include="DebugingTools\GenericNodeGraphView.cpp">
       <Filter>DebugingTools</Filter>
     </ClCompile>
     <ClCompile Include="DirectXTK_Utilities\Animation.cpp">

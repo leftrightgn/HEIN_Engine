@@ -40,6 +40,7 @@ void HEIN::SocketComponent::UpdateSocketOffset(
     }
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::SocketComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     bool isActive = (HEIN::g_ActiveGizmoTarget == this);
@@ -83,7 +84,11 @@ void HEIN::SocketComponent::OnInspectorGUI(GameContext& /*gameContext*/)
         }
     }
 }
+#else
+void HEIN::SocketComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
+#if HEIN_WITH_EDITOR
 void HEIN::SocketComponent::DrawGizmo(
     const DirectX::SimpleMath::Matrix& view,
     const DirectX::SimpleMath::Matrix& proj,
@@ -99,7 +104,7 @@ void HEIN::SocketComponent::DrawGizmo(
     if ((m_model == nullptr && m_staticModel == nullptr) || m_transform == nullptr) return;
 
     ImGuizmo::SetOrthographic(false);
-    ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+    // Drawlist is configured by DebugUIManager for the active Scene View / Game View window
     float vpX = 0.0f, vpY = 0.0f, vpW = 1280.0f, vpH = 720.0f;
     HEIN::DebugUIManager::GetActiveViewportRect(vpX, vpY, vpW, vpH);
     ImGuizmo::SetRect(vpX, vpY, vpW, vpH);
@@ -138,6 +143,20 @@ void HEIN::SocketComponent::DrawGizmo(
 
             // Combine them to get the Socket's true World position for the Gizmo
             DirectX::SimpleMath::Matrix socketWorld = offsetMatrix * cleanBoneMatrix;
+
+            bool isPerspective = (std::abs(proj.m[3][3]) < 1e-4f);
+            if (isPerspective)
+            {
+                DirectX::SimpleMath::Vector3 socketWorldPos = socketWorld.Translation();
+                DirectX::SimpleMath::Vector4 clipPos = DirectX::SimpleMath::Vector4::Transform(
+                    DirectX::SimpleMath::Vector4(socketWorldPos.x, socketWorldPos.y, socketWorldPos.z, 1.0f),
+                    view * proj
+                );
+                if (clipPos.w <= 0.1f && !ImGuizmo::IsUsing())
+                {
+                    continue;
+                }
+            }
 
             // Scope identifier to prevent ImGuizmo state collision across multiple sockets
             ImGuizmo::PushID(gizmoId++);
@@ -182,6 +201,9 @@ void HEIN::SocketComponent::DrawGizmo(
         }
     }
 }
+#else
+void HEIN::SocketComponent::DrawGizmo(const DirectX::SimpleMath::Matrix&, const DirectX::SimpleMath::Matrix&, int, int) {}
+#endif
 
 
 void HEIN::SocketComponent::AddSocket(const Socket& socket)

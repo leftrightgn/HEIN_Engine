@@ -3,7 +3,9 @@
 #include "Components/HealthComponent.h"
 #include "Components/TransformComponent.h"
 #include "Entities/ActorManager.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 
 
 namespace HEIN
@@ -135,6 +137,7 @@ void HEIN::TargetTrackingComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("TargetType")) m_targetTypeToFind = static_cast<ActorType>(data["TargetType"]);
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::TargetTrackingComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
     if (ImGui::CollapsingHeader("TargetTrackingComponent", ImGuiTreeNodeFlags_DefaultOpen))
@@ -148,6 +151,9 @@ void HEIN::TargetTrackingComponent::OnInspectorGUI(GameContext& /*gameContext*/)
         ImGui::Text("Distance: %.2f", m_distanceToTarget);
     }
 }
+#else
+void HEIN::TargetTrackingComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 
 } // namespace HEIN

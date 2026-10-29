@@ -4,7 +4,9 @@
 #include "Components/TransformComponent.h"
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include <cmath>
 
 
@@ -190,6 +192,7 @@ void HEIN::SlidingDoorComponent::Toggle()
 	}
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::SlidingDoorComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	ImGui::PushID((void*)this);
@@ -267,6 +270,9 @@ void HEIN::SlidingDoorComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 
 	ImGui::PopID();
 }
+#else
+void HEIN::SlidingDoorComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 nlohmann::json HEIN::SlidingDoorComponent::Serialize()
 {

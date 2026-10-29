@@ -8,9 +8,13 @@
 #include "Components/StaticModelComponent.h"
 #include "DebugingTools/DebugUIManager.h"
 #include "DebugingTools/EditorUtils.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_stdlib.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/ImGuizmo.h"
+#endif
+#endif
 
 namespace
 {
@@ -378,6 +382,7 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
         return;
     }
 
+#if HEIN_WITH_EDITOR
     // Keyboard shortcuts configured per button (empty list = mouse-only button)
     for (int key : m_submitKeys)
     {
@@ -398,12 +403,14 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
         m_hoverProgress += (targetProgress - m_hoverProgress) * std::min(1.0f, 12.0f * deltaTime);
         return;
     }
+#endif
 
     // Grab true client window cursor position
     float mouseX = 0.0f;
     float mouseY = 0.0f;
     bool hasValidMousePos = false;
 
+#if HEIN_WITH_EDITOR
     if (ImGui::IsMousePosValid(&ImGui::GetIO().MousePos))
     {
         mouseX = ImGui::GetIO().MousePos.x;
@@ -411,6 +418,7 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
         hasValidMousePos = true;
     }
     else
+#endif
     {
         HWND hwnd = GetActiveWindow();
         if (!hwnd) hwnd = GetForegroundWindow();
@@ -432,8 +440,13 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
 
     float vpX = (m_lastScaleX > 0.0001f) ? m_lastVpX : s_activeUIViewport.TopLeftX;
     float vpY = (m_lastScaleY > 0.0001f) ? m_lastVpY : s_activeUIViewport.TopLeftY;
+#if HEIN_WITH_EDITOR
     float scaleX = (m_lastScaleX > 0.0001f) ? m_lastScaleX : (s_activeUIViewport.Width > 0.0f ? s_activeUIViewport.Width / kRefWidth : (ImGui::GetIO().DisplaySize.x > 0.0f ? ImGui::GetIO().DisplaySize.x / kRefWidth : 1.0f));
     float scaleY = (m_lastScaleY > 0.0001f) ? m_lastScaleY : (s_activeUIViewport.Height > 0.0f ? s_activeUIViewport.Height / kRefHeight : (ImGui::GetIO().DisplaySize.y > 0.0f ? ImGui::GetIO().DisplaySize.y / kRefHeight : 1.0f));
+#else
+    float scaleX = (m_lastScaleX > 0.0001f) ? m_lastScaleX : (s_activeUIViewport.Width > 0.0f ? s_activeUIViewport.Width / kRefWidth : 1.0f);
+    float scaleY = (m_lastScaleY > 0.0001f) ? m_lastScaleY : (s_activeUIViewport.Height > 0.0f ? s_activeUIViewport.Height / kRefHeight : 1.0f);
+#endif
     if (scaleX <= 0.0001f) scaleX = 1.0f;
     if (scaleY <= 0.0001f) scaleY = 1.0f;
 
@@ -446,8 +459,11 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
         canvasMouseY >= m_position.y && canvasMouseY <= m_position.y + m_size.y);
 
     bool isMouseDown = mouseState.leftButton ||
-                       ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) ||
-                       ImGui::IsMouseDown(ImGuiMouseButton_Left);
+                       ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
+#if HEIN_WITH_EDITOR
+                       || ImGui::IsMouseDown(ImGuiMouseButton_Left)
+#endif
+                       ;
 
     if (isHovering)
     {
@@ -466,11 +482,13 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
             }
         }
 
+#if HEIN_WITH_EDITOR
         // Also register immediate click if triggered this frame
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             m_isClicked = true;
         }
+#endif
     }
     else
     {
@@ -704,6 +722,7 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
         }
         else
         {
+#if HEIN_WITH_EDITOR
             ImDrawList* drawList = ImGui::GetForegroundDrawList();
             if (drawList)
             {
@@ -742,6 +761,7 @@ void HEIN::UIButtonComponent::Draw(GameContext& gameContext, const DirectX::Simp
                 drawList->AddText(ImGui::GetFont(), fontSize, ImVec2(textPos.x + shadowOff, textPos.y + shadowOff), IM_COL32(0, 0, 0, static_cast<int>(activeTextColor.w * 190.0f)), m_text.c_str());
                 drawList->AddText(ImGui::GetFont(), fontSize, textPos, col, m_text.c_str());
             }
+#endif
         }
     }
 }
@@ -928,6 +948,7 @@ void HEIN::UIButtonComponent::InitializeAfterDeserialize(GameContext& gameContex
     LoadFont(gameContext.deviceResources.GetD3DDevice(), m_spriteFontPath);
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::UIButtonComponent::OnInspectorGUI(GameContext& gameContext)
 {
     HWND windowHandle = gameContext.deviceResources.GetWindow();
@@ -1201,7 +1222,11 @@ void HEIN::UIButtonComponent::OnInspectorGUI(GameContext& gameContext)
         }
     }
 }
+#else
+void HEIN::UIButtonComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
+#if HEIN_WITH_EDITOR
 void HEIN::UIButtonComponent::DrawGizmo(
     const DirectX::SimpleMath::Matrix& /*view*/,
     const DirectX::SimpleMath::Matrix& /*proj*/,
@@ -1210,7 +1235,7 @@ void HEIN::UIButtonComponent::DrawGizmo(
 )
 {
     ImGuizmo::SetOrthographic(true);
-    ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+    // Drawlist is configured by DebugUIManager for the active Scene View / Game View window
     float vpX = 0.0f, vpY = 0.0f, displayW = kRefWidth, displayH = kRefHeight;
     HEIN::DebugUIManager::GetActiveViewportRect(vpX, vpY, displayW, displayH);
 
@@ -1304,5 +1329,8 @@ void HEIN::UIButtonComponent::DrawGizmo(
     drawList->AddRectFilled(bMin, bMax, IM_COL32(10, 20, 35, 220), 4.0f);
     drawList->AddText(ImVec2(bMin.x + 4.0f, bMin.y + 1.0f), borderColor, badgeBuf);
 }
+#else
+void HEIN::UIButtonComponent::DrawGizmo(const DirectX::SimpleMath::Matrix&, const DirectX::SimpleMath::Matrix&, int, int) {}
+#endif
 
 } // namespace HEIN

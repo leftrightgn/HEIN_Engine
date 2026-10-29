@@ -2,7 +2,9 @@
 #include "AABBColliderComponent.h"
 #include "Components/StaticModelComponent.h"
 #include "Entities/Actor.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
+#endif
 #include <DirectXColors.h>
 
 
@@ -101,6 +103,7 @@ void HEIN::AABBColliderComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("ExtentsY")) m_extents.y = data["ExtentsY"];
     if (data.contains("ExtentsZ")) m_extents.z = data["ExtentsZ"];
 }
+#if HEIN_WITH_EDITOR
 
 void HEIN::AABBColliderComponent::OnInspectorGUI(GameContext& gameContext)
 {
@@ -122,6 +125,9 @@ void HEIN::AABBColliderComponent::OnInspectorGUI(GameContext& gameContext)
         }
     }
 }
+#else
+void HEIN::AABBColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 bool HEIN::AABBColliderComponent::IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const
 {

@@ -12,7 +12,9 @@
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui_stdlib.h"
+#endif
 #include <cstdio>
 #include <d3dcompiler.h>
 
@@ -794,6 +796,7 @@ void HEIN::TerrainComponent::InitializeAfterDeserialize(GameContext& gameContext
 	m_needsReload = false;
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 {
 	if (ImGui::CollapsingHeader("Terrain Component", ImGuiTreeNodeFlags_DefaultOpen))
@@ -1019,6 +1022,9 @@ void HEIN::TerrainComponent::OnInspectorGUI(GameContext& gameContext)
 		}
 	}
 }
+#else
+void HEIN::TerrainComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 bool HEIN::TerrainComponent::LoadHeightMap(const wchar_t* filename)
 {

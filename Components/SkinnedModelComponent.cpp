@@ -11,8 +11,10 @@
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_stdlib.h"
+#endif
 #include <d3dcompiler.h>
 #include <filesystem>
 #include <string>
@@ -1380,6 +1382,7 @@ namespace HEIN
 	{
 		return m_animations.find(name) != m_animations.end();
 	}
+#if HEIN_WITH_EDITOR
 		
 	void SkinnedModelComponent::OnInspectorGUI(GameContext& gameContext)
 	{
@@ -1551,6 +1554,9 @@ namespace HEIN
 			}
 		}
 	}
+#else
+void SkinnedModelComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 }
 
 nlohmann::json HEIN::SkinnedModelComponent::Serialize()

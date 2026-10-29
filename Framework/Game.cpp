@@ -5,11 +5,14 @@
 #include "pch.h"
 #include "Game.h"
 #include "Factory/ComponentFactory.h"
+#include "Message/Messenger.h"
+#include "Components/UIButtonComponent.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_dx11.h"
 #include "ImGui/imgui_impl_win32.h"
-#include "Message/Messenger.h"
-#include "Components/UIButtonComponent.h"
+#include "ImGui/imnodes.h"
+#endif
 
 extern void ExitGame() noexcept;
 
@@ -33,9 +36,12 @@ Game::Game() noexcept(false)
 
 Game::~Game()
 {
+#if HEIN_WITH_EDITOR
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
+    ImNodes::DestroyContext();
     ImGui::DestroyContext();
+#endif
 }
 
 // Initialize the Direct3D resources required to run.
@@ -75,9 +81,11 @@ void Game::Initialize(HWND window, int width, int height)
 
 
 
+#if HEIN_WITH_EDITOR
     // --- SETUP IMGUI ---
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImNodes::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
@@ -89,6 +97,7 @@ void Game::Initialize(HWND window, int width, int height)
     ID3D11Device* device = m_deviceResources->GetD3DDevice();
     ID3D11DeviceContext* context = m_deviceResources->GetD3DDeviceContext();
     ImGui_ImplDX11_Init(device, context);
+#endif
 }
 
 #pragma region Frame Update
@@ -106,9 +115,11 @@ void Game::Tick()
 // Updates the world.
 void Game::Update(DX::StepTimer const& timer)
 {
+#if HEIN_WITH_EDITOR
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
+#endif
 
 
     float elapsedTime = float(timer.GetElapsedSeconds());
@@ -162,8 +173,18 @@ void Game::Render()
     // シーンの描画
     m_sceneManager.Render(*m_gameContext);
 
+#if HEIN_WITH_EDITOR
     ImGui::Render();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+    // Update and Render additional Platform Windows (when dragged outside the main editor window)
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
+#endif
 
     m_deviceResources->PIXEndEvent();
 
@@ -286,5 +307,27 @@ void Game::OnDeviceRestored()
 
     CreateWindowSizeDependentResources();
 
+}
+
+void Game::SetEditorApplication(bool isEditor) noexcept
+{
+    if (m_gameContext)
+    {
+        m_gameContext->isEditorApplication = isEditor;
+        m_gameContext->isEditorMode = isEditor;
+    }
+#if HEIN_WITH_EDITOR
+    ImGuiIO& io = ImGui::GetIO();
+    if (isEditor)
+    {
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    }
+    else
+    {
+        io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
+        io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
+    }
+#endif
 }
 #pragma endregion

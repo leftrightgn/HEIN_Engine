@@ -11,9 +11,11 @@
 #include "Effect/ReadData.h"
 #include "Entities/Actor.h"
 #include "Entities/ActorManager.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_stdlib.h"
 #include "ImGui/ImGuizmo.h"
+#endif
 #include <algorithm>
 #include <d3dcompiler.h>
 #include <filesystem>
@@ -567,7 +569,15 @@ void HEIN::GaugeComponent::Draw(
             {
                 // Only the currently active player actor draws the player HUD
                 Actor* activePlayer = FindPlayerActor(gameContext);
+#if HEIN_WITH_EDITOR
+#if HEIN_WITH_EDITOR
                 if (activePlayer && m_owner != activePlayer && (!gameContext.isEditorMode || HEIN::g_ActiveGizmoTarget != this))
+#else
+                if (activePlayer && m_owner != activePlayer)
+#endif
+#else
+                if (activePlayer && m_owner != activePlayer)
+#endif
                 {
                     return; // Inactive or former player body - do not draw over active HUD
                 }
@@ -580,10 +590,14 @@ void HEIN::GaugeComponent::Draw(
             {
                 // Dormant vessels (ActorType::Default), corpses, props, Ghost, etc.
                 // Do not draw a screen-space HUD unless actively being edited in editor.
+#if HEIN_WITH_EDITOR
                 if (!gameContext.isEditorMode || HEIN::g_ActiveGizmoTarget != this)
                 {
                     return;
                 }
+#else
+                return;
+#endif
             }
         }
     }
@@ -1001,6 +1015,7 @@ void HEIN::GaugeComponent::DrawBar(
     // Label and Value text fallback using ImGui draw list (if no custom SpriteFont loaded)
     if (!gameContext.showUI || gameContext.isSceneViewPass) return;
 
+#if HEIN_WITH_EDITOR
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
     if (drawList && !bar.spriteFont)
     {
@@ -1081,12 +1096,21 @@ void HEIN::GaugeComponent::DrawBar(
                 static_cast<int>(bar.borderColor.w * kMaxColorChannelValue)
             );
             drawList->AddRect(
+
                 ImVec2(m_lastVpX + barX, m_lastVpY + barY),
+
                 ImVec2(m_lastVpX + barX + barW, m_lastVpY + barY + barH),
+
                 bCol, 0.0f, 0, 1.5f
+
             );
+
         }
+
     }
+
+#endif
+
 }
 
 // ============================================================================
@@ -1415,6 +1439,8 @@ void HEIN::GaugeComponent::InitializeAfterDeserialize(GameContext& gameContext)
 // ============================================================================
 // OnInspectorGUI: ImGui editor panel (Unity-style inspector for gauge bars)
 // ============================================================================
+#if HEIN_WITH_EDITOR
+
 void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
 {
     HWND windowHandle = gameContext.deviceResources.GetWindow();
@@ -1928,10 +1954,18 @@ void HEIN::GaugeComponent::OnInspectorGUI(GameContext& gameContext)
         }
     }
 }
+#else
+void HEIN::GaugeComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 // ============================================================================
+
 // DrawGizmo: Visual editing of gauge position in the editor viewport
+
 // ============================================================================
+
+#if HEIN_WITH_EDITOR
+
 void HEIN::GaugeComponent::DrawGizmo(
     const DirectX::SimpleMath::Matrix& /*view*/,
     const DirectX::SimpleMath::Matrix& /*proj*/,
@@ -1941,7 +1975,7 @@ void HEIN::GaugeComponent::DrawGizmo(
     if (m_anchorMode != GaugeAnchorMode::ScreenSpace) return;
 
     ImGuizmo::SetOrthographic(true);
-    ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+    // Drawlist is configured by DebugUIManager for the active Scene View / Game View window
     float vpX = 0.0f, vpY = 0.0f, displayW = kRefWidth, displayH = kRefHeight;
     HEIN::DebugUIManager::GetActiveViewportRect(vpX, vpY, displayW, displayH);
 
@@ -2022,6 +2056,11 @@ void HEIN::GaugeComponent::DrawGizmo(
     drawList->AddRectFilled(bMin, bMax, IM_COL32(10, 20, 35, 220), 4.0f);
     drawList->AddText(ImVec2(bMin.x + 4.0f, bMin.y + 1.0f), borderColor, badgeBuf);
 }
+#else
+
+void HEIN::GaugeComponent::DrawGizmo(const DirectX::SimpleMath::Matrix&, const DirectX::SimpleMath::Matrix&, int, int) {}
+
+#endif
 
 
 } // namespace HEIN

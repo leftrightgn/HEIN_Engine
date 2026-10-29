@@ -1,5 +1,10 @@
 #include "pch.h"
+#if HEIN_WITH_EDITOR
+#include "pch.h"
 #include "DebugUIManager.h"
+#include "ImGui/imgui_internal.h"
+#include <Components/StaticModelComponent.h>
+#include <Camera/ICameraMode.h>
 #include "EditorUtils.h"
 #include "Components/SocketComponent.h"
 #include <Components/ColliderComponent/CapsuleColliderComponent.h>
@@ -128,36 +133,58 @@ namespace HEIN
 
 	D3D11_VIEWPORT DebugUIManager::GetSceneViewport(const GameContext& gameContext) const
 	{
-		D3D11_VIEWPORT center = GetCenterViewport(gameContext);
 		if (!m_isVisible)
 		{
-			return center;
+			return gameContext.deviceResources.GetScreenViewport();
 		}
-		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
+		if (m_sceneContentSize.x > 10.0f && m_sceneContentSize.y > 10.0f)
 		{
-			D3D11_VIEWPORT vp = center;
-			vp.Width = std::floor(center.Width * 0.5f);
-			return FitViewportToAspect(vp);
+			D3D11_VIEWPORT vp = {};
+			vp.TopLeftX = 0.0f;
+			vp.TopLeftY = 0.0f;
+			vp.Width = std::floor(m_sceneContentSize.x);
+			vp.Height = std::floor(m_sceneContentSize.y);
+			vp.MinDepth = 0.0f;
+			vp.MaxDepth = 1.0f;
+			return vp;
 		}
-		return FitViewportToAspect(center);
+		return GetCenterViewport(gameContext);
 	}
 
 	D3D11_VIEWPORT DebugUIManager::GetGameViewport(const GameContext& gameContext) const
 	{
-		D3D11_VIEWPORT center = GetCenterViewport(gameContext);
 		if (!m_isVisible)
 		{
-			return center;
+			return gameContext.deviceResources.GetScreenViewport();
 		}
-		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
+		if (m_gameContentSize.x > 10.0f && m_gameContentSize.y > 10.0f)
 		{
-			float leftW = std::floor(center.Width * 0.5f);
-			D3D11_VIEWPORT vp = center;
-			vp.TopLeftX = center.TopLeftX + leftW;
-			vp.Width = center.Width - leftW;
-			return FitViewportToAspect(vp);
+			D3D11_VIEWPORT vp = {};
+			vp.TopLeftX = 0.0f;
+			vp.TopLeftY = 0.0f;
+			vp.Width = std::floor(m_gameContentSize.x);
+			vp.Height = std::floor(m_gameContentSize.y);
+			vp.MinDepth = 0.0f;
+			vp.MaxDepth = 1.0f;
+			return vp;
 		}
-		return FitViewportToAspect(center);
+		return GetCenterViewport(gameContext);
+	}
+
+	void DebugUIManager::FocusOnActor(HEIN::Actor* actor)
+	{
+		if (!actor || !m_debugCameraController) return;
+		HEIN::TransformComponent* transform = actor->GetComponent<HEIN::TransformComponent>();
+		if (!transform) return;
+
+		DirectX::SimpleMath::Matrix worldMat = transform->GetWorldMatrix();
+		DirectX::SimpleMath::Vector3 worldPos = worldMat.Translation();
+
+		ICameraMode* currentMode = m_debugCameraController->GetCurrentCameraMode();
+		if (currentMode && currentMode->GetType() == CameraType::Debug)
+		{
+			currentMode->SetTarget(worldPos);
+		}
 	}
 
 	void DebugUIManager::Update(
@@ -168,6 +195,7 @@ namespace HEIN
 		HEIN::CameraController* debugCameraController
 	)
 	{
+		m_debugCameraController = debugCameraController;
 
 		if (gameContext.keyboardTracker.pressed.F2)
 		{
@@ -189,7 +217,10 @@ namespace HEIN
 		}
 
 		D3D11_VIEWPORT sceneVp = GetSceneViewport(gameContext);
-		SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
+		if (m_sceneContentSize.x > 10.0f && m_sceneContentSize.y > 10.0f)
+		{
+			SetActiveViewportRect(m_sceneContentPos.x, m_sceneContentPos.y, m_sceneContentSize.x, m_sceneContentSize.y);
+		}
 
 		if (!m_isVisible) return;
 
@@ -199,11 +230,22 @@ namespace HEIN
 			m_selectedActor = nullptr;
 			g_ActiveGizmoTarget = nullptr;
 		}
+		else if (m_selectedActor != nullptr && g_ActiveGizmoTarget == nullptr)
+		{
+			auto* cam = m_selectedActor->GetComponent<HEIN::CameraController>();
+			auto* btn = m_selectedActor->GetComponent<HEIN::UIButtonComponent>();
+			auto* trans = m_selectedActor->GetComponent<HEIN::TransformComponent>();
+			if (cam != nullptr) g_ActiveGizmoTarget = cam;
+			else if (btn != nullptr) g_ActiveGizmoTarget = btn;
+			else if (trans != nullptr) g_ActiveGizmoTarget = trans;
+		}
+
+		bool isTyping = ImGui::GetIO().WantTextInput;
 
 		// Delete shortcut key
-		if (m_selectedActor != nullptr && !ImGui::GetIO().WantCaptureKeyboard)
+		if (m_selectedActor != nullptr && !isTyping)
 		{
-			if (gameContext.keyboardTracker.pressed.Delete)
+			if (gameContext.keyboardTracker.pressed.Delete || ImGui::IsKeyPressed(ImGuiKey_Delete, false))
 			{
 				ActorID idToDelete = m_selectedActor->GetID();
 				m_selectedActor = nullptr;
@@ -212,23 +254,16 @@ namespace HEIN
 			}
 		}
 
-		bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift;
-
-		if (gameContext.keyboardTracker.pressed.F && m_selectedActor != nullptr && !ImGui::GetIO().WantCaptureKeyboard)
+		// Frame / Focus selected actor (F)
+		if (m_selectedActor != nullptr && !isTyping)
 		{
-			HEIN::TransformComponent* transform = m_selectedActor->GetComponent<HEIN::TransformComponent>();
-			if (transform && debugCameraController)
+			if (gameContext.keyboardTracker.pressed.F || ImGui::IsKeyPressed(ImGuiKey_F, false))
 			{
-				DirectX::SimpleMath::Matrix worldMat = transform->GetWorldMatrix();
-				DirectX::SimpleMath::Vector3 worldPos = worldMat.Translation();
-
-				ICameraMode* currentMode = debugCameraController->GetCurrentCameraMode();
-				if (currentMode && currentMode->GetType() == CameraType::Debug)
-				{
-					currentMode->SetTarget(worldPos);
-				}
+				FocusOnActor(m_selectedActor);
 			}
 		}
+
+		bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift;
 
 		if (isShiftHeld)
 		{
@@ -270,168 +305,8 @@ namespace HEIN
 			}
 		}
 
-		if (m_viewportLayout != EditorViewportLayout::GameViewOnly &&
-			gameContext.mouseButtonTracker.leftButton == DirectX::Mouse::ButtonStateTracker::PRESSED &&
-			!ImGui::GetIO().WantCaptureMouse)
-		{
-			double currentTime = gameContext.timer.GetTotalSeconds();
-			if ((currentTime - m_lastleftClickTime) < DOUBLE_CLICK_THRESHOLD)
-			{
-				float mouseX = static_cast<float>(gameContext.mouseState.x);
-				float mouseY = static_cast<float>(gameContext.mouseState.y);
-
-				if (mouseX < sceneVp.TopLeftX || mouseX > sceneVp.TopLeftX + sceneVp.Width ||
-					mouseY < sceneVp.TopLeftY || mouseY > sceneVp.TopLeftY + sceneVp.Height)
-				{
-					m_lastleftClickTime = -1.0;
-					return;
-				}
-
-				DirectX::SimpleMath::Viewport viewport(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
-				DirectX::SimpleMath::Matrix world = DirectX::SimpleMath::Matrix::Identity;
-
-				// Unproject screen coordinates to 3D space
-				DirectX::SimpleMath::Vector3 rayOrigin = viewport.Unproject(DirectX::SimpleMath::Vector3(mouseX, mouseY, 0.0f), proj, view, world);
-				DirectX::SimpleMath::Vector3 rayTarget = viewport.Unproject(DirectX::SimpleMath::Vector3(mouseX, mouseY, 1.0f), proj, view, world);
-
-				DirectX::SimpleMath::Vector3 rayDir = rayTarget - rayOrigin;
-				rayDir.Normalize();
-
-				float closestHit = FLT_MAX;
-				HEIN::Actor* hitActor = nullptr;
-
-				for (const std::pair<const HEIN::ActorID, std::unique_ptr<HEIN::Actor>>& pair : actorManager.GetAllActors())
-				{
-					HEIN::Actor* actor = pair.second.get();
-					if (!actor || !actor->IsVisible()) continue;
-					float actorClosestHit = FLT_MAX;
-					bool hit = false;
-
-					std::vector<HEIN::OBBColliderComponent*> obbs = actor->GetComponents<HEIN::OBBColliderComponent>();
-					for (auto* obb : obbs)
-					{
-						float d = 0.0f;
-						if (obb->GetWorldOBB().Intersects(rayOrigin, rayDir, d)) { hit = true; if (d < actorClosestHit) actorClosestHit = d; }
-					}
-
-					std::vector<HEIN::AABBColliderComponent*> aabbs = actor->GetComponents<HEIN::AABBColliderComponent>();
-					for (auto* aabb : aabbs)
-					{
-						float d = 0.0f;
-						if (aabb->GetWorldAABB().Intersects(rayOrigin, rayDir, d)) { hit = true; if (d < actorClosestHit) actorClosestHit = d; }
-					}
-
-					std::vector<HEIN::SphereColliderComponent*> spheres = actor->GetComponents<HEIN::SphereColliderComponent>();
-					for (auto* sphere : spheres)
-					{
-						float d = 0.0f;
-						if (sphere->GetWorldSphere().Intersects(rayOrigin, rayDir, d)) { hit = true; if (d < actorClosestHit) actorClosestHit = d; }
-					}
-
-					std::vector<HEIN::CapsuleColliderComponent*> capsules = actor->GetComponents<HEIN::CapsuleColliderComponent>();
-					for (auto* capsule : capsules)
-					{
-						DirectX::SimpleMath::Vector3 top = capsule->GetWorldTopCenter();
-						DirectX::SimpleMath::Vector3 bottom = capsule->GetWorldBottomCenter();
-						DirectX::SimpleMath::Vector3 center = (top + bottom) * 0.5f;
-						float halfHeight = (top - bottom).Length() * 0.5f;
-						DirectX::BoundingSphere bound(center, halfHeight + capsule->GetRadius());
-
-						float d = 0.0f;
-						if (bound.Intersects(rayOrigin, rayDir, d)) { hit = true; if (d < actorClosestHit) actorClosestHit = d; }
-					}
-
-					std::vector<HEIN::MeshColliderComponent*> meshes = actor->GetComponents<HEIN::MeshColliderComponent>();
-					for (auto* mesh : meshes)
-					{
-						const std::vector<HEIN::Triangle>& triangles = mesh->GetWorldTriangles();
-
-						for (const HEIN::Triangle& tri : triangles)
-						{
-							float d = 0.0f;
-							DirectX::SimpleMath::Vector3 normal;
-
-							if (HEIN::CollisionMath::IntersectRayTriangle(rayOrigin, rayDir, tri, d, normal))
-							{
-								hit = true;
-								if (d < actorClosestHit) actorClosestHit = d;
-							}
-						}
-					}
-
-					// 3D Picking for Camera Component
-					auto* camComp = actor->GetComponent<HEIN::CameraController>();
-					if (camComp != nullptr)
-					{
-						DirectX::BoundingSphere camSphere(camComp->GetPosition(), 1.5f);
-						float d = 0.0f;
-						if (camSphere.Intersects(rayOrigin, rayDir, d))
-						{
-							hit = true;
-							if (d < actorClosestHit) actorClosestHit = d;
-						}
-					}
-
-					// 2D Screen Picking for UI Button Component (mapped from center viewport to 1280x720 reference canvas)
-					auto* uiBtn = actor->GetComponent<HEIN::UIButtonComponent>();
-					if (uiBtn != nullptr)
-					{
-						float refMouseX = (mouseX - sceneVp.TopLeftX) / (sceneVp.Width / 1280.0f);
-						float refMouseY = (mouseY - sceneVp.TopLeftY) / (sceneVp.Height / 720.0f);
-						DirectX::SimpleMath::Vector2 bPos = uiBtn->GetPosition();
-						DirectX::SimpleMath::Vector2 bSize = uiBtn->GetSize();
-						if (refMouseX >= bPos.x && refMouseX <= bPos.x + bSize.x &&
-							refMouseY >= bPos.y && refMouseY <= bPos.y + bSize.y)
-						{
-							hit = true;
-							actorClosestHit = -1.0f; // UI always takes top priority over 3D geometry
-						}
-					}
-
-					if (hit && actorClosestHit < closestHit)
-					{
-						closestHit = actorClosestHit;
-						hitActor = actor;
-					}
-
-
-				}
-				if (hitActor != m_selectedActor)
-				{
-					m_selectedActor = hitActor;
-					
-					if (m_selectedActor != nullptr)
-					{
-						if (auto* cam = m_selectedActor->GetComponent<HEIN::CameraController>())
-						{
-							g_ActiveGizmoTarget = cam;
-						}
-						else if (auto* btn = m_selectedActor->GetComponent<HEIN::UIButtonComponent>())
-						{
-							g_ActiveGizmoTarget = btn;
-						}
-						else if (auto* trans = m_selectedActor->GetComponent<HEIN::TransformComponent>())
-						{
-							g_ActiveGizmoTarget = trans;
-						}
-						else
-						{
-							g_ActiveGizmoTarget = nullptr;
-						}
-					}
-					else
-					{
-						g_ActiveGizmoTarget = nullptr;
-					}
-				}
-
-				m_lastleftClickTime = -1.0;
-			}
-			else
-			{
-				m_lastleftClickTime = currentTime;
-			}
-		}
+		(void)view;
+		(void)proj;
 	}
 	void DebugUIManager::SelectActor(HEIN::Actor* actor)
 	{
@@ -519,9 +394,15 @@ namespace HEIN
 		}
 
 		// Left-click to select
+		// Left-click to select, Double-click to focus camera
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
 		{
 			SelectActor(actor);
+		}
+		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			SelectActor(actor);
+			FocusOnActor(actor);
 		}
 
 		// Drag and Drop Source (drag this actor)
@@ -619,25 +500,55 @@ namespace HEIN
 		const DirectX::SimpleMath::Matrix& gameProj
 	)
 	{
+		(void)gameView;
+		(void)gameProj;
 		HEIN::EditorAction currentAction = HEIN::EditorAction::None;
 
 		if (!m_isVisible) return currentAction;
 
 		ImGuiIO& io = ImGui::GetIO();
-		float screenW = io.DisplaySize.x;
-		float screenH = io.DisplaySize.y;
-		float hierarchyWidth = std::floor(screenW * 0.14f);
-		m_toolbarHeight = 88.0f;
-
-		// -------------------------------------------------------------------------
-		// DRAW THE TOP TOOLBAR (Spans full width from Hierarchy to Right Edge)
-		//    Inspector is placed strictly below m_toolbarHeight so it NEVER covers ToolBar!
-		// -------------------------------------------------------------------------
-		ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+		ImGuiViewport* mainVp = ImGui::GetMainViewport();
+		ImVec2 mainPos = mainVp ? mainVp->WorkPos : ImVec2(0.0f, 0.0f);
+		ImVec2 mainSize = mainVp ? mainVp->WorkSize : io.DisplaySize;
+		float screenW = mainSize.x;
+		float screenH = mainSize.y;
+		float hierarchyWidth = m_isHierarchyFloating ? 0.0f : ((m_hierarchyWidth > 50.0f) ? m_hierarchyWidth : std::floor(screenW * 0.14f));
+		float defaultToolbarH = 88.0f;
 		float toolbarWidth = std::max(100.0f, screenW - hierarchyWidth);
 
-		ImGui::SetNextWindowPos(ImVec2(hierarchyWidth, 0.0f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(toolbarWidth, m_toolbarHeight), ImGuiCond_Always);
+		// -------------------------------------------------------------------------
+		// MASTER DOCKSPACE (Connectable & Dockable Viewport Graph)
+		// -------------------------------------------------------------------------
+		ImGuiID dockspaceId = ImGui::GetID("EditorMainDockSpace");
+		ImGuiDockNodeFlags dockspaceFlags = ImGuiDockNodeFlags_PassthruCentralNode;
+		ImGui::DockSpaceOverViewport(dockspaceId, mainVp, dockspaceFlags);
+
+		if (m_resetLayoutRequested || ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
+		{
+			ImGui::DockBuilderRemoveNode(dockspaceId);
+			ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
+			ImGui::DockBuilderSetNodeSize(dockspaceId, mainVp->WorkSize);
+
+			ImGuiID dockMain = dockspaceId;
+			ImGuiID dockTop = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Up, 0.08f, nullptr, &dockMain);
+			ImGuiID dockLeft = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.16f, nullptr, &dockMain);
+			ImGuiID dockRight = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.25f, nullptr, &dockMain);
+
+			ImGuiID dockCenterLeft = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.5f, nullptr, &dockMain);
+
+			ImGui::DockBuilderDockWindow("ToolBar", dockTop);
+			ImGui::DockBuilderDockWindow("Hierarchy", dockLeft);
+			ImGui::DockBuilderDockWindow("Inspector", dockRight);
+			ImGui::DockBuilderDockWindow("Scene View", dockCenterLeft);
+			ImGui::DockBuilderDockWindow("Game View", dockMain);
+
+			ImGui::DockBuilderFinish(dockspaceId);
+		}
+
+		ImGuiCond layoutCond = m_resetLayoutRequested ? ImGuiCond_Always : ImGuiCond_FirstUseEver;
+
+		ImGui::SetNextWindowPos(ImVec2(mainPos.x + hierarchyWidth, mainPos.y), layoutCond);
+		ImGui::SetNextWindowSize(ImVec2(toolbarWidth, defaultToolbarH), layoutCond);
 
 		auto SameLineWrap = [](float nextItemEstimatedWidth)
 		{
@@ -648,7 +559,10 @@ namespace HEIN
 			}
 		};
 
-		ImGui::Begin("ToolBar", nullptr, toolbarFlags);
+		ImGui::Begin("ToolBar", nullptr, ImGuiWindowFlags_NoCollapse);
+		ImVec2 toolbarActualSize = ImGui::GetWindowSize();
+		m_toolbarHeight = toolbarActualSize.y;
+		m_isToolBarFloating = (mainVp != nullptr && ImGui::GetWindowViewport() != mainVp);
 		if (ImGui::Button("[ > PLAY ]"))
 		{
 			currentAction = HEIN::EditorAction::PlayPressed;
@@ -657,56 +571,13 @@ namespace HEIN
 		if (ImGui::Button("[ || PAUSE ]")) currentAction = HEIN::EditorAction::StopPressed;
 		SameLineWrap(85.0f);
 
-		// Unity-style Scene View vs Game View layout selector tabs (F2)
-		bool isSceneOnly = (m_viewportLayout == EditorViewportLayout::SceneViewOnly);
-		bool isGameOnly  = (m_viewportLayout == EditorViewportLayout::GameViewOnly);
-		bool isSplit     = (m_viewportLayout == EditorViewportLayout::SplitSideBySide);
-
-		if (isSceneOnly)
+		// Reset Dock Layout Button
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.25f, 0.3f, 1.0f));
+		if (ImGui::Button("[ Reset Layout ]"))
 		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.85f, 1.0f));
-			ImGui::Button("[ Scene ] (F2)");
-			ImGui::PopStyleColor();
+			m_resetLayoutRequested = true;
 		}
-		else
-		{
-			if (ImGui::Button("[ Scene ] (F2)"))
-			{
-				SetViewportLayout(EditorViewportLayout::SceneViewOnly);
-			}
-		}
-
-		SameLineWrap(75.0f);
-
-		if (isGameOnly)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.65f, 0.35f, 1.0f));
-			ImGui::Button("[ Game ]");
-			ImGui::PopStyleColor();
-		}
-		else
-		{
-			if (ImGui::Button("[ Game ]"))
-			{
-				SetViewportLayout(EditorViewportLayout::GameViewOnly);
-			}
-		}
-
-		SameLineWrap(150.0f);
-
-		if (isSplit)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.35f, 0.85f, 1.0f));
-			ImGui::Button("[ Split: Scene | Game ]");
-			ImGui::PopStyleColor();
-		}
-		else
-		{
-			if (ImGui::Button("[ Split: Scene | Game ]"))
-			{
-				SetViewportLayout(EditorViewportLayout::SplitSideBySide);
-			}
-		}
+		ImGui::PopStyleColor();
 
 
 
@@ -889,78 +760,137 @@ namespace HEIN
 		}
 		ImGui::End();
 
-		// -------------------------------------------------------------------------
-		// DRAW THE INSPECTOR WINDOW (Strictly below ToolBar so it NEVER covers it!)
-		// -------------------------------------------------------------------------
-		float inspectorTopY = m_toolbarHeight;
-		float inspectorHeight = std::max(100.0f, screenH - inspectorTopY);
-		float maxInspectorWidth = std::max(200.0f, screenW - hierarchyWidth - 150.0f);
-
-		ImGui::SetNextWindowSizeConstraints(ImVec2(180.0f, inspectorHeight), ImVec2(maxInspectorWidth, inspectorHeight));
-		ImGui::SetNextWindowSize(ImVec2(std::floor(screenW * 0.24f), inspectorHeight), ImGuiCond_FirstUseEver);
-		ImGui::SetNextWindowPos(ImVec2(screenW, inspectorTopY), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-
-		ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
-		
-		ImVec2 inspectorSize = ImGui::GetWindowSize();
-		m_inspectorWidth = inspectorSize.x;
-
 		D3D11_VIEWPORT sceneVp = GetSceneViewport(gameContext);
 		D3D11_VIEWPORT gameVp  = GetGameViewport(gameContext);
-		SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
 
-		// Draw off-screen render texture and subtle Unity-style border around fitted Scene / Game Viewport(s)
-		if (ImDrawList* bgList = ImGui::GetBackgroundDrawList())
+		// -------------------------------------------------------------------------
+		// DRAW THE SCENE VIEW WINDOW (Connectable & Dockable)
+		// -------------------------------------------------------------------------
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+		if (ImGui::Begin("Scene View", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 		{
-			if (m_viewportLayout != EditorViewportLayout::GameViewOnly)
+			ImVec2 contentPos = ImGui::GetCursorScreenPos();
+			ImVec2 contentSize = ImGui::GetContentRegionAvail();
+
+			if (contentSize.x > 10.0f && contentSize.y > 10.0f)
 			{
+				m_sceneContentSize = contentSize;
+				m_sceneContentPos = contentPos;
+				m_isSceneViewHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+				m_isSceneViewFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+
+				SetActiveViewportRect(contentPos.x, contentPos.y, contentSize.x, contentSize.y);
+
 				if (m_sceneSRV != nullptr)
 				{
-					bgList->AddImage(
+					ImGui::Image(
 						reinterpret_cast<ImTextureID>(m_sceneSRV),
-						ImVec2(sceneVp.TopLeftX, sceneVp.TopLeftY),
-						ImVec2(sceneVp.TopLeftX + sceneVp.Width, sceneVp.TopLeftY + sceneVp.Height)
+						contentSize
 					);
+					if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || 
+					    ImGui::IsItemClicked(ImGuiMouseButton_Right) || 
+					    ImGui::IsItemClicked(ImGuiMouseButton_Middle))
+					{
+						ImGui::SetWindowFocus();
+					}
 				}
-				bgList->AddRect(
-					ImVec2(sceneVp.TopLeftX, sceneVp.TopLeftY),
-					ImVec2(sceneVp.TopLeftX + sceneVp.Width, sceneVp.TopLeftY + sceneVp.Height),
-					IM_COL32(55, 130, 210, 180), 0.0f, 0, 1.5f
-				);
+
+				// Scene View Top Strip Overlay
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				float bannerH = 24.0f;
+				dl->AddRectFilled(contentPos, ImVec2(contentPos.x + contentSize.x, contentPos.y + bannerH), IM_COL32(18, 20, 24, 200));
+				dl->AddText(ImVec2(contentPos.x + 8.0f, contentPos.y + 4.0f), IM_COL32(90, 180, 255, 255), "[ Scene View ]");
+
+				if (m_selectedActor != nullptr)
+				{
+					ImVec2 btnPos = ImVec2(contentPos.x + 115.0f, contentPos.y + 2.0f);
+					ImGui::SetCursorScreenPos(btnPos);
+					if (ImGui::SmallButton("Focus (F)"))
+					{
+						FocusOnActor(m_selectedActor);
+					}
+				}
+
+				const char* navHint = "RMB: Look | MMB: Pan | Scroll: Zoom | WASD: Fly";
+				ImVec2 hintSize = ImGui::CalcTextSize(navHint);
+				dl->AddText(ImVec2(contentPos.x + contentSize.x - hintSize.x - 10.0f, contentPos.y + 4.0f), IM_COL32(175, 175, 175, 210), navHint);
+
+				// Draw ImGuizmo inside Scene View window drawlist
+				if (m_selectedActor != nullptr && g_ActiveGizmoTarget != nullptr)
+				{
+					ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+					ImGuizmo::SetRect(contentPos.x, contentPos.y, contentSize.x, contentSize.y);
+					ImGuizmo::SetOrthographic(false);
+					ImGuizmo::SetGizmoSizeClipSpace(0.2f);
+					g_ActiveGizmoTarget->DrawGizmo(sceneView, sceneProj, m_currentGinzmoOperation, m_currentGinzmo);
+				}
 			}
-			if (m_viewportLayout != EditorViewportLayout::SceneViewOnly)
+		}
+		ImGui::End();
+		ImGui::PopStyleVar();
+
+		// -------------------------------------------------------------------------
+		// DRAW THE GAME VIEW WINDOW (Connectable & Dockable)
+		// -------------------------------------------------------------------------
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+		if (ImGui::Begin("Game View", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+		{
+			ImVec2 contentPos = ImGui::GetCursorScreenPos();
+			ImVec2 contentSize = ImGui::GetContentRegionAvail();
+
+			if (contentSize.x > 10.0f && contentSize.y > 10.0f)
 			{
+				m_gameContentSize = contentSize;
+				m_gameContentPos = contentPos;
+				m_isGameViewHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+				m_isGameViewFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+
 				if (m_gameSRV != nullptr)
 				{
-					bgList->AddImage(
+					ImGui::Image(
 						reinterpret_cast<ImTextureID>(m_gameSRV),
-						ImVec2(gameVp.TopLeftX, gameVp.TopLeftY),
-						ImVec2(gameVp.TopLeftX + gameVp.Width, gameVp.TopLeftY + gameVp.Height)
+						contentSize
 					);
 				}
-				bgList->AddRect(
-					ImVec2(gameVp.TopLeftX, gameVp.TopLeftY),
-					ImVec2(gameVp.TopLeftX + gameVp.Width, gameVp.TopLeftY + gameVp.Height),
-					IM_COL32(60, 175, 95, 180), 0.0f, 0, 1.5f
-				);
 
 				if (gameContext.isEditorApplication && !gameContext.isGameViewFocused)
 				{
-					const char* hintText = "[ Press F3 for Fullscreen Gameplay Mode ]";
+					const char* hintText = "[ Fullscreen Play (F3) ]";
 					ImVec2 textSize = ImGui::CalcTextSize(hintText);
-					float textX = gameVp.TopLeftX + (gameVp.Width - textSize.x) * 0.5f;
-					float textY = gameVp.TopLeftY + 8.0f;
-					bgList->AddRectFilled(
-						ImVec2(textX - 8.0f, textY - 3.0f),
-						ImVec2(textX + textSize.x + 8.0f, textY + textSize.y + 3.0f),
-						IM_COL32(20, 20, 25, 200), 4.0f
-					);
-					bgList->AddText(ImVec2(textX, textY), IM_COL32(230, 230, 230, 255), hintText);
+					float textX = contentPos.x + (contentSize.x - textSize.x) * 0.5f;
+					float textY = contentPos.y + 8.0f;
+					ImGui::SetCursorScreenPos(ImVec2(textX - 10.0f, textY - 3.0f));
+					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.45f, 0.8f, 0.85f));
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.6f, 0.95f, 1.0f));
+					if (ImGui::Button(hintText, ImVec2(textSize.x + 20.0f, textSize.y + 6.0f)))
+					{
+						m_isVisible = false;
+						currentAction = HEIN::EditorAction::PlayPressed;
+					}
+					ImGui::PopStyleColor(2);
 				}
-
-
 			}
 		}
+		ImGui::End();
+		ImGui::PopStyleVar();
+
+		// -------------------------------------------------------------------------
+		// DRAW THE INSPECTOR WINDOW (Dockable & Separated)
+		// -------------------------------------------------------------------------
+		float inspectorTopY = m_isToolBarFloating ? 0.0f : m_toolbarHeight;
+		float inspectorHeight = std::max(100.0f, screenH - inspectorTopY);
+		float maxInspectorWidth = std::max(200.0f, screenW - hierarchyWidth - 150.0f);
+		float defaultInspectorW = (m_inspectorWidth > 100.0f && !m_isInspectorFloating) ? m_inspectorWidth : std::floor(screenW * 0.24f);
+
+		ImGui::SetNextWindowSizeConstraints(ImVec2(180.0f, 100.0f), ImVec2(maxInspectorWidth, screenH));
+		ImGui::SetNextWindowSize(ImVec2(defaultInspectorW, inspectorHeight), layoutCond);
+		ImGui::SetNextWindowPos(ImVec2(mainPos.x + screenW, mainPos.y + inspectorTopY), layoutCond, ImVec2(1.0f, 0.0f));
+
+		ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_NoCollapse);
+		
+		ImVec2 inspectorSize = ImGui::GetWindowSize();
+		m_isInspectorFloating = (mainVp != nullptr && ImGui::GetWindowViewport() != mainVp);
+		m_inspectorWidth = inspectorSize.x;
 
 		// Mode Tabs: [ Inspector ]  [ Scene Transition ]
 		if (m_rightPanelMode == RightPanelMode::Inspector)
@@ -1108,6 +1038,13 @@ namespace HEIN
 
 					if (m_selectedActor)
 					{
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.45f, 0.7f, 1.0f));
+						if (ImGui::Button("[ Focus Camera (F) ]", ImVec2(-1.0f, 26.0f)))
+						{
+							FocusOnActor(m_selectedActor);
+						}
+						ImGui::PopStyleColor();
+						ImGui::Separator();
 						m_selectedActor->DrawInspector(gameContext);
 					}
 
@@ -1140,68 +1077,7 @@ namespace HEIN
 			}
 		} // end if (m_rightPanelMode == RightPanelMode::SceneTransition) ... else
 
-		// ImGuizmo 2D & 3D Viewport Controls Integration (active regardless of which right panel tab is open)
-		if (m_selectedActor != nullptr && g_ActiveGizmoTarget != nullptr)
-		{
-			bool is2DUITarget = (m_selectedActor->GetComponent<HEIN::UIButtonComponent>() != nullptr ||
-			                     m_selectedActor->GetComponent<HEIN::GaugeComponent>() != nullptr);
-			if (is2DUITarget)
-			{
-				// 2D UI targets draw in Game View when GameViewOnly or SplitSideBySide is active
-				D3D11_VIEWPORT uiVp = (m_viewportLayout == EditorViewportLayout::SceneViewOnly) ? sceneVp : gameVp;
-				const auto& uiView = (m_viewportLayout == EditorViewportLayout::SceneViewOnly) ? sceneView : gameView;
-				const auto& uiProj = (m_viewportLayout == EditorViewportLayout::SceneViewOnly) ? sceneProj : gameProj;
-				SetActiveViewportRect(uiVp.TopLeftX, uiVp.TopLeftY, uiVp.Width, uiVp.Height);
-				ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-				ImGuizmo::SetRect(uiVp.TopLeftX, uiVp.TopLeftY, uiVp.Width, uiVp.Height);
-				ImGuizmo::SetOrthographic(true);
-				ImGuizmo::SetGizmoSizeClipSpace(0.12f);
-				g_ActiveGizmoTarget->DrawGizmo(uiView, uiProj, m_currentGinzmoOperation, m_currentGinzmo);
-				SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
-			}
-			else if (m_viewportLayout == EditorViewportLayout::SceneViewOnly)
-			{
-				SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
-				ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-				ImGuizmo::SetRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
-				ImGuizmo::SetOrthographic(false);
-				ImGuizmo::SetGizmoSizeClipSpace(0.2f);
-				g_ActiveGizmoTarget->DrawGizmo(sceneView, sceneProj, m_currentGinzmoOperation, m_currentGinzmo);
-			}
-			else if (m_viewportLayout == EditorViewportLayout::GameViewOnly)
-			{
-				SetActiveViewportRect(gameVp.TopLeftX, gameVp.TopLeftY, gameVp.Width, gameVp.Height);
-				ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-				ImGuizmo::SetRect(gameVp.TopLeftX, gameVp.TopLeftY, gameVp.Width, gameVp.Height);
-				ImGuizmo::SetOrthographic(false);
-				ImGuizmo::SetGizmoSizeClipSpace(0.2f);
-				g_ActiveGizmoTarget->DrawGizmo(gameView, gameProj, m_currentGinzmoOperation, m_currentGinzmo);
-			}
-			else if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
-			{
-				// In split view, render and interact in Scene View
-				ImGuizmo::PushID(1);
-				SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
-				ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-				ImGuizmo::SetRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
-				ImGuizmo::SetOrthographic(false);
-				ImGuizmo::SetGizmoSizeClipSpace(0.2f);
-				g_ActiveGizmoTarget->DrawGizmo(sceneView, sceneProj, m_currentGinzmoOperation, m_currentGinzmo);
-				ImGuizmo::PopID();
-
-				// Also render and interact in Game View with game camera projection
-				ImGuizmo::PushID(2);
-				SetActiveViewportRect(gameVp.TopLeftX, gameVp.TopLeftY, gameVp.Width, gameVp.Height);
-				ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-				ImGuizmo::SetRect(gameVp.TopLeftX, gameVp.TopLeftY, gameVp.Width, gameVp.Height);
-				ImGuizmo::SetOrthographic(false);
-				ImGuizmo::SetGizmoSizeClipSpace(0.2f);
-				g_ActiveGizmoTarget->DrawGizmo(gameView, gameProj, m_currentGinzmoOperation, m_currentGinzmo);
-				ImGuizmo::PopID();
-
-				SetActiveViewportRect(sceneVp.TopLeftX, sceneVp.TopLeftY, sceneVp.Width, sceneVp.Height);
-			}
-		}
+		// ImGuizmo handles are rendered directly inside Scene View window above
 
 		ImGui::End();
 
@@ -1310,10 +1186,13 @@ namespace HEIN
 		// The Scene Hierarchy provides a visual tree-view of the Actor parent-child graph.
 		// It supports drag-and-drop parenting, context menu spawning, and selection tracking.
 		// Reorganising the hierarchy here directly alters the execution order of CascadeTransforms.
-		ImGuiWindowFlags staticFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
-		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(hierarchyWidth, screenH), ImGuiCond_Always);
-		ImGui::Begin("Hierarchy", nullptr, staticFlags);
+		ImGui::SetNextWindowPos(mainPos, layoutCond);
+		ImGui::SetNextWindowSize(ImVec2(hierarchyWidth, screenH), layoutCond);
+		ImGui::Begin("Hierarchy", nullptr, ImGuiWindowFlags_NoCollapse);
+
+		ImVec2 hierActualSize = ImGui::GetWindowSize();
+		m_hierarchyWidth = hierActualSize.x;
+		m_isHierarchyFloating = (mainVp != nullptr && ImGui::GetWindowViewport() != mainVp);
 
 		// Context menu on empty window area
 		if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
@@ -1441,6 +1320,7 @@ namespace HEIN
 			}
 		}
 
+		m_resetLayoutRequested = false;
 		return currentAction;
 	}
 
@@ -2193,3 +2073,5 @@ namespace HEIN
 	}
 
 }
+
+#endif

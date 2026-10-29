@@ -54,8 +54,8 @@ void HEIN::DebugCameraMode::ProcessInput(const CameraInputState& input)
         m_distance = std::max(MIN_DISTANCE, m_distance); // Prevent zooming past the center point
     }
 
-    // Only look around if the Left Mouse Button is held down
-    if (input.isLeftMouseDown)
+    // Look around / Orbit if Right Mouse Button is held down
+    if (input.isRightMouseDown)
     {
         if (!m_isDragging)
         {
@@ -80,6 +80,42 @@ void HEIN::DebugCameraMode::ProcessInput(const CameraInputState& input)
     {
         // Button was released, stop dragging
         m_isDragging = false;
+    }
+
+    // Pan camera if Middle Mouse Button is held down
+    if (input.isMiddleMouseDown)
+    {
+        if (!m_isPanning)
+        {
+            m_lastPanMouseX = input.mouseX;
+            m_lastPanMouseY = input.mouseY;
+            m_isPanning = true;
+        }
+        else
+        {
+            float deltaX = input.mouseX - m_lastPanMouseX;
+            float deltaY = input.mouseY - m_lastPanMouseY;
+
+            DirectX::SimpleMath::Quaternion rotation = 
+                DirectX::SimpleMath::Quaternion::CreateFromYawPitchRoll(m_yaw, m_pitch, m_roll);
+
+            DirectX::SimpleMath::Vector3 camRight = 
+                DirectX::SimpleMath::Vector3::Transform(DirectX::SimpleMath::Vector3::Right, rotation);
+            DirectX::SimpleMath::Vector3 camUp = 
+                DirectX::SimpleMath::Vector3::Transform(DirectX::SimpleMath::Vector3::Up, rotation);
+
+            float panFactor = m_distance * 0.0015f;
+            m_target += (-camRight * deltaX + camUp * deltaY) * panFactor;
+            m_isFlying = false;
+            m_desiredTarget = m_target;
+
+            m_lastPanMouseX = input.mouseX;
+            m_lastPanMouseY = input.mouseY;
+        }
+    }
+    else
+    {
+        m_isPanning = false;
     }
 
     // Clamp the pitch so it doesn't flip upside down

@@ -8,8 +8,10 @@
 #include "Components/TransformComponent.h"
 #include "DebugingTools/DebugUIManager.h"
 #include "Framework/GameContext.h"
+#if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
 #include "ImGui/ImGuizmo.h"
+#endif
 #include <cmath>
 #include <optional>
 
@@ -302,6 +304,7 @@ void CameraController::UpdateMouseMode()
 		DirectX::Mouse::Get().SetMode(DirectX::Mouse::MODE_ABSOLUTE);
 }
 
+#if HEIN_WITH_EDITOR
 void CameraController::DrawGizmo(
 	const DirectX::SimpleMath::Matrix& view,
 	const DirectX::SimpleMath::Matrix& proj,
@@ -319,6 +322,20 @@ void CameraController::DrawGizmo(
 
 	DirectX::SimpleMath::Matrix camWorld = DirectX::SimpleMath::Matrix::CreateFromQuaternion(m_data.rotation);
 	camWorld.Translation(m_data.position);
+
+	bool isPerspective = (std::abs(proj.m[3][3]) < 1e-4f);
+	if (isPerspective)
+	{
+		DirectX::SimpleMath::Vector4 clipPos = DirectX::SimpleMath::Vector4::Transform(
+			DirectX::SimpleMath::Vector4(m_data.position.x, m_data.position.y, m_data.position.z, 1.0f),
+			view * proj
+		);
+		if (clipPos.w <= 0.1f && !ImGuizmo::IsUsing())
+		{
+			return;
+		}
+	}
+
 	ImGuizmo::Manipulate(
 		(float*)&view.m[0][0],
 		(float*)&proj.m[0][0],
@@ -364,17 +381,20 @@ void CameraController::DrawGizmo(
 			newCamWorld.Translation(pos);
 			m_data.viewMatrix = newCamWorld.Invert();
 
-			if (m_owner != nullptr)
-			{
-				if (auto* transform = m_owner->GetComponent<TransformComponent>())
-				{
-					transform->SetPosition(pos);
-					transform->SetRotation(rot);
-				}
-			}
-		}
-	}
-}
+			if (m_owner != nullptr)
+			{
+				if (auto* transform = m_owner->GetComponent<TransformComponent>())
+				{
+					transform->SetPosition(pos);
+					transform->SetRotation(rot);
+				}
+			}
+		}
+	}
+}
+#else
+void CameraController::DrawGizmo(const DirectX::SimpleMath::Matrix&, const DirectX::SimpleMath::Matrix&, int, int) {}
+#endif
 
 nlohmann::json CameraController::Serialize()
 {
@@ -452,6 +472,7 @@ void CameraController::Deserialize(const nlohmann::json& data)
 	m_data.viewMatrix = camWorld.Invert();
 }
 
+#if HEIN_WITH_EDITOR
 void CameraController::OnInspectorGUI(GameContext& gameContext)
 {
 	bool isGizmoActive = (HEIN::g_ActiveGizmoTarget == this);
@@ -908,14 +929,17 @@ void CameraController::OnInspectorGUI(GameContext& gameContext)
 			ImGui::ProgressBar(m_blendTimer / m_blendDuration, ImVec2(-1, 0), "Blending...");
 		}
 
-		ImGui::Separator();
-		ImGui::Text("Viewport & Frustum Information:");
-		D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
-		ImGui::Text("Screen Viewport: %.0f x %.0f", vp.Width, vp.Height);
-		float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : 1.777f;
-		ImGui::Text("Aspect Ratio: %.3f", aspect);
-		ImGui::Text("Camera Stack Depth: %zu", m_cameraStack.size());
-	}
-}
+		ImGui::Separator();
+		ImGui::Text("Viewport & Frustum Information:");
+		D3D11_VIEWPORT vp = gameContext.deviceResources.GetScreenViewport();
+		ImGui::Text("Screen Viewport: %.0f x %.0f", vp.Width, vp.Height);
+		float aspect = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : 1.777f;
+		ImGui::Text("Aspect Ratio: %.3f", aspect);
+		ImGui::Text("Camera Stack Depth: %zu", m_cameraStack.size());
+	}
+}
+#else
+void CameraController::OnInspectorGUI(GameContext&) {}
+#endif
 
 } // namespace HEIN

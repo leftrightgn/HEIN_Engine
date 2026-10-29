@@ -1,6 +1,10 @@
 #pragma once
 #include "Common/json.hpp"
 
+#ifndef HEIN_WITH_EDITOR
+#define HEIN_WITH_EDITOR 1
+#endif
+
 
 struct GameContext;
 

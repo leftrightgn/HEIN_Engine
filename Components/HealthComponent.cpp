@@ -76,6 +76,7 @@ void HEIN::HealthComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("HitFlashDuration")) m_hitFlashDuration = data["HitFlashDuration"];
 }
 
+#if HEIN_WITH_EDITOR
 void HEIN::HealthComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 {
 	if (ImGui::CollapsingHeader("HealthComponent", ImGuiTreeNodeFlags_DefaultOpen))
@@ -122,6 +123,9 @@ void HEIN::HealthComponent::OnInspectorGUI(GameContext& /*gameContext*/)
 		}
 	}
 }
+#else
+void HEIN::HealthComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 
 } // namespace HEIN

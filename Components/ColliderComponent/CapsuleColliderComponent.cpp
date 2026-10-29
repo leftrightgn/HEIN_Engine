@@ -209,6 +209,7 @@ void HEIN::CapsuleColliderComponent::Deserialize(const nlohmann::json& data)
     if (data.contains("Radius")) m_radius = data["Radius"];
     if (data.contains("Height")) m_height = data["Height"];
 }
+#if HEIN_WITH_EDITOR
 
 void HEIN::CapsuleColliderComponent::OnInspectorGUI(GameContext& gameContext)
 {
@@ -219,6 +220,9 @@ void HEIN::CapsuleColliderComponent::OnInspectorGUI(GameContext& gameContext)
         ImGui::DragFloat("Height", &m_height, 0.05f);
     }
 }
+#else
+void HEIN::CapsuleColliderComponent::OnInspectorGUI(GameContext& /*gameContext*/) {}
+#endif
 
 bool HEIN::CapsuleColliderComponent::IntersectsFrustum(const DirectX::BoundingFrustum& frustum) const
 {
