@@ -45,6 +45,8 @@ namespace DX
         void RegisterDeviceNotify(IDeviceNotify* deviceNotify) noexcept { m_deviceNotify = deviceNotify; }
         void Present();
         void UpdateColorSpace();
+        void SetUncappedFPS(bool uncapped) noexcept { m_uncappedFPS = uncapped; }
+        bool IsUncappedFPS() const noexcept { return m_uncappedFPS; }
 
         // Device Accessors.
         RECT GetOutputSize() const noexcept { return m_outputSize; }
@@ -117,6 +119,7 @@ namespace DX
 
         // DeviceResources options (see flags above)
         unsigned int                                    m_options;
+        bool                                            m_uncappedFPS;
 
         // The IDeviceNotify can be held directly as it owns the DeviceResources.
         IDeviceNotify*                                  m_deviceNotify;

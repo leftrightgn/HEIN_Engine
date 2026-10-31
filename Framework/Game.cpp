@@ -7,6 +7,8 @@
 #include "Factory/ComponentFactory.h"
 #include "Message/Messenger.h"
 #include "Components/UIButtonComponent.h"
+#include "Camera/CameraController.h"
+#include "System/AudioSystem.h"
 #if HEIN_WITH_EDITOR
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_dx11.h"
@@ -27,7 +29,13 @@ Game::Game() noexcept(false)
     , m_gameContext{}
     , m_sceneManager{}
 {
-    m_deviceResources = std::make_unique<DX::DeviceResources>();
+    m_deviceResources = std::make_unique<DX::DeviceResources>(
+        DXGI_FORMAT_B8G8R8A8_UNORM,
+        DXGI_FORMAT_D32_FLOAT,
+        2,
+        D3D_FEATURE_LEVEL_10_0,
+        DX::DeviceResources::c_FlipPresent | DX::DeviceResources::c_AllowTearing
+    );
     // TODO: Provide parameters for swapchain format, depth/stencil format, and backbuffer count.
     //   Add DX::DeviceResources::c_AllowTearing to opt-in to variable rate displays.
     //   Add DX::DeviceResources::c_EnableHDR for HDR10 display.
@@ -36,6 +44,17 @@ Game::Game() noexcept(false)
 
 Game::~Game()
 {
+    if (m_gameContext)
+    {
+        m_sceneManager.ClearAllScenes(&*m_gameContext);
+    }
+    else
+    {
+        m_sceneManager.ClearAllScenes(nullptr);
+    }
+
+    m_debugCollisionRenderer.ReleaseGPUResources();
+    HEIN::AudioSystem::DestroyInstance();
 #if HEIN_WITH_EDITOR
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -79,7 +98,7 @@ void Game::Initialize(HWND window, int width, int height)
     m_gameContext->eventManager = &m_eventManager;
     m_gameContext->sceneManager = &m_sceneManager;
 
-
+    HEIN::AudioSystem::GetInstance()->Initialize();
 
 #if HEIN_WITH_EDITOR
     // --- SETUP IMGUI ---
@@ -139,7 +158,10 @@ void Game::Update(DX::StepTimer const& timer)
     m_gameContext->keyboardState = keyboard;
     m_gameContext->gameViewport = m_deviceResources->GetScreenViewport();
     HEIN::UIButtonComponent::SetActiveUIViewport(m_gameContext->gameViewport);
-    HEIN::Messenger::GetInstance()->Update(elapsedTime);
+    if (HEIN::Messenger* messenger = HEIN::Messenger::GetInstance())
+    {
+        messenger->Update(elapsedTime);
+    }
     m_inputManager.Update(*m_gameContext);
     // Escape lifecycle is handled contextually by active Scene and UI systems
     if (!m_gameContext->isEditorApplication && keyboard.Escape && m_gameContext->sceneManager == nullptr)
@@ -149,6 +171,16 @@ void Game::Update(DX::StepTimer const& timer)
 
     // シーンの更新
     m_sceneManager.Update(*m_gameContext);
+
+    DirectX::SimpleMath::Vector3 listenerPos = DirectX::SimpleMath::Vector3::Zero;
+    if (m_gameContext && m_gameContext->mainCamera)
+    {
+        listenerPos = m_gameContext->mainCamera->GetPosition();
+    }
+    if (auto* audio = HEIN::AudioSystem::GetInstance())
+    {
+        audio->Update(elapsedTime, listenerPos);
+    }
 }
 #pragma endregion
 
@@ -174,6 +206,33 @@ void Game::Render()
     m_sceneManager.Render(*m_gameContext);
 
 #if HEIN_WITH_EDITOR
+    if (m_gameContext && m_gameContext->isEditorApplication && m_gameContext->showFPS)
+    {
+        ImGuiIO& fpsIo = ImGui::GetIO();
+        const float fps = (fpsIo.Framerate > 0.0f) ? fpsIo.Framerate : static_cast<float>(m_timer.GetFramesPerSecond());
+        const float frameMs = (fps > 0.001f) ? (1000.0f / fps) : static_cast<float>(m_timer.GetElapsedSeconds() * 1000.0);
+
+        if (!m_gameContext->isEditorMode)
+        {
+            ImDrawList* fg = ImGui::GetForegroundDrawList();
+            ImGuiViewport* mainVp = ImGui::GetMainViewport();
+            if (fg && mainVp)
+            {
+                char fpsBuf[64];
+                snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f (%.2f ms)%s", fps, frameMs, m_gameContext->uncappedFPS ? " [UNCAPPED]" : " [VSYNC]");
+                ImVec2 textSize = ImGui::CalcTextSize(fpsBuf);
+                ImVec2 badgePos(mainVp->Pos.x + 14.0f, mainVp->Pos.y + 14.0f);
+                fg->AddRectFilled(
+                    ImVec2(badgePos.x - 6.0f, badgePos.y - 4.0f),
+                    ImVec2(badgePos.x + textSize.x + 6.0f, badgePos.y + textSize.y + 4.0f),
+                    IM_COL32(15, 17, 22, 210),
+                    4.0f
+                );
+                ImU32 fpsColor = (fps >= 58.0f) ? IM_COL32(80, 235, 110, 255) : ((fps >= 30.0f) ? IM_COL32(255, 205, 70, 255) : IM_COL32(255, 85, 85, 255));
+                fg->AddText(badgePos, fpsColor, fpsBuf);
+            }
+        }
+    }
     ImGui::Render();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
@@ -229,6 +288,10 @@ void Game::OnDeactivated()
 void Game::OnSuspending()
 {
     // TODO: Game is being power-suspended (or minimized).
+    if (auto* audio = HEIN::AudioSystem::GetInstance())
+    {
+        audio->Suspend();
+    }
 }
 
 void Game::OnResuming()
@@ -236,6 +299,10 @@ void Game::OnResuming()
     m_timer.ResetElapsedTime();
 
     // TODO: Game is being power-resumed (or returning from minimize).
+    if (auto* audio = HEIN::AudioSystem::GetInstance())
+    {
+        audio->Resume();
+    }
 }
 
 void Game::OnWindowMoved()

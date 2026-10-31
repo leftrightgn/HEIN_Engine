@@ -88,6 +88,8 @@ struct GameContext
 	bool isSceneViewPass = false;
 	EditorViewportLayout viewportLayout = EditorViewportLayout::SceneViewOnly;
 	bool enableFrustumCulling = true;
+	bool uncappedFPS = false;
+	bool showFPS = true;
 	/// @brief Whether Game View has captured input focus in editor play mode
 	bool isGameViewFocused = false;
 };

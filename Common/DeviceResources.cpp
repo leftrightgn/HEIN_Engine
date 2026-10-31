@@ -77,6 +77,7 @@ DeviceResources::DeviceResources(
         m_outputSize{0, 0, 1, 1},
         m_colorSpace(DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709),
         m_options(flags | c_FlipPresent),
+        m_uncappedFPS(false),
         m_deviceNotify(nullptr)
 {
 }
@@ -459,10 +460,11 @@ void DeviceResources::HandleDeviceLost()
 void DeviceResources::Present()
 {
     HRESULT hr = E_FAIL;
-    if (m_options & c_AllowTearing)
+    if (m_uncappedFPS)
     {
         // Recommended to always use tearing if supported when using a sync interval of 0.
-        hr = m_swapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+        const UINT presentFlags = (m_options & c_AllowTearing) ? DXGI_PRESENT_ALLOW_TEARING : 0u;
+        hr = m_swapChain->Present(0, presentFlags);
     }
     else
     {
