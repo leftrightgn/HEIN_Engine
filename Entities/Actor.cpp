@@ -323,6 +323,10 @@ void HEIN::Actor::Deserialize(const nlohmann::json& actorData, ActorManager* man
 				{
 					targetComp->Deserialize(compData["Data"]);
 				}
+				else
+				{
+					targetComp->Deserialize(compData);
+				}
 			}
 			else
 			{
@@ -334,6 +338,10 @@ void HEIN::Actor::Deserialize(const nlohmann::json& actorData, ActorManager* man
 					if (compData.contains("Data") && !compData["Data"].is_null())
 					{
 						newComp->Deserialize(compData["Data"]);
+					}
+					else
+					{
+						newComp->Deserialize(compData);
 					}
 				}
 			}

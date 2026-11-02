@@ -37,9 +37,6 @@
     <ClCompile Include="Components\UIButtonComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
-    <ClCompile Include="Components\AnimationEditorComponent.cpp">
-      <Filter>Components</Filter>
-    </ClCompile>
     <ClCompile Include="Components\ColliderComponent\TerrainColliderComponent.cpp">
       <Filter>Components\ColliderComponent</Filter>
     </ClCompile>
@@ -52,11 +49,14 @@
     <ClCompile Include="Components\GaugeComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
-    <ClCompile Include="Components\HitEffectComponent.cpp">
+    <ClCompile Include="Components\ParticleComponent.cpp">
       <Filter>Components</Filter>
     </ClCompile>
-    <ClCompile Include="Components\WeaponTrailComponent.cpp">
+    <ClCompile Include="Components\SoundComponent.cpp">
       <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="System\AudioSystem.cpp">
+      <Filter>System</Filter>
     </ClCompile>
     <ClCompile Include="System\CollisionDispatcher.cpp">
       <Filter>System</Filter>
@@ -124,9 +124,6 @@
     <ClInclude Include="Camera\CameraCollisionHelper.h">
       <Filter>Camera</Filter>
     </ClInclude>
-    <ClInclude Include="Components\AnimationEditorComponent.h">
-      <Filter>Components</Filter>
-    </ClInclude>
     <ClInclude Include="Components\ColliderComponent\TerrainColliderComponent.h">
       <Filter>Components\ColliderComponent</Filter>
     </ClInclude>
@@ -145,11 +142,14 @@
     <ClInclude Include="Components\GaugeComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
-    <ClInclude Include="Components\HitEffectComponent.h">
+    <ClInclude Include="Components\ParticleComponent.h">
       <Filter>Components</Filter>
     </ClInclude>
-    <ClInclude Include="Components\WeaponTrailComponent.h">
+    <ClInclude Include="Components\SoundComponent.h">
       <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="System\AudioSystem.h">
+      <Filter>System</Filter>
     </ClInclude>
     <ClInclude Include="System\CollisionDispatcher.h">
       <Filter>System</Filter>

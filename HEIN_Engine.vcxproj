@@ -179,6 +179,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;uuid.lib;kernel32.lib;user32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
@@ -211,6 +212,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;uuid.lib;kernel32.lib;user32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
@@ -243,6 +245,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <AdditionalDependencies>d3d11.lib;dxgi.lib;dxguid.lib;uuid.lib;kernel32.lib;user32.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
@@ -261,7 +264,7 @@
     <ClInclude Include="ImGui\imnodes_internal.h" />
     <ClInclude Include="System\ShadowSystem.h" />
     <ClInclude Include="Common\ShaderStructures.h" />
-    <ClInclude Include="Components\AnimationEditorComponent.h" />
+
     <ClInclude Include="Components\LightComponent.h" />
     <ClInclude Include="Components\ColliderComponent\TerrainColliderComponent.h" />
     <ClInclude Include="Components\ProceduralAnimationComponent.h" />
@@ -270,8 +273,9 @@
     <ClInclude Include="Components\TerrainComponent.h" />
     <ClInclude Include="Components\GaugeComponent.h" />
     <ClInclude Include="Components\UIButtonComponent.h" />
-    <ClInclude Include="Components\WeaponTrailComponent.h" />
-    <ClInclude Include="Components\HitEffectComponent.h" />
+    <ClInclude Include="Components\ParticleComponent.h" />
+    <ClInclude Include="Components\SoundComponent.h" />
+    <ClInclude Include="System\AudioSystem.h" />
     <ClInclude Include="DebugingTools\EditorUtils.h" />
     <ClInclude Include="Factory\ComponentFactory.h" />
     <ClInclude Include="pch.h" />
@@ -283,7 +287,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="System\ShadowSystem.cpp" />
-    <ClCompile Include="Components\AnimationEditorComponent.cpp" />
+
     <ClCompile Include="Components\ColliderComponent\TerrainColliderComponent.cpp" />
     <ClCompile Include="Components\ProceduralAnimationComponent.cpp" />
     <ClCompile Include="Components\FogComponent.cpp" />
@@ -291,8 +295,9 @@
     <ClCompile Include="Components\TerrainComponent.cpp" />
     <ClCompile Include="Components\GaugeComponent.cpp" />
     <ClCompile Include="Components\UIButtonComponent.cpp" />
-    <ClCompile Include="Components\WeaponTrailComponent.cpp" />
-    <ClCompile Include="Components\HitEffectComponent.cpp" />
+    <ClCompile Include="Components\ParticleComponent.cpp" />
+    <ClCompile Include="Components\SoundComponent.cpp" />
+    <ClCompile Include="System\AudioSystem.cpp" />
     <ClCompile Include="Components\LightComponent.cpp" />
     <ClCompile Include="DebugingTools\EditorUtils.cpp" />
     <ClCompile Include="pch.cpp">
@@ -424,6 +429,26 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64' or '$(Configuration)|$(Platform)'=='Shipping|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shaders\GaugeUI_PS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64' or '$(Configuration)|$(Platform)'=='Shipping|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64' or '$(Configuration)|$(Platform)'=='Shipping|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shaders\Particle_VS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64' or '$(Configuration)|$(Platform)'=='Shipping|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64' or '$(Configuration)|$(Platform)'=='Shipping|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shaders\Particle_PS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -617,6 +642,7 @@
     <None Include="Shaders\StaticModel_Common.hlsli" />
     <None Include="Shaders\Terrain_Common.hlsli" />
     <None Include="Shaders\HitEffect_Common.hlsli" />
+    <None Include="Shaders\Particle_Common.hlsli" />
     <None Include="Shaders\WaterPs.hlsl" />
     <None Include="Shaders\WaterVs.hlsl" />
   </ItemGroup>

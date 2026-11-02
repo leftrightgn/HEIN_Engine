@@ -19,7 +19,7 @@ float4 main(VSOutput input) : SV_TARGET
     float radialBody = pow(v, max(0.2f, TipFalloffPower));
     float tipRimBoost = smoothstep(0.68f, 0.96f, v);
     // Crisp anti-aliased outer tip edge and soft inner hilt fade
-    float outerEdgeMask = smoothstep(1.0f, 0.965f, v) * smoothstep(0.0f, 0.08f, v);
+    float outerEdgeMask = smoothstep(0.0f, 0.08f, v) * (1.0f - smoothstep(0.965f, 1.0f, v));
 
     // Dual-Octave Anisotropic Scrolled Noise for Air-Cut Streak Erosion
     float2 noiseUV1 = float2(u * NoiseScale - Time * NoiseScrollSpeed, v * (NoiseScale * 2.2f));

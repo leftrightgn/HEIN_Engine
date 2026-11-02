@@ -351,8 +351,17 @@ HEIN::Actor* HEIN::ActorManager::DuplicateActor(Actor* sourceActor, GameContext&
 
 void HEIN::ActorManager::ClearAllActors()
 {
-    m_actors.clear();
-    m_pendingDestorys.clear(); 
+    m_pendingDestorys.clear();
+
+    // Detach each actor from the map before destroying it, so component destructors
+    // that query this manager never observe a half-cleared container.
+    while (!m_actors.empty())
+    {
+        auto it = m_actors.begin();
+        std::unique_ptr<Actor> doomed = std::move(it->second);
+        m_actors.erase(it);
+        doomed.reset();
+    }
 }
 
 void HEIN::ActorManager::ReleaseEditorResources()

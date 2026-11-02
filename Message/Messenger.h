@@ -23,29 +23,29 @@ namespace HEIN
 	class Messenger
 	{
 	private:
+private:
+	static std::unique_ptr<Messenger> s_messenger;
+	inline static bool s_isTerminated = false;
 
-		static std::unique_ptr<Messenger> s_messenger;
+	std::unordered_map<int, std::vector<IObserver*>> m_objects;
+	float m_elapsedTime;
+	std::vector<DelayedMessage> m_delayedMessages;
 
-		std::unordered_map<int, std::vector<IObserver*>> m_objects;
+public:
+	IObserver* GetObject(int actorID);
 
-		float m_elapsedTime;
+	float GetElapsedTime() const { return m_elapsedTime; }
 
-		std::vector<DelayedMessage> m_delayedMessages;
+	void SetElapsedTime(const float& elapsedTime) { m_elapsedTime = elapsedTime; }
 
-	public:
-		IObserver* GetObject(int actorID);
+public:
 
-		float GetElapsedTime() const { return m_elapsedTime; }
+	static Messenger* GetInstance();
 
-		void SetElapsedTime(const float& elapsedTime) { m_elapsedTime = elapsedTime; }
+	static void DestroyInstance();
+	static void ResetTermination() { s_isTerminated = false; }
 
-	public:
-
-		static Messenger* GetInstance();
-
-		static void DestroyInstance();
-
-		/// <summary>
+	/// <summary>
 		/// Subscribes an observer to receive messages destined for a specific actor.
 		/// </summary>
 		void Register(int actorID, IObserver* observer);

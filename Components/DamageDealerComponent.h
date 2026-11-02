@@ -2,6 +2,7 @@
 #include "../Message/IObserver.h"
 #include "../Message/Message.h"
 #include "Components/IComponent.h"
+#include <SimpleMath.h>
 #include <algorithm>
 #include <cstdint>
 #include <unordered_set>
@@ -34,6 +35,9 @@ namespace HEIN
 		std::unordered_set<uint32_t> m_hitActorsThisSwing;
 
 		uint32_t m_registeredListenID = 0;
+
+		DirectX::SimpleMath::Vector3 m_lastContactPoint = DirectX::SimpleMath::Vector3::Zero;
+		DirectX::SimpleMath::Vector3 m_lastContactNormal = DirectX::SimpleMath::Vector3::UnitY;
 
 	public:
 		
@@ -78,6 +82,12 @@ namespace HEIN
 
 		int GetHitstopFrames() const { return m_hitstopFrames; }
 		void SetHitstopFrames(int frames) { m_hitstopFrames = std::max(0, frames); }
+
+		const DirectX::SimpleMath::Vector3& GetLastContactPoint() const { return m_lastContactPoint; }
+		void SetLastContactPoint(const DirectX::SimpleMath::Vector3& point) { m_lastContactPoint = point; }
+
+		const DirectX::SimpleMath::Vector3& GetLastContactNormal() const { return m_lastContactNormal; }
+		void SetLastContactNormal(const DirectX::SimpleMath::Vector3& normal) { m_lastContactNormal = normal; }
 
 		// Per-Swing Hit Registry API (One Attack = One Time Damage)
 		void ClearHitList() { m_hitActorsThisSwing.clear(); }

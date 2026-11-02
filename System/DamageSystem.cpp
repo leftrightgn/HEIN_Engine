@@ -47,9 +47,10 @@ void HEIN::DamageSystem::HandlTriggerHit(const HEIN::TriggerEventPayLoad& payLoa
 		{
 			return;
 		}
-
 		// Immediately lock in this victim for the remainder of this swing
 		dealer->RegisterHitActor(victimActor->GetID());
+		dealer->SetLastContactPoint(payLoad.contactPoint);
+		dealer->SetLastContactNormal(payLoad.contactNormal);
 
 		Actor* attacker = actorManager.GetActor(attackerID);
 		if (!attacker) attacker = weaponActor;

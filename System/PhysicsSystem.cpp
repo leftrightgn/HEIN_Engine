@@ -235,6 +235,8 @@ void HEIN::PhysicsSystem::UpdateCollisions(GameContext& gameContext, HEIN::Actor
                     HEIN::TriggerEventPayLoad payload;
                     payload.triggerA = colA;
                     payload.triggerB = colB;
+                    payload.contactPoint = mainfold.contactPoint;
+                    payload.contactNormal = mainfold.normal;
                     gameContext.eventManager->DispatchTriggerEvent(payload);
                 }
             }

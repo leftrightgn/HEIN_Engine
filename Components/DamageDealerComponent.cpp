@@ -51,11 +51,16 @@ void HEIN::DamageDealerComponent::RegisterToWielderMessages()
 
 	if (listenID != INVALID_ACTOR_ID && listenID != m_registeredListenID)
 	{
-		if (m_registeredListenID != INVALID_ACTOR_ID && Messenger::GetInstance())
+		Messenger* msg = Messenger::GetInstance();
+		if (!msg)
 		{
-			Messenger::GetInstance()->UnRegisterObserver(this);
+			return;
 		}
-		Messenger::GetInstance()->Register(listenID, this);
+		if (m_registeredListenID != INVALID_ACTOR_ID)
+		{
+			msg->UnRegisterObserver(this);
+		}
+		msg->Register(listenID, this);
 		m_registeredListenID = listenID;
 	}
 }

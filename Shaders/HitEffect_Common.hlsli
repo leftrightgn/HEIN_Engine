@@ -1,29 +1,42 @@
 //--------------------------------------------------------------------------------------
 // HitEffect_Common.hlsli
-// Shared structures and constant buffers for Combat Impact VFX (Blood Splatter & Steel Sparks)
+// Shared GPU Particle Contract (Universal Vertex Shader + Pluggable Pixel Shaders)
 //--------------------------------------------------------------------------------------
 
-cbuffer cbHitEffectParams : register(b0)
+cbuffer cbParticleFrame : register(b0)
 {
     row_major float4x4 ViewProj;
-    float  EmissiveIntensity; // HDR brightness multiplier for incandescent steel sparks
-    float  NoiseScale;        // Tiling frequency for organic blood splatter erosion
-    float  ErosionStrength;   // Edge shredding strength as particles age
-    float  PassMode;          // 0.0 = Blood Pass (Organic Noise-Eroded Alpha), 1.0 = Spark Pass (HDR Tapered Additive)
+    float3 CameraRight;
+    float  CurrentTime;
+    float3 CameraUp;
+    uint   ActiveSlotIndex;
+    float3 CameraForward;
+    float  ShaderStyleID;
+    float4 EffectShaderParams; // x = EmissiveIntensity, y = NoiseScale, z = ErosionStrength, w = CustomParam
 };
 
-struct VSInput
+struct GPUParticleSeed
 {
-    float3 Pos      : POSITION0;
-    float4 Color    : COLOR0;
-    float2 TexCoord : TEXCOORD0; // Quad local coordinates in [-1.0, 1.0]
-    float2 Params   : TEXCOORD1; // x = normalized age [0.0..1.0], y = per-particle random phase [0.0..1.0]
+    float3 SpawnPos;
+    float  SpawnTime;
+    float3 InitialVelocity;
+    float  Lifetime;
+    float4 StartColor;
+    float4 EndColor;
+    float  StartSize;
+    float  EndSize;
+    float  Drag;
+    float  Gravity;
+    float  StretchFactor;
+    float  RandomSeed;
+    uint   SlotIndex;
+    uint   Flags;
 };
 
 struct VSOutput
 {
     float4 Pos      : SV_POSITION;
     float4 Color    : COLOR0;
-    float2 TexCoord : TEXCOORD0;
-    float2 Params   : TEXCOORD1;
+    float2 TexCoord : TEXCOORD0; // Quad local coordinates in [-1.0, 1.0]
+    float2 Params   : TEXCOORD1; // x = normalized age [0.0..1.0], y = per-particle random phase [0.0..1.0]
 };

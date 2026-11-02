@@ -27,6 +27,7 @@ HEIN::IObserver* HEIN::Messenger::GetObject(int actorID)
 
 HEIN::Messenger* HEIN::Messenger::GetInstance()
 {
+    if (s_isTerminated) return nullptr;
     if (s_messenger == nullptr)
     {
         s_messenger = std::unique_ptr<Messenger>(new Messenger());
@@ -36,9 +37,9 @@ HEIN::Messenger* HEIN::Messenger::GetInstance()
 
 void HEIN::Messenger::DestroyInstance()
 {
+    s_isTerminated = true;
     s_messenger.reset();
 }
-
 void HEIN::Messenger::Register(int actorID, IObserver* observer)
 {
     if (observer == nullptr) return;
