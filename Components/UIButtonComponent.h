@@ -44,6 +44,11 @@ namespace HEIN
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_pressedTexture;
 
         ButtonState m_currentState = ButtonState::Normal;
+        ButtonState m_previousState = ButtonState::Normal;
+
+        // Sound Cue Bindings (queries owning Actor's SoundComponent)
+        std::string m_hoverSoundCue = "UI_Hover";
+        std::string m_clickSoundCue = "UI_Click";
 
         // Screen Space Coordinates
         DirectX::SimpleMath::Vector2 m_position = DirectX::SimpleMath::Vector2(100.0f, 100.0f);
@@ -192,5 +197,11 @@ namespace HEIN
 
         const std::vector<int>& GetSubmitKeys() const { return m_submitKeys; }
         void SetSubmitKeys(const std::vector<int>& keys) { m_submitKeys = keys; }
+
+        const std::string& GetHoverSoundCue() const { return m_hoverSoundCue; }
+        void SetHoverSoundCue(const std::string& cue) { m_hoverSoundCue = cue; }
+
+        const std::string& GetClickSoundCue() const { return m_clickSoundCue; }
+        void SetClickSoundCue(const std::string& cue) { m_clickSoundCue = cue; }
     };
 }

@@ -148,7 +148,11 @@ void HEIN::DebugCollisionRenderer::ReleaseDebugMemory()
 	m_obb.shrink_to_fit();
 	m_meshes.shrink_to_fit();
 	m_lineSegments.shrink_to_fit();
+}
 
+void HEIN::DebugCollisionRenderer::ReleaseGPUResources()
+{
+	ReleaseDebugMemory();
 	m_modelSphere.reset();
 	m_modelBox.reset();
 	m_modelEffect.reset();
@@ -171,6 +175,7 @@ void HEIN::DebugCollisionRenderer::DrawSolidShapes(
 	DirectX::FXMVECTOR color
 )
 {
+	if (!m_modelEffect || !m_modelSphere || !m_modelBox || !m_instancedVB) return;
 	m_modelEffect->SetColorAndAlpha(color);
 	m_modelEffect->SetView(view);
 	m_modelEffect->SetProjection(proj);
@@ -268,6 +273,7 @@ void HEIN::DebugCollisionRenderer::DrawWireFrames(
 	DirectX::FXMVECTOR color
 )
 {
+	if (!m_lineEffect || !m_primitiveBatch) return;
 	context->OMSetBlendState(states.Opaque(), nullptr, 0xFFFFFFFF);
 	context->OMSetDepthStencilState(states.DepthRead(), 0);
 	context->RSSetState(states.CullNone());

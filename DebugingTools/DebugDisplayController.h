@@ -40,6 +40,7 @@ namespace HEIN
 
 		OffscreenRenderTarget m_sceneRenderTarget;
 		OffscreenRenderTarget m_gameRenderTarget;
+		OffscreenRenderTarget m_particleRenderTarget;
 	public:
 
 		DebugDisplayController();
@@ -88,6 +89,8 @@ namespace HEIN
 		OffscreenRenderTarget& GetGameRenderTarget() noexcept { return m_gameRenderTarget; }
 		ID3D11ShaderResourceView* GetSceneSRV() const noexcept { return m_sceneRenderTarget.GetShaderResourceView(); }
 		ID3D11ShaderResourceView* GetGameSRV() const noexcept { return m_gameRenderTarget.GetShaderResourceView(); }
+		OffscreenRenderTarget& GetParticleRenderTarget() noexcept { return m_particleRenderTarget; }
+		ID3D11ShaderResourceView* GetParticleSRV() const noexcept { return m_particleRenderTarget.GetShaderResourceView(); }
 	};
 #else
 	class DebugDisplayController

@@ -197,7 +197,8 @@ namespace HEIN
 
     public:
         SceneManager();
-        ~SceneManager() = default;
+        ~SceneManager();
+        void ClearAllScenes(GameContext* context = nullptr);
 
         template <class TScene>
         void RegisterScene(const std::string& sceneName)

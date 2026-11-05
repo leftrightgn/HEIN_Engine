@@ -68,6 +68,12 @@ namespace HEIN
         LoadTransitionConfig();
     }
 
+    SceneManager::~SceneManager()
+    {
+        ClearAllScenes(nullptr);
+    }
+
+
     void SceneManager::EnsureWhiteTexture(ID3D11Device* device)
     {
         if (m_whiteTextureSRV || !device) return;
@@ -377,6 +383,27 @@ namespace HEIN
     void SceneManager::UnloadScene(const std::string& sceneName)
     {
         m_pendingUnloads.push_back(sceneName);
+    }
+
+    void SceneManager::ClearAllScenes(GameContext* context)
+    {
+        m_pendingLoads.clear();
+        m_pendingUnloads.clear();
+
+        for (auto& active : m_activeScenes)
+        {
+            if (active.instance)
+            {
+                if (context)
+                {
+                    active.instance->OnExit(*context);
+                }
+            }
+        }
+        m_activeScenes.clear();
+
+        StaticModelComponent::PruneModelCache();
+        HEIN::PruneSharedTextureCache();
     }
 
     bool SceneManager::LoadTransitionConfig(const std::string& path)

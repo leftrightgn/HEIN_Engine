@@ -6,6 +6,8 @@
 #include "DDSTextureLoader.h"
 #include "WICTextureLoader.h"
 #include "Components/StaticModelComponent.h"
+#include "Components/SoundComponent.h"
+#include "Entities/Actor.h"
 #include "DebugingTools/DebugUIManager.h"
 #include "DebugingTools/EditorUtils.h"
 #if HEIN_WITH_EDITOR
@@ -367,7 +369,13 @@ void HEIN::UIButtonComponent::Start()
 
 void HEIN::UIButtonComponent::Update(float deltaTime)
 {
-    if (!m_isVisible) return;
+    if (!m_isVisible)
+    {
+        m_currentState = ButtonState::Normal;
+        m_previousState = ButtonState::Normal;
+        m_isClicked = false;
+        return;
+    }
 
     m_animTime += deltaTime;
 
@@ -378,6 +386,7 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
     if (m_elementType != UIElementType::Button)
     {
         m_currentState = ButtonState::Normal;
+        m_previousState = ButtonState::Normal;
         m_hoverProgress = 0.0f;
         return;
     }
@@ -399,6 +408,7 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
     {
         m_wasMouseDown = false;
         m_currentState = ButtonState::Normal;
+        m_previousState = ButtonState::Normal;
         float targetProgress = 0.0f;
         m_hoverProgress += (targetProgress - m_hoverProgress) * std::min(1.0f, 12.0f * deltaTime);
         return;
@@ -496,6 +506,23 @@ void HEIN::UIButtonComponent::Update(float deltaTime)
     }
 
     m_wasMouseDown = isMouseDown;
+
+    // - Dispatch rising-edge Hover and Click sound cues via the owning Actor's SoundComponent
+    if (m_owner != nullptr)
+    {
+        if (auto* soundComp = m_owner->GetComponent<SoundComponent>())
+        {
+            if (m_isClicked && !m_clickSoundCue.empty())
+            {
+                soundComp->PlayCueOrFallbackPath(m_clickSoundCue, AudioBus::UISFX, 1.0f);
+            }
+            else if (m_previousState == ButtonState::Normal && m_currentState == ButtonState::Hover && !m_hoverSoundCue.empty())
+            {
+                soundComp->PlayCueOrFallbackPath(m_hoverSoundCue, AudioBus::UISFX, 1.0f);
+            }
+        }
+    }
+    m_previousState = m_currentState;
 
     // Smooth hover progress interpolation for fluid Elden Ring light-up transition
     float targetProgress = (m_currentState == ButtonState::Hover || m_currentState == ButtonState::Pressed) ? 1.0f : 0.0f;
@@ -837,6 +864,8 @@ nlohmann::json HEIN::UIButtonComponent::Serialize()
     data["PressedTex"] = std::string(m_pressedTexPath.begin(), m_pressedTexPath.end());
     data["IsVisible"] = m_isVisible;
     data["SubmitKeys"] = m_submitKeys;
+    data["HoverSoundCue"] = m_hoverSoundCue;
+    data["ClickSoundCue"] = m_clickSoundCue;
     return data;
 }
 
@@ -935,6 +964,14 @@ void HEIN::UIButtonComponent::Deserialize(const nlohmann::json& data)
     {
         std::string path = data["PressedTex"];
         m_pressedTexPath = std::wstring(path.begin(), path.end());
+    }
+    if (data.contains("HoverSoundCue") && data["HoverSoundCue"].is_string())
+    {
+        m_hoverSoundCue = data["HoverSoundCue"].get<std::string>();
+    }
+    if (data.contains("ClickSoundCue") && data["ClickSoundCue"].is_string())
+    {
+        m_clickSoundCue = data["ClickSoundCue"].get<std::string>();
     }
 }
 
@@ -1110,6 +1147,67 @@ void HEIN::UIButtonComponent::OnInspectorGUI(GameContext& gameContext)
                     ImGui::DragFloat("Beam Height Scale", &m_beamHeightScale, 0.05f, 0.5f, 3.0f, "%.2fx");
                 }
                 ImGui::Checkbox("Draw Fallback Background Box", &m_drawFallbackBox);
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNodeEx("Button Sound Cues (SoundComponent)", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                SoundComponent* soundComp = m_owner ? m_owner->GetComponent<SoundComponent>() : nullptr;
+                if (!soundComp)
+                {
+                    ImGui::TextDisabled("No SoundComponent attached to this Button Actor yet.");
+                    if (m_owner && ImGui::Button("+ Attach SoundComponent with UI Button Preset"))
+                    {
+                        soundComp = m_owner->AddComponent<SoundComponent>();
+                        soundComp->ApplyUIButtonPreset();
+                        soundComp->Start();
+                    }
+                }
+                else
+                {
+                    const auto& cues = soundComp->GetCues();
+                    if (!cues.empty())
+                    {
+                        if (ImGui::BeginCombo("Hover Sound Cue", m_hoverSoundCue.empty() ? "<None>" : m_hoverSoundCue.c_str()))
+                        {
+                            for (const auto& c : cues)
+                            {
+                                bool isSel = (m_hoverSoundCue == c.cueName);
+                                if (ImGui::Selectable(c.cueName.c_str(), isSel))
+                                {
+                                    m_hoverSoundCue = c.cueName;
+                                }
+                                if (isSel) ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
+                        if (ImGui::BeginCombo("Click Sound Cue", m_clickSoundCue.empty() ? "<None>" : m_clickSoundCue.c_str()))
+                        {
+                            for (const auto& c : cues)
+                            {
+                                bool isSel = (m_clickSoundCue == c.cueName);
+                                if (ImGui::Selectable(c.cueName.c_str(), isSel))
+                                {
+                                    m_clickSoundCue = c.cueName;
+                                }
+                                if (isSel) ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
+                    ImGui::InputText("Hover Cue Name", &m_hoverSoundCue);
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Test Hover"))
+                    {
+                        soundComp->PlayCueOrFallbackPath(m_hoverSoundCue, AudioBus::UISFX, 1.0f);
+                    }
+                    ImGui::InputText("Click Cue Name", &m_clickSoundCue);
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Test Click"))
+                    {
+                        soundComp->PlayCueOrFallbackPath(m_clickSoundCue, AudioBus::UISFX, 1.0f);
+                    }
+                }
                 ImGui::TreePop();
             }
         }

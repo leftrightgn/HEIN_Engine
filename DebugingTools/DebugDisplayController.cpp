@@ -11,6 +11,7 @@
 #include <Entities/Actor.h>
 #include <Components/UIButtonComponent.h>
 #include <Components/GaugeComponent.h>
+#include <Components/ParticleComponent.h>
 
 
 namespace HEIN
@@ -130,13 +131,12 @@ namespace HEIN
             debugInput.isMiddleMouseDown = m_isSceneCameraDragging && isMiddleDown;
 
             // Scroll wheel handling:
-            debugInput.scrollWheelDelta = static_cast<float>(gameContext.mouseState.scrollWheelValue);
             if (io.MouseWheel != 0.0f && (isSceneHovered || m_isSceneCameraDragging))
             {
                 m_lastVirtualScroll += io.MouseWheel * 120.0f;
-                debugInput.scrollWheelDelta = m_lastVirtualScroll;
             }
-            debugInput.ignoreScroll = !(isSceneHovered || m_isSceneCameraDragging) || isGizmoActive;
+            debugInput.scrollWheelDelta = m_lastVirtualScroll;
+            debugInput.ignoreScroll = !(isSceneHovered || m_isSceneCameraDragging) || isGizmoActive || (io.MouseWheel == 0.0f);
 
             // Keyboard navigation (WASD, QE, Arrows):
             bool isShiftHeld = gameContext.keyboardState.LeftShift || gameContext.keyboardState.RightShift || io.KeyShift;
@@ -396,9 +396,71 @@ namespace HEIN
             m_gameRenderTarget.End(context);
         };
 
+        // Helper: Render Particle View pass (Isolated VFX studio for selected actor's ParticleComponent)
+        auto RenderParticleViewPass = [&](const D3D11_VIEWPORT& vp)
+        {
+            ID3D11Device* device = gameContext.deviceResources.GetD3DDevice();
+            int targetW = std::max(1, static_cast<int>(vp.Width));
+            int targetH = std::max(1, static_cast<int>(vp.Height));
+            m_particleRenderTarget.Resize(device, targetW, targetH);
+            const float particleClearColor[4] = { 0.08f, 0.08f, 0.10f, 1.0f };
+            m_particleRenderTarget.Begin(context, particleClearColor);
+
+            HEIN::Actor* selectedActor = m_debugUI.GetSelectedActor();
+            HEIN::ParticleComponent* particleComp = selectedActor ? selectedActor->GetComponent<HEIN::ParticleComponent>() : nullptr;
+            if (!particleComp && selectedActor)
+            {
+                for (HEIN::ActorID childID : selectedActor->GetChildren())
+                {
+                    if (HEIN::Actor* child = actorManager.GetActor(childID))
+                    {
+                        particleComp = child->GetComponent<HEIN::ParticleComponent>();
+                        if (particleComp) break;
+                    }
+                }
+            }
+
+            if (particleComp)
+            {
+                float aspectRatio = (vp.Height > 0.0f) ? (vp.Width / vp.Height) : 1.777f;
+                DirectX::SimpleMath::Matrix previewProj = DirectX::SimpleMath::Matrix::CreatePerspectiveFieldOfView(
+                    DirectX::XM_PI / 4.0f, aspectRatio, 0.1f, 1000.0f
+                );
+
+                float yaw = particleComp->GetPreviewCamYaw();
+                float pitch = particleComp->GetPreviewCamPitch();
+                float dist = particleComp->GetPreviewCamDist();
+                const auto& target = particleComp->GetPreviewCamTarget();
+
+                float camX = target.x + dist * std::cos(pitch) * std::sin(yaw);
+                float camY = target.y + dist * std::sin(pitch);
+                float camZ = target.z + dist * std::cos(pitch) * std::cos(yaw);
+                DirectX::SimpleMath::Vector3 eye(camX, camY, camZ);
+                DirectX::SimpleMath::Matrix previewView = DirectX::SimpleMath::Matrix::CreateLookAt(eye, target, DirectX::SimpleMath::Vector3::UnitY);
+
+                if (gameContext.debugRenderer)
+                {
+                    gameContext.debugRenderer->Begin(previewView, previewProj);
+                    gameContext.debugRenderer->DrawGrid(
+                        DirectX::SimpleMath::Vector3(20.0f, 0.0f, 0.0f),
+                        DirectX::SimpleMath::Vector3(0.0f, 0.0f, 20.0f),
+                        DirectX::SimpleMath::Vector3::Zero,
+                        20, 20,
+                        DirectX::XMVectorSet(0.25f, 0.28f, 0.35f, 0.5f)
+                    );
+                    gameContext.debugRenderer->End();
+                }
+
+                particleComp->RenderEditorPreviewPass(gameContext, previewView, previewProj);
+            }
+
+            m_particleRenderTarget.End(context);
+        };
+
         // Execute Viewport Layout Passes (Dockable Multi-Viewport Graph)
         D3D11_VIEWPORT sceneVp = m_debugUI.GetSceneViewport(gameContext);
         D3D11_VIEWPORT gameVp  = m_debugUI.GetGameViewport(gameContext);
+        D3D11_VIEWPORT particleVp = m_debugUI.GetParticleViewport(gameContext);
 
         bool shouldRenderScene = (layout != EditorViewportLayout::GameViewOnly) ||
                                  (m_debugUI.GetSceneContentSize().x > 10.0f && m_debugUI.GetSceneContentSize().y > 10.0f);
@@ -413,11 +475,16 @@ namespace HEIN
         {
             RenderGameViewPass(gameVp);
         }
+        bool shouldRenderParticle = (m_debugUI.GetParticleContentSize().x > 10.0f && m_debugUI.GetParticleContentSize().y > 10.0f);
+        if (shouldRenderParticle)
+        {
+            RenderParticleViewPass(particleVp);
+        }
 
         // Re-bind backbuffer and pass offscreen SRVs to DebugUIManager
         context->OMSetRenderTargets(1, &rtv, dsv);
         context->RSSetViewports(1, &fullscreen);
-        m_debugUI.SetViewportSRVs(m_sceneRenderTarget.GetShaderResourceView(), m_gameRenderTarget.GetShaderResourceView());
+        m_debugUI.SetViewportSRVs(m_sceneRenderTarget.GetShaderResourceView(), m_gameRenderTarget.GetShaderResourceView(), m_particleRenderTarget.GetShaderResourceView());
 
         // Unbind shadow SRV and sampler to eliminate pipeline hazards across frame boundaries
         ID3D11ShaderResourceView* nullSRV = nullptr;

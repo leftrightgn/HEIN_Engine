@@ -18,12 +18,12 @@
 #include <Factory/ComponentFactory.h>
 #include <Components/UIButtonComponent.h>
 #include <Components/GaugeComponent.h>
-#include <Components/AnimationEditorComponent.h>
 #include <Windows.h>
 #include <commdlg.h>
 #include <filesystem>
 #include <vector>
 #include <Components/TransformComponent.h>
+#include <Components/ParticleComponent.h>
 #include <Camera/CameraController.h>
 
 namespace HEIN
@@ -164,6 +164,22 @@ namespace HEIN
 			vp.TopLeftY = 0.0f;
 			vp.Width = std::floor(m_gameContentSize.x);
 			vp.Height = std::floor(m_gameContentSize.y);
+			vp.MinDepth = 0.0f;
+			vp.MaxDepth = 1.0f;
+			return vp;
+		}
+		return GetCenterViewport(gameContext);
+	}
+
+	D3D11_VIEWPORT DebugUIManager::GetParticleViewport(const GameContext& gameContext) const
+	{
+		if (m_particleContentSize.x > 10.0f && m_particleContentSize.y > 10.0f)
+		{
+			D3D11_VIEWPORT vp = {};
+			vp.TopLeftX = 0.0f;
+			vp.TopLeftY = 0.0f;
+			vp.Width = std::floor(m_particleContentSize.x);
+			vp.Height = std::floor(m_particleContentSize.y);
 			vp.MinDepth = 0.0f;
 			vp.MaxDepth = 1.0f;
 			return vp;
@@ -541,6 +557,7 @@ namespace HEIN
 			ImGui::DockBuilderDockWindow("Inspector", dockRight);
 			ImGui::DockBuilderDockWindow("Scene View", dockCenterLeft);
 			ImGui::DockBuilderDockWindow("Game View", dockMain);
+			ImGui::DockBuilderDockWindow("Particle View", dockMain);
 
 			ImGui::DockBuilderFinish(dockspaceId);
 		}
@@ -576,6 +593,24 @@ namespace HEIN
 		if (ImGui::Button("[ Reset Layout ]"))
 		{
 			m_resetLayoutRequested = true;
+		}
+		ImGui::PopStyleColor();
+
+		SameLineWrap(95.0f);
+		if (ImGui::Button("Scene View"))
+		{
+			ImGui::SetWindowFocus("Scene View");
+		}
+		SameLineWrap(90.0f);
+		if (ImGui::Button("Game View"))
+		{
+			ImGui::SetWindowFocus("Game View");
+		}
+		SameLineWrap(105.0f);
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.40f, 0.55f, 1.0f));
+		if (ImGui::Button("Particle View"))
+		{
+			ImGui::SetWindowFocus("Particle View");
 		}
 		ImGui::PopStyleColor();
 
@@ -654,8 +689,6 @@ namespace HEIN
 		if (ImGui::Button("LOAD SCENE")) currentAction = HEIN::EditorAction::LoadPressed;
 		SameLineWrap(95.0f);
 		if (ImGui::Button("NEW SCENE")) currentAction = HEIN::EditorAction::NewScenePressed;
-		SameLineWrap(85.0f);
-		if (ImGui::Button("ANIMATOR")) m_showAnimatorWindow = !m_showAnimatorWindow;
 
 		ImGui::Separator();
 		if (ImGui::Button("Create Empty Actor"))
@@ -732,6 +765,25 @@ namespace HEIN
 		ImGui::Checkbox("Show UI", &m_showUI);
 		SameLineWrap(125.0f);
 		ImGui::Checkbox("Frustum Culling", &gameContext.enableFrustumCulling);
+		SameLineWrap(115.0f);
+		if (ImGui::Checkbox("Uncapped FPS", &gameContext.uncappedFPS))
+		{
+			gameContext.deviceResources.SetUncappedFPS(gameContext.uncappedFPS);
+		}
+		SameLineWrap(90.0f);
+		ImGui::Checkbox("Show FPS", &gameContext.showFPS);
+
+		if (gameContext.showFPS)
+		{
+			const float fps = (io.Framerate > 0.0f) ? io.Framerate : static_cast<float>(gameContext.timer.GetFramesPerSecond());
+			const float frameMs = (fps > 0.001f) ? (1000.0f / fps) : static_cast<float>(gameContext.timer.GetElapsedSeconds() * 1000.0);
+			ImVec4 fpsColor = (fps >= 58.0f)
+				? ImVec4(0.31f, 0.92f, 0.43f, 1.0f)
+				: ((fps >= 30.0f) ? ImVec4(1.0f, 0.80f, 0.27f, 1.0f) : ImVec4(1.0f, 0.33f, 0.33f, 1.0f));
+
+			SameLineWrap(210.0f);
+			ImGui::TextColored(fpsColor, "FPS: %.1f (%.2f ms)", fps, frameMs);
+		}
 
 		if (m_selectedActor != nullptr)
 		{
@@ -815,6 +867,24 @@ namespace HEIN
 				ImVec2 hintSize = ImGui::CalcTextSize(navHint);
 				dl->AddText(ImVec2(contentPos.x + contentSize.x - hintSize.x - 10.0f, contentPos.y + 4.0f), IM_COL32(175, 175, 175, 210), navHint);
 
+				if (gameContext.showFPS)
+				{
+					const float fps = (io.Framerate > 0.0f) ? io.Framerate : static_cast<float>(gameContext.timer.GetFramesPerSecond());
+					const float frameMs = (fps > 0.001f) ? (1000.0f / fps) : static_cast<float>(gameContext.timer.GetElapsedSeconds() * 1000.0);
+					char fpsBuf[64];
+					snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f (%.2f ms)%s", fps, frameMs, gameContext.uncappedFPS ? " [UNCAPPED]" : "");
+					ImVec2 textSize = ImGui::CalcTextSize(fpsBuf);
+					ImVec2 badgePos(contentPos.x + 10.0f, contentPos.y + bannerH + 6.0f);
+					dl->AddRectFilled(
+						ImVec2(badgePos.x - 5.0f, badgePos.y - 3.0f),
+						ImVec2(badgePos.x + textSize.x + 5.0f, badgePos.y + textSize.y + 3.0f),
+						IM_COL32(15, 17, 22, 200),
+						4.0f
+					);
+					ImU32 col = (fps >= 58.0f) ? IM_COL32(80, 235, 110, 255) : ((fps >= 30.0f) ? IM_COL32(255, 205, 70, 255) : IM_COL32(255, 85, 85, 255));
+					dl->AddText(badgePos, col, fpsBuf);
+				}
+
 				// Draw ImGuizmo inside Scene View window drawlist
 				if (m_selectedActor != nullptr && g_ActiveGizmoTarget != nullptr)
 				{
@@ -853,6 +923,25 @@ namespace HEIN
 					);
 				}
 
+				if (gameContext.showFPS)
+				{
+					const float fps = (io.Framerate > 0.0f) ? io.Framerate : static_cast<float>(gameContext.timer.GetFramesPerSecond());
+					const float frameMs = (fps > 0.001f) ? (1000.0f / fps) : static_cast<float>(gameContext.timer.GetElapsedSeconds() * 1000.0);
+					char fpsBuf[64];
+					snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f (%.2f ms)%s", fps, frameMs, gameContext.uncappedFPS ? " [UNCAPPED]" : "");
+					ImDrawList* gameDl = ImGui::GetWindowDrawList();
+					ImVec2 textSize = ImGui::CalcTextSize(fpsBuf);
+					ImVec2 badgePos(contentPos.x + 10.0f, contentPos.y + 8.0f);
+					gameDl->AddRectFilled(
+						ImVec2(badgePos.x - 5.0f, badgePos.y - 3.0f),
+						ImVec2(badgePos.x + textSize.x + 5.0f, badgePos.y + textSize.y + 3.0f),
+						IM_COL32(15, 17, 22, 200),
+						4.0f
+					);
+					ImU32 col = (fps >= 58.0f) ? IM_COL32(80, 235, 110, 255) : ((fps >= 30.0f) ? IM_COL32(255, 205, 70, 255) : IM_COL32(255, 85, 85, 255));
+					gameDl->AddText(badgePos, col, fpsBuf);
+				}
+
 				if (gameContext.isEditorApplication && !gameContext.isGameViewFocused)
 				{
 					const char* hintText = "[ Fullscreen Play (F3) ]";
@@ -868,6 +957,64 @@ namespace HEIN
 						currentAction = HEIN::EditorAction::PlayPressed;
 					}
 					ImGui::PopStyleColor(2);
+				}
+			}
+		}
+		ImGui::End();
+		ImGui::PopStyleVar();
+
+		// -------------------------------------------------------------------------
+		// DRAW THE PARTICLE VIEW WINDOW (Connectable & Dockable)
+		// -------------------------------------------------------------------------
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+		if (ImGui::Begin("Particle View", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+		{
+			ImVec2 contentPos = ImGui::GetCursorScreenPos();
+			ImVec2 contentSize = ImGui::GetContentRegionAvail();
+
+			if (contentSize.x > 10.0f && contentSize.y > 10.0f)
+			{
+				m_particleContentSize = contentSize;
+				m_particleContentPos  = contentPos;
+
+				if (m_particleSRV != nullptr)
+				{
+					ImGui::Image(
+						reinterpret_cast<ImTextureID>(m_particleSRV),
+						contentSize
+					);
+				}
+
+				// Overlay UI controls on the particle viewport (orbit controls, solo toggles, trigger burst)
+				HEIN::Actor* selectedActor = m_selectedActor;
+				HEIN::ParticleComponent* particleComp = selectedActor ? selectedActor->GetComponent<HEIN::ParticleComponent>() : nullptr;
+				if (!particleComp && selectedActor)
+				{
+					for (HEIN::ActorID childID : selectedActor->GetChildren())
+					{
+						if (HEIN::Actor* child = manager.GetActor(childID))
+						{
+							particleComp = child->GetComponent<HEIN::ParticleComponent>();
+							if (particleComp) break;
+						}
+					}
+				}
+
+				if (particleComp)
+				{
+					particleComp->DrawParticleViewportOverlayUI(gameContext, contentPos, contentSize);
+				}
+				else
+				{
+					ImDrawList* dl = ImGui::GetWindowDrawList();
+					float bannerH = 26.0f;
+					dl->AddRectFilled(contentPos, ImVec2(contentPos.x + contentSize.x, contentPos.y + bannerH), IM_COL32(16, 20, 26, 220));
+					dl->AddText(ImVec2(contentPos.x + 10.0f, contentPos.y + 5.0f), IM_COL32(100, 215, 255, 255), "[ Particle Studio Viewport ]");
+
+					const char* msg = "Select an Actor with a ParticleComponent to preview in studio.";
+					ImVec2 msgSize = ImGui::CalcTextSize(msg);
+					ImVec2 msgPos(contentPos.x + (contentSize.x - msgSize.x) * 0.5f, contentPos.y + (contentSize.y - msgSize.y) * 0.5f);
+					dl->AddText(msgPos, IM_COL32(180, 180, 180, 200), msg);
 				}
 			}
 		}
@@ -1254,35 +1401,6 @@ namespace HEIN
 		// Draw the floating, movable and resizable Camera Viewport window
 		DrawViewportWindow(gameContext, true);
 
-		// Draw Animator Window
-		if (m_showAnimatorWindow)
-		{
-			ImGui::SetNextWindowSize(ImVec2(800.0f, 500.0f), ImGuiCond_FirstUseEver);
-			ImGui::Begin("Animator", &m_showAnimatorWindow);
-
-			if (m_selectedActor != nullptr)
-			{
-				auto* animEditor = m_selectedActor->GetComponent<HEIN::AnimationEditorComponent>();
-				if (animEditor)
-				{
-					animEditor->DrawAnimatorWindow(gameContext);
-				}
-				else
-				{
-					ImGui::Text("Selected actor does not have an AnimationEditorComponent.");
-					if (ImGui::Button("Add Animation Editor"))
-					{
-						auto* newComp = m_selectedActor->AddComponent<HEIN::AnimationEditorComponent>();
-						newComp->Start();
-					}
-				}
-			}
-			else
-			{
-				ImGui::Text("Please select an actor to edit its animations.");
-			}
-			ImGui::End();
-		}
 
 		if (m_viewportLayout == EditorViewportLayout::SplitSideBySide)
 		{

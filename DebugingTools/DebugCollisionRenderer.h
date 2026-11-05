@@ -176,6 +176,7 @@ namespace HEIN
 
 		void Clear();
 		void ReleaseDebugMemory();
+		void ReleaseGPUResources();
 
 
 		void QueueSphere(

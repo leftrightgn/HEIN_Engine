@@ -55,7 +55,6 @@ namespace HEIN
 		bool m_showViewportPreview = false;
 		bool m_isSceneViewActive = true;
 		EditorViewportLayout m_viewportLayout = EditorViewportLayout::SceneViewOnly;
-		bool m_showAnimatorWindow = false;
 		bool m_showColliders = true;
 		bool m_showUI = true;
 
@@ -78,12 +77,15 @@ namespace HEIN
 		bool m_resetLayoutRequested = false;
 		ID3D11ShaderResourceView* m_sceneSRV = nullptr;
 		ID3D11ShaderResourceView* m_gameSRV = nullptr;
+		ID3D11ShaderResourceView* m_particleSRV = nullptr;
 		HEIN::CameraController* m_debugCameraController = nullptr;
 
 		ImVec2 m_sceneContentSize = ImVec2(1280.0f, 720.0f);
 		ImVec2 m_sceneContentPos = ImVec2(0.0f, 0.0f);
 		ImVec2 m_gameContentSize = ImVec2(1280.0f, 720.0f);
 		ImVec2 m_gameContentPos = ImVec2(0.0f, 0.0f);
+		ImVec2 m_particleContentSize = ImVec2(1280.0f, 720.0f);
+		ImVec2 m_particleContentPos = ImVec2(0.0f, 0.0f);
 		bool m_isSceneViewHovered = false;
 		bool m_isGameViewHovered = false;
 		bool m_isSceneViewFocused = false;
@@ -113,6 +115,7 @@ namespace HEIN
 		D3D11_VIEWPORT GetCenterViewport(const GameContext& gameContext) const;
 		D3D11_VIEWPORT GetSceneViewport(const GameContext& gameContext) const;
 		D3D11_VIEWPORT GetGameViewport(const GameContext& gameContext) const;
+		D3D11_VIEWPORT GetParticleViewport(const GameContext& gameContext) const;
 
 		EditorViewportLayout GetViewportLayout() const { return m_viewportLayout; }
 		void SetViewportLayout(EditorViewportLayout layout)
@@ -176,13 +179,17 @@ namespace HEIN
 			HEIN::CameraController* debugCameraController = nullptr
 		);
 
-		void SetViewportSRVs(ID3D11ShaderResourceView* sceneSRV, ID3D11ShaderResourceView* gameSRV) noexcept
+		void SetViewportSRVs(ID3D11ShaderResourceView* sceneSRV, ID3D11ShaderResourceView* gameSRV, ID3D11ShaderResourceView* particleSRV = nullptr) noexcept
 		{
 			m_sceneSRV = sceneSRV;
 			m_gameSRV = gameSRV;
+			m_particleSRV = particleSRV;
 		}
 		ID3D11ShaderResourceView* GetSceneSRV() const noexcept { return m_sceneSRV; }
 		ID3D11ShaderResourceView* GetGameSRV() const noexcept { return m_gameSRV; }
+		ID3D11ShaderResourceView* GetParticleSRV() const noexcept { return m_particleSRV; }
+		ImVec2 GetParticleContentSize() const { return m_particleContentSize; }
+		ImVec2 GetParticleContentPos() const { return m_particleContentPos; }
 
 		EditorAction Draw(
 			GameContext& gameContext,
@@ -209,6 +216,7 @@ namespace HEIN
 
 		D3D11_VIEWPORT GetGameViewport(GameContext& gc) const { return gc.deviceResources.GetScreenViewport(); }
 		D3D11_VIEWPORT GetSceneViewport(GameContext& gc) const { return gc.deviceResources.GetScreenViewport(); }
+		D3D11_VIEWPORT GetParticleViewport(GameContext& gc) const { return gc.deviceResources.GetScreenViewport(); }
 		bool IsShowUIEnabled() const { return true; }
 		void SetShowUIEnabled(bool) {}
 		EditorViewportLayout GetViewportLayout() const { return EditorViewportLayout::GameViewOnly; }
